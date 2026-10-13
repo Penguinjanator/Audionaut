@@ -6,6 +6,10 @@ Code, Claude Desktop, and any other MCP client) edit
 auto-edit and export. It is a thin wrapper: every tool runs one Audionaut
 command with `--json` and relays the result — no engine logic lives here.
 
+**Requires the Audionaut app** ([Mac App Store](https://apps.apple.com/app/id6743627933) /
+[GitHub Releases](https://github.com/kvoltmer/Audionaut/releases)). On its own
+this package does nothing.
+
 ## Quick start
 
 You need [Audionaut](https://audionaut.app/download) — 1.6.3 or later is
@@ -60,6 +64,12 @@ AppImage.
 
 `separate_stems` needs the Demucs model, which you download once in the app
 (Settings ▸ Separation). The model weights are licensed for research use.
+
+A stem split takes minutes for a full song, and exporting or analysing a long
+project can too. When your client sends a `progressToken` with the call,
+`separate_stems`, `export_audio` and `analyze` report progress (Audionaut
+1.6.5 and later). A call is only stopped after ten minutes without any sign of
+life, not ten minutes in total.
 
 ## Projects that are open in Audionaut
 
