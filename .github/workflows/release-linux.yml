@@ -24,8 +24,9 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
-      with:
-        submodules: 'recursive'
+
+    - name: Checkout submodules
+      uses: ./.github/actions/checkout-submodules
 
     - name: Check tag matches .jucer version
       if: startsWith(github.ref, 'refs/tags/')
