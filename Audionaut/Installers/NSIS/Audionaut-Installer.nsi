@@ -35,6 +35,11 @@ FunctionEnd
 !define MUI_FINISHPAGE_RUN_FUNCTION "LaunchLink"
 
 !insertmacro MUI_PAGE_WELCOME
+; GPL needs no acceptance, so the license page is informational: Next, not "I Agree"
+!define MUI_LICENSEPAGE_TEXT_TOP "Audionaut is free software under the GNU GPL v3 or later."
+!define MUI_LICENSEPAGE_TEXT_BOTTOM "You do not have to accept this license to install Audionaut. Click Next to continue."
+!define MUI_LICENSEPAGE_BUTTON "&Next >"
+!insertmacro MUI_PAGE_LICENSE "License.txt"
 !insertmacro MUI_PAGE_DIRECTORY
 !insertmacro MUI_PAGE_INSTFILES
 !insertmacro MUI_PAGE_FINISH
@@ -50,12 +55,14 @@ WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\Voltmer Sy
 WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\Voltmer Systems"   "UninstallString" "$INSTDIR\Uninstall.exe"
 ;Install your files with the File command
 File "..\..\Builds\VisualStudio2026\x64\Release\App\${Name}.exe"
+File "License.txt"
 CreateShortCut "$SMPROGRAMS\${Name}.lnk" "$INSTDIR\${Name}.exe"
 SectionEnd
 
 Section "Uninstall"
 ;Delete your files
 Delete "$INSTDIR\${Name}.exe"
+Delete "$INSTDIR\License.txt"
 Delete "$SMPROGRAMS\${Name}.lnk"
 DeleteRegKey HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\Voltmer Systems"
 Delete "$INSTDIR\Uninstall.exe"
