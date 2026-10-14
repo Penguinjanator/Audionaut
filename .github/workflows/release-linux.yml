@@ -195,3 +195,28 @@ jobs:
           gh release create "$GITHUB_REF_NAME" Audionaut-*.flatpak \
             --title "Audionaut $GITHUB_REF_NAME" --generate-notes
         fi
+
+  flatpark:
+    # Tells FlatPark (flatpark.org, a Flatpak repository for apps outside
+    # Flathub) that the release is live, so its app.audionaut.Audionaut
+    # package picks up the new .deb within minutes instead of at its daily
+    # poll. FlatPark repacks the release .deb unchanged. Same request as
+    # flatpark/publish-action, inlined so no third-party code runs in the
+    # release workflow; no token needed, the webhook checks the tag against
+    # this repository's published releases. Lives here rather than in an
+    # `on: release` workflow: releases created with GITHUB_TOKEN don't
+    # trigger other workflows.
+    needs: package
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    permissions: {}
+    # A FlatPark hiccup must never fail the release.
+    continue-on-error: true
+    steps:
+    - name: Notify FlatPark
+      run: |
+        payload=$(jq -n --arg a app.audionaut.Audionaut --arg t "$GITHUB_REF_NAME" --arg r "$GITHUB_REPOSITORY" \
+          '{app_id: $a, tag: $t, repository: $r}')
+        curl -sS --fail-with-body --retry 5 --max-time 30 \
+          -H 'content-type: application/json' \
+          -d "$payload" https://hooks.flatpark.org/release
