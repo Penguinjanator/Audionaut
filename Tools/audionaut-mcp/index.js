@@ -451,7 +451,8 @@ server.registerTool(
     title: "Create region",
     description:
       "Creates a named region from a timeline range on every track whose clip fully contains it " +
-      "(the GUI's Create Region command). The arrangement itself is unchanged.",
+      "(the GUI's Create Region command). The arrangement itself is unchanged. The name must not be taken by " +
+      "another region (error name_taken).",
     inputSchema: {
       project: projectParam,
       name: z.string().min(1).describe("Name for the new region"),
