@@ -86,7 +86,7 @@ json ProjectFileStore::readProjectJson (const juce::File& file)
     if (!inputStream.openedOk())
         throw std::runtime_error(inputStream.getStatus().getErrorMessage().toStdString());
 
-    auto inputString = inputStream.readString().toStdString();
+    auto inputString = Streamable::readJsonText(inputStream);
     if (inputString.empty())
         throw std::runtime_error("empty project file");
 
@@ -104,7 +104,10 @@ bool ProjectFileStore::writeJsonAtomically (const juce::File& target, const json
         }
 
         // same framing as Streamable::writeToStream
-        out->writeString(content.dump(2));
+        if (! Streamable::writeJsonText(*out, content)) {
+            error = out->getStatus().getErrorMessage().toStdString();
+            return false;
+        }
         out->flush();
         success = true;
     }

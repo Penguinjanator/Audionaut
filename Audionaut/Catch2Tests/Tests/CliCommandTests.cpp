@@ -35,8 +35,8 @@ juce::File makeWorkDirectory()
 
 const auto testFilesDir = juce::String (CURRENT_SOURCE_DIR) + "/TestFiles/";
 
-// Parses a saved Project.json (tolerating the writer's trailing NUL, which
-// strict parsers reject).
+// Parses a saved Project.json (tolerating the trailing NUL that versions
+// before 1.6.6 wrote, which strict parsers reject).
 nlohmann::json readProjectJson (const juce::File& project)
 {
     auto text = project.getChildFile ("Project.json").loadFileAsString().toStdString();
@@ -128,6 +128,22 @@ SCENARIO ("cli create and info", "[cli]")
 
         WHEN ("info runs on it") {
             REQUIRE (cli::runInfo (makeArgs ("info " + project.getFullPathName()), context) == cli::exitOk);
+        }
+
+        THEN ("Project.json is plain JSON without a trailing NUL (#84)") {
+            auto text = project.getChildFile ("Project.json").loadFileAsString().toStdString();
+            REQUIRE_FALSE (text.empty());
+            REQUIRE (text.back() == '}');
+            REQUIRE_NOTHROW (nlohmann::json::parse (text));
+        }
+
+        WHEN ("Project.json ends with the NUL terminator older versions wrote") {
+            auto projectJson = project.getChildFile ("Project.json");
+            REQUIRE (projectJson.appendData ("", 1));
+
+            THEN ("it still loads") {
+                REQUIRE (cli::runInfo (makeArgs ("info " + project.getFullPathName()), context) == cli::exitOk);
+            }
         }
 
         WHEN ("create runs again on the same path") {
@@ -224,11 +240,47 @@ SCENARIO ("cli split and create-region", "[cli][region]")
             }
         }
 
+        WHEN ("create-region is given the name of an existing region") {
+            THEN ("it fails as name_taken with nothing created (#186)") {
+                nlohmann::json envelope;
+                cli::CliContext capturing;
+                capturing.envelopeSink = [&envelope] (const nlohmann::json& produced) { envelope = produced; };
+
+                REQUIRE (cli::runCreateRegion (makeArgs ("create-region " + project.getFullPathName()
+                                                         + " --name sine-0dB --start 0.25 --end 0.75 --unit seconds"),
+                                               capturing)
+                         == cli::exitFailure);
+                REQUIRE (envelope["error"]["code"] == "name_taken");
+                auto names = allRegionNames (readProjectJson (project));
+                REQUIRE (std::count (names.begin(), names.end(), "sine-0dB") == 1);
+            }
+        }
+
         WHEN ("create-region's range reaches beyond the clip") {
             REQUIRE (cli::runCreateRegion (makeArgs ("create-region " + project.getFullPathName()
                                                      + " --name tail --start 0.5 --end 2.0 --unit seconds"),
                                            context)
                      == cli::exitFailure);
+        }
+
+        WHEN ("create-region covers a late clip exactly, up to just inside its end (#186)") {
+            // the reported case: a short clip far into the timeline, range from
+            // its start to one microsecond before its end
+            REQUIRE (cli::runImport (makeArgs ("import " + project.getFullPathName() + " "
+                                               + audioFile.getFullPathName()
+                                               + " --position 950.4206349206352"),
+                                     context)
+                     == cli::exitOk);
+            REQUIRE (cli::runCreateRegion (makeArgs ("create-region " + project.getFullPathName()
+                                                     + " --name late --start 950.4206349206352"
+                                                     + " --end 951.4206339206352 --unit seconds"),
+                                           context)
+                     == cli::exitOk);
+
+            THEN ("the region exists") {
+                auto names = allRegionNames (readProjectJson (project));
+                REQUIRE (std::count (names.begin(), names.end(), "late") == 1);
+            }
         }
 
         WHEN ("create-region is missing its name or range") {
@@ -430,6 +482,20 @@ SCENARIO ("cli clip editing and set-region", "[cli][region]")
 
             THEN ("the range is clamped to the one-second source") {
                 auto range = regionRangeSeconds (readProjectJson (project), "sine-0dB");
+                REQUIRE (range.first == 0.0);
+                REQUIRE (range.second == 1.0);
+            }
+        }
+
+        WHEN ("a retrim from the start asks for more than the source holds (#189)") {
+            REQUIRE (cli::runSetRegion (makeArgs ("set-region " + projectArg
+                                                  + " --region sine-0dB --start 0 --length 1.5 --unit seconds"),
+                                        context)
+                     == cli::exitOk);
+
+            THEN ("the region is the whole source and never starts below zero") {
+                auto range = regionRangeSeconds (readProjectJson (project), "sine-0dB");
+                REQUIRE (range.first == 0.0);
                 REQUIRE (range.second == 1.0);
             }
         }
