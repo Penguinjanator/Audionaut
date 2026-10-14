@@ -688,13 +688,16 @@ bool AudioTrack::addAudioFiles(const juce::StringArray& filenames,
     juce::String errors;
     
     for (auto i = 0; i < filenames.size(); i++) {
-        auto audioFileResources = addAudioFile(resourceGroup, filenames[i], destChannel);
+        juce::String fileError;
+        auto audioFileResources = addAudioFile(resourceGroup, filenames[i], destChannel, fileError);
         if (audioFileResources.size() > 0) {
             for (auto resource : audioFileResources)
                 resources.push_back(resource);
         }
         else {
-            errors += filenames[i];
+            if (errors.isNotEmpty())
+                errors += "; ";
+            errors += fileError.isNotEmpty() ? fileError : filenames[i];
         }
     }
     
@@ -719,7 +722,8 @@ bool AudioTrack::addAudioFiles(const juce::StringArray& filenames,
 
 std::vector<std::shared_ptr<AudioResource>> AudioTrack::addAudioFile (std::shared_ptr<ResourceGroup> resourceGroup,
                                                                       const juce::File filename,
-                                                                      int &destChannel)
+                                                                      int &destChannel,
+                                                                      juce::String& error)
 {
     std::vector<std::shared_ptr<AudioResource>> result;
     auto numResourcesLoaded = getAudioResources().size();
@@ -727,6 +731,18 @@ std::vector<std::shared_ptr<AudioResource>> AudioTrack::addAudioFile (std::share
     auto chan = destChannel;
     getAudioResourceContainer().copyToAudioFileDirectoryIfNeeded(url);
     if (auto audioFormatReader = getAudioResourceContainer().getAudioFormatReaderForUrl(url)) {
+        // addChannel stops at MAX_AUDIO_CHANNELS for the whole project; a file
+        // past that would land on a track without channels, so refuse it here
+        const auto trackChannels = getNumAudioTrackChannels();
+        const auto channelsNeeded = std::max(trackChannels, destChannel + static_cast<int>(audioFormatReader->numChannels));
+        const auto projectChannels = getAudioTrackContainer().getNumAudioTrackChannels();
+        if (projectChannels + channelsNeeded - trackChannels > MAX_AUDIO_CHANNELS) {
+            error = filename.getFileName() + ": needs " + juce::String(channelsNeeded - trackChannels)
+                    + " more audio channel(s), but the project already uses " + juce::String(projectChannels)
+                    + " of at most " + juce::String(MAX_AUDIO_CHANNELS);
+            return result;
+        }
+
         for (auto sourceChannel = 0; sourceChannel < audioFormatReader->numChannels; sourceChannel++) {
             auto audioResource = getAudioResourceContainer().addAudioResource(url,
                                                                               audioFormatReader,
