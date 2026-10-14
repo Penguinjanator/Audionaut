@@ -9,6 +9,7 @@
 #include "Cli/Commands/Commands.h"
 #include "Engine/Project/ProjectFileStore.h"
 #include "Engine/AudiumEngine.h"
+#include "Engine/Playback/PlaybackDefines.h"
 
 using namespace audium;
 
@@ -1417,6 +1418,80 @@ SCENARIO ("cli rejects out-of-range numeric options", "[cli][validation]")
             THEN ("it renders") {
                 REQUIRE (envelope["ok"] == true);
                 REQUIRE (outputFile.existsAsFile());
+            }
+        }
+    }
+
+    workDir.deleteRecursively();
+}
+
+SCENARIO ("cli import stops at the project's channel limit", "[cli][channels]")
+{
+    auto workDir = makeWorkDirectory();
+    auto project = workDir.getChildFile ("channel-limit.audium");
+    auto stereoFile = juce::File (testFilesDir + "120-funk-1-sec.wav");
+    REQUIRE (stereoFile.existsAsFile());
+
+    cli::CliContext context;
+    context.quiet = true;
+
+    const auto projectArg = project.getFullPathName();
+    auto totalChannels = [] (const nlohmann::json& projectJson) {
+        std::size_t total = 0;
+        for (auto& track : projectJson["audium"]["audio_tracks"])
+            total += track.value ("channels", nlohmann::json::array()).size();
+        return total;
+    };
+
+    GIVEN ("a mono project that stereo imports fill up to one channel below the limit") {
+        REQUIRE (cli::runCreate (makeArgs ("create " + projectArg + " --channels 1"), context) == cli::exitOk);
+
+        const int fitting = (MAX_AUDIO_CHANNELS - 1) / 2;
+        for (int i = 0; i < fitting; ++i)
+            REQUIRE (cli::runImport (makeArgs ("import " + projectArg + " " + stereoFile.getFullPathName()),
+                                     context)
+                     == cli::exitOk);
+
+        const auto before = readProjectJson (project);
+        REQUIRE (totalChannels (before) == static_cast<std::size_t> (MAX_AUDIO_CHANNELS - 1));
+
+        WHEN ("one more stereo file is imported (#190)") {
+            nlohmann::json envelope;
+            cli::CliContext capturing;
+            capturing.envelopeSink = [&envelope] (const nlohmann::json& produced) { envelope = produced; };
+
+            THEN ("the import fails and adds no track without channels") {
+                REQUIRE (cli::runImport (makeArgs ("import " + projectArg + " " + stereoFile.getFullPathName()),
+                                         capturing)
+                         == cli::exitFailure);
+                REQUIRE (envelope["error"]["code"] == "import_failed");
+                REQUIRE (envelope["error"]["message"].get<std::string>().find ("channel") != std::string::npos);
+
+                auto after = readProjectJson (project);
+                REQUIRE (after["audium"]["audio_tracks"].size() == before["audium"]["audio_tracks"].size());
+                for (auto& track : after["audium"]["audio_tracks"])
+                    REQUIRE_FALSE (track.value ("channels", nlohmann::json::array()).empty());
+            }
+        }
+
+        WHEN ("a project from before the check has a track without channels") {
+            // what older versions left behind once the limit was hit
+            auto projectJson = readProjectJson (project);
+            auto& tracks = projectJson["audium"]["audio_tracks"];
+            const auto lastTrack = static_cast<int> (tracks.size()) - 1;
+            tracks[static_cast<std::size_t> (lastTrack)].erase ("channels");
+            REQUIRE (project.getChildFile ("Project.json").replaceWithText (projectJson.dump (2)));
+
+            THEN ("clip-gain on its clip fails instead of reporting an empty success") {
+                nlohmann::json envelope;
+                cli::CliContext capturing;
+                capturing.envelopeSink = [&envelope] (const nlohmann::json& produced) { envelope = produced; };
+
+                REQUIRE (cli::runClipGain (makeArgs ("clip-gain " + projectArg + " --at 0.5 --unit seconds"
+                                                     + " --track " + juce::String (lastTrack) + " --gain -6 --db"),
+                                           capturing)
+                         == cli::exitFailure);
+                REQUIRE (envelope["error"]["code"] == "no_channels");
             }
         }
     }
