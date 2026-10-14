@@ -13,6 +13,12 @@ Audionaut is a free, open-source desktop application for effortless audio editin
 [![Linux build](https://github.com/kvoltmer/Audionaut/actions/workflows/makefile.yml/badge.svg)](https://github.com/kvoltmer/Audionaut/actions/workflows/makefile.yml)
 [![Sponsor](https://img.shields.io/badge/%E2%9D%A4-Sponsor-ff69b4)](https://github.com/sponsors/kvoltmer)
 
+### Install
+
+- **macOS** — installer on [GitHub Releases](https://github.com/kvoltmer/Audionaut/releases/latest) or [Mac App Store](https://apps.apple.com/app/id6743627933)
+- **Windows** — installer on [GitHub Releases](https://github.com/kvoltmer/Audionaut/releases/latest)
+- **Linux** — `.deb`, AppImage and Flatpak bundle on [GitHub Releases](https://github.com/kvoltmer/Audionaut/releases/latest), or install and update the Flatpak through [FlatPark](https://flatpark.org/apps/app.audionaut.Audionaut)
+
 ### Use with Claude
 
 Audionaut speaks [MCP](https://modelcontextprotocol.io), so Claude and other agents can edit your sessions. With the app and [Node.js](https://nodejs.org) 18+ installed:
