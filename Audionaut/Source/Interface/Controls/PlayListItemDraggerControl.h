@@ -109,6 +109,14 @@ public:
     }
     
     bool validateData() override;
+
+    // Shift-drag crossfade: while Shift is down, every overlap the dragged
+    // clips have with a neighbour gets a symmetric crossfade, live on each
+    // drag step. Each step starts from the fades the clips had when the drag
+    // began, so moving apart again or releasing Shift brings them back.
+    void beginDragCommit (std::vector<std::shared_ptr<audium::PlayListItem>>& items) override;
+    bool afterPositionCommit() override;
+    void endDragCommit() override;
     
     void setPlayListItem(std::shared_ptr<audium::PlayListItem> playListItem_) { playListItem = playListItem_; }
     
@@ -176,5 +184,8 @@ private:
     std::shared_ptr<audium::PlayListContainer> playListContainer;
     std::shared_ptr<audium::PlayListItem> playListItem;
     std::unique_ptr<audium::PlayListItemExport> exporter;
+
+    // the fades of every clip on the dragged clips' playlists at drag start
+    std::vector<std::pair<std::weak_ptr<audium::PlayListItem>, json>> dragStartDynamics;
     
 };

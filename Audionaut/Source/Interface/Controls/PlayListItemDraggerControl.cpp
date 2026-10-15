@@ -255,6 +255,81 @@ bool PlayListItemDraggerControl::validateData()
     return result;
 }
 
+void PlayListItemDraggerControl::beginDragCommit (std::vector<std::shared_ptr<audium::PlayListItem>>& items)
+{
+    // a crossfade changes the neighbours too: the undo snapshot and the
+    // drag-start fades cover every clip on the dragged clips' playlists
+    std::set<audium::PlayListContainer*> containers;
+    for (auto& item : items)
+        containers.insert(&item->getPlayListContainer());
+
+    dragStartDynamics.clear();
+    for (auto* container : containers) {
+        for (auto& item : container->getPlayListItems()) {
+            if (std::find(items.begin(), items.end(), item) == items.end())
+                items.push_back(item);
+
+            json dynamics;
+            item->getDynamics().writeToJson(dynamics);
+            dragStartDynamics.emplace_back(item, std::move(dynamics));
+        }
+    }
+}
+
+void PlayListItemDraggerControl::endDragCommit()
+{
+    // the neighbours' curves were drag feedback only
+    auto hadPartners = false;
+    for (auto& [weakItem, dynamics] : dragStartDynamics) {
+        if (auto item = weakItem.lock()) {
+            hadPartners |= item->isCrossfadePartner();
+            item->setCrossfadePartner(false);
+        }
+    }
+    dragStartDynamics.clear();
+
+    if (hadPartners)
+        audiumEngine->getAudioTrackContainer()->sendActionMessage(audium::updateArrangementAction);
+}
+
+bool PlayListItemDraggerControl::afterPositionCommit()
+{
+    // start over from the drag-start fades
+    for (auto& [weakItem, dynamics] : dragStartDynamics) {
+        if (auto item = weakItem.lock()) {
+            auto copy = dynamics;
+            item->getDynamics().readFromJson(copy);
+            item->setCrossfadePartner(false);
+        }
+    }
+
+    // a crossfade from the previous step was just undone: redraw
+    if (! juce::ModifierKeys::currentModifiers.isShiftDown()) {
+        if (crossfaded)
+            audiumEngine->getAudioTrackContainer()->sendActionMessage(audium::updateArrangementAction);
+        return false;
+    }
+
+    std::map<audium::PlayListContainer*, std::vector<audium::PlayListItem*>> draggedItems;
+    for (auto& object : audiumEngine->getAudioTrackContainer()->getSelectionManager()->getSelectedObjects())
+        if (auto item = dynamic_cast<audium::PlayListItem*>(object.get()))
+            draggedItems[&item->getPlayListContainer()].push_back(item);
+
+    // show the neighbours' curves while the drag shapes them
+    auto changed = false;
+    for (auto& [container, items] : draggedItems) {
+        for (auto* item : container->crossfadeOverlappingNeighbours(items)) {
+            item->setCrossfadePartner(true);
+            changed = true;
+        }
+    }
+
+    if (changed || crossfaded)
+        audiumEngine->getAudioTrackContainer()->sendActionMessage(audium::updateArrangementAction);
+
+    return changed;
+}
+
 
 void PlayListItemDraggerControl::shiftSelect()
 {

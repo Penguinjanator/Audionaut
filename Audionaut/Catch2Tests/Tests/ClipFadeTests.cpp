@@ -14,6 +14,7 @@
 #include "Engine/PlayList/PlayListItem.h"
 #include "Engine/Group/AudioTrackContainer.h"
 #include "Engine/Group/AudioTrack.h"
+#include "Engine/Undo/UndoablePlayListItemAction.h"
 
 #include "TestUtils.h"
 #include "TestEngine.h"
@@ -1887,6 +1888,165 @@ SCENARIO("clip dynamics only touch the active sub-block region", "[engine][dsp][
 
                 auto fadeStartSample = static_cast<int>(sr * (lengthSeconds - fadeOutSeconds));
                 examineFadeOutEnvelope(output, fadeStartSample, totalSamples, blockSize);
+            }
+        }
+    }
+}
+
+SCENARIO("overlapping clips get a symmetric crossfade", "[engine][fade][crossfade]")
+{
+    GIVEN("two clips on one track, the second overlapping the first")
+    {
+        TestEngine engine;
+        const auto audioFile = createSlowSawTwoSecondsAudioFile();
+        REQUIRE(audioFile.existsAsFile());
+        REQUIRE(engine->getProjectFileStore()->open(audioFile, nullptr));
+
+        auto container = engine->getAudioTrackContainer();
+        auto playList = container->getAudioTrack(0)->getPlayListContainer();
+        auto left = playList->getPlayListItem(0);
+        REQUIRE(left != nullptr);
+        left->setAbsolutePosition(0.0, seconds);
+
+        const auto length = left->getAbsolutePositionRange(seconds).getLength();
+        const auto overlap = 0.1;
+        // own region, so trimming one clip leaves the other alone
+        auto right = playList->clonePlayListItem(left);
+        REQUIRE(right != nullptr);
+        right->init();
+        right->setAbsolutePosition(length - overlap, seconds);
+        playList->sortByPosition();
+
+        auto& leftDynamics = left->getDynamics();
+        auto& rightDynamics = right->getDynamics();
+
+        WHEN("the dragged right clip is crossfaded")
+        {
+            const auto faded = playList->crossfadeOverlappingNeighbours({ right.get() });
+            REQUIRE(std::count(faded.begin(), faded.end(), left.get()) == 1);
+            REQUIRE(std::count(faded.begin(), faded.end(), right.get()) == 1);
+
+            THEN("the joint sides fade over exactly the overlap, inside the clips")
+            {
+                REQUIRE(leftDynamics.getFadeOut(seconds) == Catch::Approx(overlap).margin(0.001));
+                REQUIRE(rightDynamics.getFadeIn(seconds) == Catch::Approx(overlap).margin(0.001));
+                REQUIRE(leftDynamics.getFadeOutEnd() == 0.0);
+                REQUIRE(rightDynamics.getFadeInStart() == 0.0);
+                REQUIRE(leftDynamics.getFadeIn() == 0.0);
+                REQUIRE(rightDynamics.getFadeOut() == 0.0);
+            }
+        }
+
+        WHEN("the dragged left clip is crossfaded")
+        {
+            REQUIRE_FALSE(playList->crossfadeOverlappingNeighbours({ left.get() }).empty());
+
+            THEN("the same pair gets the same crossfade")
+            {
+                REQUIRE(leftDynamics.getFadeOut(seconds) == Catch::Approx(overlap).margin(0.001));
+                REQUIRE(rightDynamics.getFadeIn(seconds) == Catch::Approx(overlap).margin(0.001));
+            }
+        }
+
+        WHEN("the playlist is out of order, as mid-drag")
+        {
+            // the right clip dragged before the left one, not yet sorted
+            right->setAbsolutePosition(0.0, seconds);
+            left->setAbsolutePosition(length - overlap, seconds);
+            REQUIRE_FALSE(playList->sortedByPosition());
+
+            REQUIRE_FALSE(playList->crossfadeOverlappingNeighbours({ right.get() }).empty());
+
+            THEN("the neighbours are found by position")
+            {
+                REQUIRE(rightDynamics.getFadeOut(seconds) == Catch::Approx(overlap).margin(0.001));
+                REQUIRE(leftDynamics.getFadeIn(seconds) == Catch::Approx(overlap).margin(0.001));
+            }
+            playList->sortByPosition();
+        }
+
+        WHEN("the clips only touch")
+        {
+            right->setAbsolutePosition(length, seconds);
+
+            THEN("nothing is faded")
+            {
+                REQUIRE(playList->crossfadeOverlappingNeighbours({ right.get() }).empty());
+                REQUIRE(leftDynamics.getFadeOut() == 0.0);
+                REQUIRE(rightDynamics.getFadeIn() == 0.0);
+            }
+        }
+
+        WHEN("one clip lies inside the other")
+        {
+            right->setRegionData({ 0.0, 0.5 }, seconds);
+            right->setAbsolutePosition(0.5, seconds);
+
+            THEN("there is no joint to crossfade")
+            {
+                REQUIRE(playList->crossfadeOverlappingNeighbours({ right.get() }).empty());
+                REQUIRE(leftDynamics.getFadeOut() == 0.0);
+                REQUIRE(rightDynamics.getFadeIn() == 0.0);
+            }
+        }
+
+        WHEN("the clips already have fades and extensions")
+        {
+            leftDynamics.setFadeIn(0.1);
+            leftDynamics.setFadeOut(0.3);
+            leftDynamics.setFadeOutEnd(-0.1);
+            rightDynamics.setFadeIn(0.2);
+            rightDynamics.setFadeInStart(-0.05);
+            rightDynamics.setFadeOut(0.25);
+
+            REQUIRE_FALSE(playList->crossfadeOverlappingNeighbours({ right.get() }).empty());
+
+            THEN("only the joint sides are replaced")
+            {
+                REQUIRE(leftDynamics.getFadeOut(seconds) == Catch::Approx(overlap).margin(0.001));
+                REQUIRE(leftDynamics.getFadeOutEnd() == 0.0);
+                REQUIRE(rightDynamics.getFadeIn(seconds) == Catch::Approx(overlap).margin(0.001));
+                REQUIRE(rightDynamics.getFadeInStart() == 0.0);
+                REQUIRE(leftDynamics.getFadeIn() == Catch::Approx(0.1));
+                REQUIRE(rightDynamics.getFadeOut() == Catch::Approx(0.25));
+            }
+        }
+
+        WHEN("the right clip plays at double speed")
+        {
+            right->setSpeedRatio(2.0);
+            right->setAbsolutePosition(length - overlap, seconds);
+            const auto rightTimelineLength = right->getAbsolutePositionRange(seconds).getLength();
+            REQUIRE(rightTimelineLength == Catch::Approx(length / 2.0));
+
+            REQUIRE_FALSE(playList->crossfadeOverlappingNeighbours({ right.get() }).empty());
+
+            THEN("its fade covers the overlap on the timeline")
+            {
+                REQUIRE(rightDynamics.getFadeIn() * rightTimelineLength == Catch::Approx(overlap).margin(0.001));
+                REQUIRE(leftDynamics.getFadeOut(seconds) == Catch::Approx(overlap).margin(0.001));
+            }
+        }
+
+        WHEN("the crossfade is recorded as one undo step over both clips")
+        {
+            auto undoManager = container->getUndoManager();
+            auto action = std::make_unique<UndoablePlayListItemAction>(*container,
+                std::vector<std::shared_ptr<PlayListItem>>{ left, right });
+            REQUIRE_FALSE(playList->crossfadeOverlappingNeighbours({ right.get() }).empty());
+            action->storeNewState();
+            REQUIRE_FALSE(action->isNoOp());
+            undoManager->perform(action.release(), "Crossfade Clips");
+
+            THEN("undo restores both clips' fades and redo reapplies them")
+            {
+                undoManager->undo();
+                REQUIRE(leftDynamics.getFadeOut() == 0.0);
+                REQUIRE(rightDynamics.getFadeIn() == 0.0);
+
+                undoManager->redo();
+                REQUIRE(leftDynamics.getFadeOut(seconds) == Catch::Approx(overlap).margin(0.001));
+                REQUIRE(rightDynamics.getFadeIn(seconds) == Catch::Approx(overlap).margin(0.001));
             }
         }
     }

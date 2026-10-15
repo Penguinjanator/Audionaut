@@ -52,6 +52,12 @@ Every clip carries its own dynamics:
 
 ![A crossfade at a clip joint: the outgoing clip's fade-out and the incoming clip's fade-in overlap](img/clip-fades.png)
 
+To crossfade two clips that overlap, hold **Shift** while dragging or
+trimming one of them: wherever it overlaps a neighbour, the left clip fades
+out and the right clip fades in over exactly the overlap, updating live as
+you drag. Releasing Shift, or dragging out of the overlap, brings the
+original fades back; the crossfade is one undo step.
+
 Crossfades at segment joints can also be created automatically by Auto Edit
 (see [Analysis and Auto Edit](08-analysis-and-auto-edit.md)); their default
 length and curve are configured in *Settings → Auto Edit*.
@@ -91,6 +97,7 @@ Vorbis or MP3 file (see [Exporting audio](09-export.md)).
 
 ## Snap and zoom
 
-The grid snaps drags to musical positions; *View → Zoom In / Zoom Out*
+The grid snaps drags to musical positions (hold **Ctrl** while dragging to
+place freely); *View → Zoom In / Zoom Out*
 (**Cmd++** / **Cmd+-**) and paging (**←** / **→**) navigate, and *Follow
 Transport* keeps the playhead in view.

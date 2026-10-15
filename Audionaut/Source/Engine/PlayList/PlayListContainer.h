@@ -97,6 +97,15 @@ public:
     
     // move all playlist items at start index
     void movePlayListItemsPosition(int startIndex);
+
+    // Gives each of selectedItemsIn a symmetric crossfade with the neighbour
+    // it partially overlaps on either side: the left clip fades out and the
+    // right clip fades in over exactly the overlap (fade offsets reset to
+    // the clip edges). Clips that contain one another are left alone. Finds
+    // neighbours by position, so it works on an unsorted playlist (mid-drag).
+    // Returns every clip whose fades were set (both sides of each joint);
+    // empty if there was no overlap to crossfade.
+    std::vector<PlayListItem*> crossfadeOverlappingNeighbours(const std::vector<PlayListItem*>& selectedItemsIn);
     
     // selection:
     void selectPlayListItemWithRegion(std::shared_ptr<AudioRegion> region);

@@ -204,7 +204,18 @@ public:
     virtual bool validateData() = 0;
     
     virtual bool isRecording() = 0;
-    
+
+    /// Called once per drag, before the first change lands: adds any clips
+    /// the drag may change besides the selected ones to the undo snapshot.
+    virtual void beginDragCommit (std::vector<std::shared_ptr<audium::PlayListItem>>&) {}
+
+    /// Called after every position commit of a drag (live and at mouse-up).
+    /// Returns true while the drag has changed clips beyond their position.
+    virtual bool afterPositionCommit() { return false; }
+
+    /// Called at mouse-up once the drag's undo step is recorded.
+    virtual void endDragCommit() {}
+
     void setComponentToDrag(juce::Component* comp);
     
     void setPositionableObject(std::shared_ptr<audium::PositionableBase> object);
@@ -242,6 +253,9 @@ protected:
     // moved. Clip-only on purpose: a whole-container snapshot rebuilt every
     // clip's voice sources on replay (a DSP spike per drop).
     std::unique_ptr<audium::UndoablePlayListItemAction> undoableAction;
-    
+
+    // Result of the last afterPositionCommit() - names the undo step.
+    bool crossfaded = false;
+
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (DraggerControl)
 };
