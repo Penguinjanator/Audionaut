@@ -61,6 +61,11 @@ public:
     
     bool deleteAssociatedItems(const AudioRegion* audioRegion);
     bool exitsInPlayList(const AudioRegion* audioRegion);
+
+    // Gives item a private copy of its region when other clips use that
+    // region too, so trimming item leaves them alone. The copy is named like
+    // a split piece (getUniqueName). Returns true if it made a copy.
+    bool detachSharedRegion(PlayListItem& item);
     
     const std::vector<std::shared_ptr<PlayListItem>> &getPlayListItems() const;
     int getNumItems(std::shared_ptr<AudioTrack> track = nullptr) const;

@@ -217,6 +217,28 @@ bool PlayListContainer::exitsInPlayList(const AudioRegion* region)
     return it != playListItems.getObjects().end();
 }
 
+bool PlayListContainer::detachSharedRegion(PlayListItem& item)
+{
+    auto region = item.getRegion();
+    const auto shared = std::any_of(playListItems.getObjects().begin(), playListItems.getObjects().end(),
+                                    [&](const auto& other) {
+        return other.get() != &item && other->getRegion() == region;
+    });
+    if (! shared)
+        return false;
+
+    auto resourceGroup = region->getResourceGroup();
+    auto regionContainer = resourceGroup->getAudioRegionContainer();
+    auto copy = regionContainer->createRegion(regionContainer->getUniqueName(region->getName()),
+                                              item.getRegionData(audium::clocks),
+                                              region->getAudioTrack(),
+                                              resourceGroup,
+                                              region,
+                                              audium::clocks);
+    item.setRegion(copy);
+    return true;
+}
+
 const std::vector<std::shared_ptr<PlayListItem>> &PlayListContainer::getPlayListItems() const
 {
     return playListItems.getObjects();

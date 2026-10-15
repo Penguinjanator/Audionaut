@@ -63,6 +63,13 @@ void PlayListItem::deinit()
     voiceSources.clear();
 }
 
+void PlayListItem::setRegion(std::shared_ptr<AudioRegion> region)
+{
+    jassert(region != nullptr);
+    jassert(audioRegion == nullptr || region->getResourceGroup() == audioRegion->getResourceGroup());
+    audioRegion = region;
+}
+
 juce::Range<double> PlayListItem::getRegionData(audium::TimeContextType context) const
 {
     if (audioRegion != nullptr)

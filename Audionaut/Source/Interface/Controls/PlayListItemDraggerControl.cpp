@@ -292,6 +292,23 @@ void PlayListItemDraggerControl::endDragCommit()
         audiumEngine->getAudioTrackContainer()->sendActionMessage(audium::updateArrangementAction);
 }
 
+void PlayListItemDraggerControl::beforeFirstCommit()
+{
+    // only a trim changes the region window; a stretch keeps it and a move
+    // leaves it alone
+    if (stretchDrag || (currentDragMode != leftEdge && currentDragMode != rightEdge))
+        return;
+
+    auto detached = false;
+    for (auto& object : audiumEngine->getAudioTrackContainer()->getSelectionManager()->getSelectedObjects())
+        if (auto item = dynamic_cast<audium::PlayListItem*>(object.get()))
+            detached |= item->getPlayListContainer().detachSharedRegion(*item);
+
+    // the copies show up in the Regions list
+    if (detached)
+        audiumEngine->getAudioTrackContainer()->sendActionMessage(audium::updateRightPanelAction);
+}
+
 bool PlayListItemDraggerControl::afterPositionCommit()
 {
     // start over from the drag-start fades

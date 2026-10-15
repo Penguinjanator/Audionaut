@@ -203,8 +203,16 @@ the one-gesture crossfade UX on top:
 
 ## Arrangement editing
 
-- [ ] **Trimming a clip whose region is used elsewhere should edit a copy,
-  not the shared region.** A `PlayListItem` holds a
+- [x] **Trimming a clip whose region is used elsewhere should edit a copy,
+  not the shared region.** Done 2026-10-15 (feature/trim-shared-region,
+  stacked on feature/overlap-crossfade): clip edge trims (not stretch, not
+  moves) call `PlayListContainer::detachSharedRegion` in
+  `PlayListItemDraggerControl::beforeFirstCommit`, right after the drag's
+  undo snapshot; `UndoablePlayListItemAction` now records the clip's region,
+  undo re-points the clip and removes the copy, redo re-adds it
+  (`AudioRegionContainer::addAudioRegion`). No voice rebuild: the copy has
+  the same resources. CLI `set-region` still retrims every clip, by design.
+  Original notes: A `PlayListItem` holds a
   `std::shared_ptr<AudioRegion>`, so changing a clip's start/end/length on
   the timeline mutates the region every other clip referencing it plays —
   trimming one instance silently reshapes the others. When a trim gesture

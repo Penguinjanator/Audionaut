@@ -177,6 +177,7 @@ void DraggerControl::commitData(const juce::Range<double> newData, audium::TimeC
 
         beginDragCommit(items);
         undoableAction = std::make_unique<audium::UndoablePlayListItemAction>(*container, items);
+        beforeFirstCommit();
     }
  
     commitPositionData(*positionableObject.get(), newData, context);
