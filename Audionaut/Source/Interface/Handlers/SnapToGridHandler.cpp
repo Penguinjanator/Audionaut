@@ -184,7 +184,7 @@ const std::vector<SnapToGridHandler::Segment> SnapToGridHandler::getPlayListItem
 bool SnapToGridHandler::snapToGrid(const ZoomHandler& zoomHandler,
                                    double &clocks)
 {
-    if (!juce::ModifierKeys::currentModifiers.isShiftDown()) {
+    if (!juce::ModifierKeys::currentModifiers.isCtrlDown()) {
         
         auto beats          = audium::TempoProvider::clocksToBeats(clocks);
         auto tolerance      = zoomHandler.xToBeats(10.0);

@@ -181,7 +181,16 @@ waveform + lane overlay ramps), and playback/export render them (equal-power
 sqrt curves, overlapping clips sum as independent voices). What is missing is
 the one-gesture crossfade UX on top:
 
-- [ ] **Auto-create symmetric fades when clips overlap.** When a clip is
+- [x] **Auto-create symmetric fades when clips overlap.** Done 2026-10-15
+  (feature/overlap-crossfade) as a **Shift-drag** gesture: while Shift is
+  held during a horizontal clip drag (move/trim/stretch), every partial
+  overlap of the dragged clips gets left fade-out = right fade-in = overlap
+  (offsets reset to the edges), live per drag step from the drag-start fades
+  (`PlayListContainer::crossfadeOverlappingNeighbours`,
+  `PlayListItemDraggerControl::afterPositionCommit`); the undo step covers
+  the whole playlist. Fades stay when clips separate later; no preference.
+  Snap bypass moved Shift → Ctrl. Drops, paste and CLI verbs don't
+  crossfade. Original notes: When a clip is
   dragged/trimmed so it overlaps its neighbour on the same playlist, create
   the crossfade automatically: the left clip gets a fade-out over the overlap
   (`setFadeOut`), the right clip a fade-in (`setFadeIn`), each clamped to the
@@ -191,16 +200,6 @@ the one-gesture crossfade UX on top:
   `validateData`) and `AudioTrack::dropPlayListItem`. Decide: recompute on
   every overlap change vs. only on first contact (protect user-edited fades),
   and whether a preference toggles the behavior.
-
-- [ ] **Drag one handle across a cut to shape both clips at once.** At a butt
-  joint (clip A ends where clip B starts, typically after a split), dragging
-  A's fade-out-end handle past the cut should simultaneously set B's
-  fade-in-start to the mirrored negative offset (and vice versa), producing a
-  symmetric crossfade without touching clip positions. The handle wiring
-  lives in `PlayListItemComponent::setPlayListItem` (onValueChange lambdas);
-  the neighbour is found via the playlist container (items are kept sorted by
-  position). Needs a paired undo action (one gesture = one transaction across
-  two items) and the lane `ClipFadeOverlay` already draws both sides.
 
 ## Arrangement editing
 
