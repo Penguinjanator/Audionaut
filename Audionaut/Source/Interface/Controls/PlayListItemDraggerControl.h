@@ -116,6 +116,10 @@ public:
     // began, so moving apart again or releasing Shift brings them back.
     void beginDragCommit (std::vector<std::shared_ptr<audium::PlayListItem>>& items) override;
     bool afterPositionCommit() override;
+
+    // A trim must not reshape other clips playing the same region: each
+    // trimmed clip whose region is shared gets its own copy first.
+    void beforeFirstCommit() override;
     void endDragCommit() override;
     
     void setPlayListItem(std::shared_ptr<audium::PlayListItem> playListItem_) { playListItem = playListItem_; }

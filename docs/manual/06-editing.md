@@ -28,6 +28,9 @@ and fades stay with the edge they belong to.
   pool for later use.
 - Regions can be renamed in the Regions list.
 - *Edit → Delete Unused Regions* clears out every region no clip uses.
+- Trimming the edge of a clip whose region other clips also play gives
+  that clip its own freshly named copy of the region first, so the other
+  clips stay as they are. Undo removes the copy again.
 
 ## Moving, duplicating, deleting clips
 

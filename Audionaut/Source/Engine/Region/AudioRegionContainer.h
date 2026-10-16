@@ -130,6 +130,18 @@ public:
     std::shared_ptr<AudioRegion> findSimilarRegion(std::shared_ptr<AudioRegion> otherRegion) const;
 
     /**
+     * @brief Adds an existing region object back to the container (redo of
+     *        a step that created it); a no-op if it is already there.
+     * @param region A shared pointer to the `AudioRegion` to add.
+     */
+    void addAudioRegion(std::shared_ptr<AudioRegion> region);
+
+    /**
+     * @brief Returns true if the region object is in this container.
+     */
+    bool containsAudioRegion(const AudioRegion* region) const;
+
+    /**
      * @brief Deletes a specific audio region.
      * @param region A shared pointer to the `AudioRegion` to delete.
      */

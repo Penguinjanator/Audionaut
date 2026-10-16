@@ -55,6 +55,11 @@ public:
     void cleanup() override {}
     
     std::shared_ptr<AudioRegion> getRegion() const { return audioRegion; }
+
+    /// Points the clip at another region of the same resource group (e.g. a
+    /// private copy of a shared region). The voice sources are built from
+    /// the group's resources, so they stay as they are.
+    void setRegion(std::shared_ptr<AudioRegion> region);
     
     juce::Range<double> getRegionData(audium::TimeContextType context) const override;
     void setRegionData(juce::Range<double> newRegionData, audium::TimeContextType context) override;

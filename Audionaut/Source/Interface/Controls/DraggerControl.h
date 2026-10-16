@@ -209,6 +209,11 @@ public:
     /// the drag may change besides the selected ones to the undo snapshot.
     virtual void beginDragCommit (std::vector<std::shared_ptr<audium::PlayListItem>>&) {}
 
+    /// Called once per drag, right after the undo snapshot is taken and
+    /// before the first change lands - changes made here are part of the
+    /// drag's undo step.
+    virtual void beforeFirstCommit() {}
+
     /// Called after every position commit of a drag (live and at mouse-up).
     /// Returns true while the drag has changed clips beyond their position.
     virtual bool afterPositionCommit() { return false; }
