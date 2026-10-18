@@ -26,6 +26,7 @@
 #include "Interface/Dialogs/StemSeparationDialog.h"
 #include "Engine/Separation/DemucsConfig.h"
 #include "Interface/Dialogs/AnalysisSettingsComponent.h"
+#include "Interface/Handlers/SnapToGridHandler.h"
 
 using namespace audium;
 
@@ -164,6 +165,7 @@ void AudiumMainWindow::getAllCommands (Array <CommandID>& commands)
         CommandIDs::pageLeft,
         CommandIDs::pageRight,
         CommandIDs::followTransport,
+        CommandIDs::enableSnapToGrid,
         CommandIDs::toggleFullScreen,
         StandardApplicationCommandIDs::undo,
         StandardApplicationCommandIDs::redo,
@@ -280,6 +282,11 @@ void AudiumMainWindow::getCommandInfo (const CommandID commandID, ApplicationCom
             result.setInfo ("Follow Transport", "Follow Transport", CommandCategories::view, 0);
             result.defaultKeypresses.add (KeyPress ('f', ModifierKeys::ctrlModifier, 0));
             result.setTicked (getEngine()->getPlayListScheduler()->getFollowTransport());
+            break;
+        case CommandIDs::enableSnapToGrid:
+            result.setInfo ("Snap to Grid", "Snap drags to the grid", CommandCategories::view, 0);
+            result.defaultKeypresses.add (KeyPress ('g', ModifierKeys::commandModifier, 0));
+            result.setTicked (SnapToGridHandler::isEnabled());
             break;
         
         case StandardApplicationCommandIDs::undo:
@@ -404,6 +411,11 @@ bool AudiumMainWindow::perform (const InvocationInfo& info)
         case CommandIDs::followTransport:
             getEngine()->getPlayListScheduler()->setFollowTransport(!getEngine()->getPlayListScheduler()->getFollowTransport());
             mainComponent->rebuildUI();
+            break;
+        case CommandIDs::enableSnapToGrid:
+            SnapToGridHandler::setEnabled (! SnapToGridHandler::isEnabled());
+            AudiumApplication::getPreferences().setValue (PreferenceKeys::snapToGridEnabled,
+                                                          SnapToGridHandler::isEnabled() ? "true" : "false");
             break;
         case StandardApplicationCommandIDs::undo:
             getEngine()->getUndoManager()->undo();

@@ -100,7 +100,7 @@ Vorbis or MP3 file (see [Exporting audio](09-export.md)).
 
 ## Snap and zoom
 
-The grid snaps drags to musical positions (hold **Ctrl** while dragging to
-place freely); *View → Zoom In / Zoom Out*
+The grid snaps drags to musical positions (*Options → Snap to Grid*, **Cmd+G**,
+turns snapping off to place freely); *View → Zoom In / Zoom Out*
 (**Cmd++** / **Cmd+-**) and paging (**←** / **→**) navigate, and *Follow
 Transport* keeps the playhead in view.
