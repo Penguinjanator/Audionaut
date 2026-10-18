@@ -55,6 +55,11 @@ public:
     void cleanup() override {}
     
     std::shared_ptr<AudioRegion> getRegion() const { return audioRegion; }
+
+    /// Points the clip at another region of the same resource group (e.g. a
+    /// private copy of a shared region). The voice sources are built from
+    /// the group's resources, so they stay as they are.
+    void setRegion(std::shared_ptr<AudioRegion> region);
     
     juce::Range<double> getRegionData(audium::TimeContextType context) const override;
     void setRegionData(juce::Range<double> newRegionData, audium::TimeContextType context) override;
@@ -132,6 +137,12 @@ public:
     const ClipDynamics& getDynamics() const { return dynamics; }
 
     bool isRecording() const;
+
+    /// Display-only, never persisted: the clip is the neighbour in a
+    /// Shift-drag crossfade, so its fade curves draw although it is not
+    /// selected.
+    void setCrossfadePartner(bool partner) noexcept { crossfadePartner = partner; }
+    bool isCrossfadePartner() const noexcept { return crossfadePartner; }
     
     const double getRecordedLength(audium::TimeContextType context) const;
     
@@ -153,6 +164,8 @@ private:
     // replay neither rebuilds voice sources nor restarts other clips
     std::unique_ptr<audium::UndoablePlayListItemAction> undoableAction;
     
+    bool crossfadePartner = false;
+
     // The absolute transport position
     double absolutePositionClocks = 0.0;
 

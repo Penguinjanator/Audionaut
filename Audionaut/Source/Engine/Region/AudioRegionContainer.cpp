@@ -212,6 +212,22 @@ void AudioRegionContainer::deleteAudioRegionsForResourceGroup(std::shared_ptr<Re
     }
 }
 
+void AudioRegionContainer::addAudioRegion(std::shared_ptr<AudioRegion> region)
+{
+    jassert(region != nullptr);
+    if (containsAudioRegion(region.get()))
+        return;
+
+    audioRegions.push_back(region);
+    sortRegionIds();
+}
+
+bool AudioRegionContainer::containsAudioRegion(const AudioRegion* region) const
+{
+    return std::any_of(audioRegions.begin(), audioRegions.end(),
+                       [region](const auto& item) { return item.get() == region; });
+}
+
 void AudioRegionContainer::deleteAudioRegion(std::shared_ptr<AudioRegion> region)
 {
     deleteAudioRegion(region.get());

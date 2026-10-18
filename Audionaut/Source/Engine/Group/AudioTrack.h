@@ -197,7 +197,8 @@ public:
     
     std::vector<std::shared_ptr<AudioResource>> addAudioFile (std::shared_ptr<ResourceGroup> resourceGroup,
                                                               const juce::File filename,
-                                                              int &destChannel);
+                                                              int &destChannel,
+                                                              juce::String& error);
     
     std::shared_ptr<PlayListItem> createDefaultPlayListItem(std::shared_ptr<AudioResource> audioResource,
                                    std::shared_ptr<ResourceGroup> resourceGroup,

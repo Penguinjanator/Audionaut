@@ -43,7 +43,9 @@ void DraggerControl::mouseDown (const juce::MouseEvent& e)
 
 void DraggerControl::mouseUp (const juce::MouseEvent& e)
 {
-    if (std::abs(e.getOffsetFromDragStart().getX()) > 0) {
+    // a drag that returned to its start still has to commit: its last live
+    // step may have left the clips (or their crossfades) off the start state
+    if (std::abs(e.getOffsetFromDragStart().getX()) > 0 || undoableAction != nullptr) {
         auto rangeInClocks = zoomHandler->xToClocks(componentToDrag->getBounds().toDouble().getHorizontalRange());
         zoomHandler->snapToGrid(rangeInClocks);
         commitRangeToEngine(rangeInClocks);
@@ -51,13 +53,16 @@ void DraggerControl::mouseUp (const juce::MouseEvent& e)
         if (undoableAction != nullptr) {
             undoableAction->storeNewState();
             if (! undoableAction->isNoOp()) {
-                auto transactionName = stretchDrag ? "Stretch Clip"
+                auto transactionName = crossfaded ? "Crossfade Clips"
+                                     : stretchDrag ? "Stretch Clip"
                                      : currentDragMode == middleEdge ? "Move Clip" : "Trim Clip";
                 audiumEngine->getUndoManager()->perform(undoableAction.release(), transactionName);
                 audiumEngine->getUndoManager()->beginNewTransaction();
             }
             undoableAction = nullptr;
         }
+        endDragCommit();
+        crossfaded = false;
         sendChangeMessage();
     }
 
@@ -170,10 +175,14 @@ void DraggerControl::commitData(const juce::Range<double> newData, audium::TimeC
             if (auto item = std::dynamic_pointer_cast<audium::PlayListItem>(object))
                 items.push_back(item);
 
+        beginDragCommit(items);
         undoableAction = std::make_unique<audium::UndoablePlayListItemAction>(*container, items);
+        beforeFirstCommit();
     }
  
     commitPositionData(*positionableObject.get(), newData, context);
+
+    crossfaded = afterPositionCommit();
 }
 
 bool DraggerControl::commitPositionData(const audium::PositionableBase &positionableBase,

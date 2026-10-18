@@ -29,6 +29,7 @@
 #include "Interface/Dialogs/FloatingToolWindow.h"
 #include "Interface/Dialogs/FileBrowserView.h"
 #include "Interface/Dialogs/AboutWindowComponent.h"
+#include "Interface/Handlers/SnapToGridHandler.h"
 
 using namespace audium;
 
@@ -180,6 +181,8 @@ void AudiumApplication::initialise (const juce::String& commandLine)
         savedAudioDeviceState = juce::XmlDocument (getPreferences().getValue(PreferenceKeys::audioDeviceSettings)).getDocumentElement();
     audiumEngine->initialise(savedAudioDeviceState.get());
     applyAnalysisPreferences();
+    // View -> Snap to Grid, on unless switched off
+    SnapToGridHandler::setEnabled(getPreferences().getValue(PreferenceKeys::snapToGridEnabled, "true") == "true");
 
 
     initialOpenDirectory = File::getSpecialLocation (File::userMusicDirectory);
@@ -662,7 +665,7 @@ MenuBarModel* AudiumApplication::getMenuModel()
 
 StringArray AudiumApplication::getMenuNames()
 {
-    StringArray currentMenuNames { "File", "Edit", "Create", "View"};
+    StringArray currentMenuNames { "File", "Edit", "Create", "Options", "View"};
     return currentMenuNames;
 }
 
@@ -676,6 +679,9 @@ PopupMenu AudiumApplication::createMenu (const String& menuName)
     
     if (menuName == "Create")
         return createCreateMenu();
+
+    if (menuName == "Options")
+        return createOptionsMenu();
 
     if (menuName == "View")
         return createViewMenu();
@@ -774,6 +780,14 @@ PopupMenu AudiumApplication::createCreateMenu()
     return menu;
 }
 
+PopupMenu AudiumApplication::createOptionsMenu()
+{
+    PopupMenu menu;
+    menu.addCommandItem (commandManager.get(), CommandIDs::followTransport);
+    menu.addCommandItem (commandManager.get(), CommandIDs::enableSnapToGrid);
+    return menu;
+}
+
 PopupMenu AudiumApplication::createViewMenu()
 {
     PopupMenu menu;
@@ -785,8 +799,6 @@ PopupMenu AudiumApplication::createViewMenu()
     menu.addCommandItem (commandManager.get(), CommandIDs::zoomOut);
     menu.addCommandItem (commandManager.get(), CommandIDs::pageLeft);
     menu.addCommandItem (commandManager.get(), CommandIDs::pageRight);
-    menu.addSeparator();
-    menu.addCommandItem (commandManager.get(), CommandIDs::followTransport);
 
     return menu;
 }

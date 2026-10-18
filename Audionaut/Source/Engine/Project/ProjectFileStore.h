@@ -108,17 +108,16 @@ public:
     static bool isValidProjectStructure(const juce::File& file);
 
     /**
-     * @brief Reads a project JSON file. The file is framed by
-     *        juce::OutputStream::writeString (see Streamable), so it is read
-     *        back the same way before parsing.
+     * @brief Reads a project JSON file (Streamable::readJsonText, so files
+     *        from before 1.6.6 with a trailing NUL still load).
      * @throws std::runtime_error when the file can't be opened, is empty, or
      *         doesn't parse.
      */
     static json readProjectJson(const juce::File& file);
 
     /**
-     * @brief Writes JSON to `target` atomically (temp file + rename) with the
-     *        writeString framing.
+     * @brief Writes JSON to `target` atomically (temp file + rename) as plain
+     *        JSON text (Streamable::writeJsonText).
      */
     bool writeJsonAtomically(const juce::File& target, const json& content, std::string& error);
 

@@ -28,6 +28,9 @@ and fades stay with the edge they belong to.
   pool for later use.
 - Regions can be renamed in the Regions list.
 - *Edit → Delete Unused Regions* clears out every region no clip uses.
+- Trimming the edge of a clip whose region other clips also play gives
+  that clip its own freshly named copy of the region first, so the other
+  clips stay as they are. Undo removes the copy again.
 
 ## Moving, duplicating, deleting clips
 
@@ -51,6 +54,12 @@ Every clip carries its own dynamics:
   neighbouring source material, which is how two butting clips crossfade.
 
 ![A crossfade at a clip joint: the outgoing clip's fade-out and the incoming clip's fade-in overlap](img/clip-fades.png)
+
+To crossfade two clips that overlap, hold **Shift** while dragging or
+trimming one of them: wherever it overlaps a neighbour, the left clip fades
+out and the right clip fades in over exactly the overlap, updating live as
+you drag. Releasing Shift, or dragging out of the overlap, brings the
+original fades back; the crossfade is one undo step.
 
 Crossfades at segment joints can also be created automatically by Auto Edit
 (see [Analysis and Auto Edit](08-analysis-and-auto-edit.md)); their default
@@ -91,6 +100,7 @@ Vorbis or MP3 file (see [Exporting audio](09-export.md)).
 
 ## Snap and zoom
 
-The grid snaps drags to musical positions; *View → Zoom In / Zoom Out*
+The grid snaps drags to musical positions (*Options → Snap to Grid*, **Cmd+G**,
+turns snapping off to place freely); *View → Zoom In / Zoom Out*
 (**Cmd++** / **Cmd+-**) and paging (**←** / **→**) navigate, and *Follow
 Transport* keeps the playhead in view.

@@ -14,8 +14,9 @@ void FadeInOutView::paint (juce::Graphics& g)
         return;
 
     // the curves are editing UI: unselected clips show their fades through
-    // the tapered waveform alone
-    if (! playListItem->isSelected())
+    // the tapered waveform alone - except the neighbour of a Shift-drag
+    // crossfade, whose fade-in/out is being shaped by the drag
+    if (! playListItem->isSelected() && ! playListItem->isCrossfadePartner())
         return;
 
 

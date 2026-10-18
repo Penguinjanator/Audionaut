@@ -15,6 +15,9 @@
 #include "Engine/AudioSources/VoiceSource.h"
 #include "Engine/Project/ProjectFileStore.h"
 #include "Engine/Undo/UndoablePlayListItemAction.h"
+#include "Engine/Region/AudioRegion.h"
+#include "Engine/Region/AudioRegionContainer.h"
+#include "Engine/Group/ResourceGroup.h"
 
 #include "TestUtils.h"
 #include "TestEngine.h"
@@ -245,6 +248,136 @@ SCENARIO("clip drags undo without rebuilding the clips", "[engine][undo][playlis
             {
                 REQUIRE(undoManager->canUndo() == undoableBefore);
             }
+        }
+    }
+}
+
+SCENARIO("trimming a clip whose region other clips share edits a private copy", "[engine][undo][playlist][region]")
+{
+    GIVEN("two clips playing the same region")
+    {
+        TestEngine engine;
+        const auto audioFile = createSlowSawTwoSecondsAudioFile();
+        REQUIRE(audioFile.existsAsFile());
+        REQUIRE(engine->getProjectFileStore()->open(audioFile, nullptr));
+
+        auto container = engine->getAudioTrackContainer();
+        auto playList = container->getAudioTrack(0)->getPlayListContainer();
+        auto item = playList->getPlayListItem(0);
+        REQUIRE(item != nullptr);
+
+        const auto sharedRegion = item->getRegion();
+        const auto regionBefore = item->getRegionData(clocks);
+        const auto length = item->getAbsolutePositionRange(clocks).getLength();
+        auto second = playList->createPlayListItemAtPositionUI(sharedRegion,
+                                                               item->getAbsolutePosition(clocks) + length,
+                                                               clocks);
+        REQUIRE(second != nullptr);
+        second->init();
+        REQUIRE(second->getRegion() == sharedRegion);
+
+        auto regions = sharedRegion->getResourceGroup()->getAudioRegionContainer();
+        const auto numRegionsBefore = regions->getNumRegions();
+
+        WHEN("the first clip detaches before its trim")
+        {
+            REQUIRE(playList->detachSharedRegion(*item));
+            item->moveLength(-length / 4.0, clocks);
+
+            THEN("it trims its own copy and the other clip keeps the shared region")
+            {
+                REQUIRE(item->getRegion() != sharedRegion);
+                REQUIRE(item->getRegion()->getName() != sharedRegion->getName());
+                REQUIRE(regions->getNumRegions() == numRegionsBefore + 1);
+                REQUIRE(item->getRegionData(clocks).getLength() == Catch::Approx(regionBefore.getLength() * 0.75));
+                REQUIRE(second->getRegion() == sharedRegion);
+                REQUIRE(second->getRegionData(clocks) == regionBefore);
+            }
+
+            AND_WHEN("its copy is no longer shared")
+            {
+                THEN("a further trim does not copy again")
+                {
+                    REQUIRE_FALSE(playList->detachSharedRegion(*item));
+                    REQUIRE(regions->getNumRegions() == numRegionsBefore + 1);
+                }
+            }
+        }
+
+        WHEN("the region is used by a single clip")
+        {
+            playList->deletePlayListItem(second.get(), false);
+
+            THEN("there is nothing to detach")
+            {
+                REQUIRE_FALSE(playList->detachSharedRegion(*item));
+                REQUIRE(item->getRegion() == sharedRegion);
+                REQUIRE(regions->getNumRegions() == numRegionsBefore);
+            }
+        }
+
+        WHEN("the detach and the trim are one undo step, as in a drag")
+        {
+            auto undoManager = container->getUndoManager();
+            auto action = std::make_unique<UndoablePlayListItemAction>(*container,
+                std::vector<std::shared_ptr<PlayListItem>>{ item, second });
+            REQUIRE(playList->detachSharedRegion(*item));
+            const auto copy = item->getRegion();
+            item->moveLength(-length / 4.0, clocks);
+            action->storeNewState();
+            REQUIRE_FALSE(action->isNoOp());
+            undoManager->perform(action.release(), "Trim Clip");
+            undoManager->beginNewTransaction();
+
+            THEN("undo puts the clip back on the shared region and drops the copy")
+            {
+                undoManager->undo();
+                REQUIRE(item->getRegion() == sharedRegion);
+                REQUIRE(item->getRegionData(clocks) == regionBefore);
+                REQUIRE(second->getRegionData(clocks) == regionBefore);
+                REQUIRE(regions->getNumRegions() == numRegionsBefore);
+                REQUIRE_FALSE(regions->containsAudioRegion(copy.get()));
+
+                AND_THEN("redo brings the trimmed copy back")
+                {
+                    undoManager->redo();
+                    REQUIRE(item->getRegion() == copy);
+                    REQUIRE(regions->containsAudioRegion(copy.get()));
+                    REQUIRE(regions->getNumRegions() == numRegionsBefore + 1);
+                    REQUIRE(item->getRegionData(clocks).getLength() == Catch::Approx(regionBefore.getLength() * 0.75));
+                    REQUIRE(second->getRegionData(clocks) == regionBefore);
+                }
+            }
+        }
+    }
+}
+
+SCENARIO("an open clip session does not keep the project alive", "[engine][undo][playlist][region]")
+{
+    GIVEN("a clip with a gain/fade session still open when the engine goes away")
+    {
+        std::weak_ptr<PlayListItem> itemWeak;
+        std::weak_ptr<AudioRegion> regionWeak;
+        {
+            TestEngine engine;
+            const auto audioFile = createSlowSawTwoSecondsAudioFile();
+            REQUIRE(audioFile.existsAsFile());
+            REQUIRE(engine->getProjectFileStore()->open(audioFile, nullptr));
+
+            auto item = engine->getAudioTrackContainer()->getAudioTrack(0)->getPlayListContainer()->getPlayListItem(0);
+            REQUIRE(item != nullptr);
+            itemWeak = item;
+            regionWeak = item->getRegion();
+
+            // the session step lives in the item itself
+            item->onDragStart();
+            item->getDynamics().setGain(0, 0.5, true);
+        }
+
+        THEN("the clip and its region are released with the engine")
+        {
+            REQUIRE(itemWeak.expired());
+            REQUIRE(regionWeak.expired());
         }
     }
 }

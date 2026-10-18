@@ -9,6 +9,7 @@
 #include "Cli/Commands/Commands.h"
 #include "Engine/Project/ProjectFileStore.h"
 #include "Engine/AudiumEngine.h"
+#include "Engine/Playback/PlaybackDefines.h"
 
 using namespace audium;
 
@@ -35,8 +36,8 @@ juce::File makeWorkDirectory()
 
 const auto testFilesDir = juce::String (CURRENT_SOURCE_DIR) + "/TestFiles/";
 
-// Parses a saved Project.json (tolerating the writer's trailing NUL, which
-// strict parsers reject).
+// Parses a saved Project.json (tolerating the trailing NUL that versions
+// before 1.6.6 wrote, which strict parsers reject).
 nlohmann::json readProjectJson (const juce::File& project)
 {
     auto text = project.getChildFile ("Project.json").loadFileAsString().toStdString();
@@ -128,6 +129,22 @@ SCENARIO ("cli create and info", "[cli]")
 
         WHEN ("info runs on it") {
             REQUIRE (cli::runInfo (makeArgs ("info " + project.getFullPathName()), context) == cli::exitOk);
+        }
+
+        THEN ("Project.json is plain JSON without a trailing NUL (#84)") {
+            auto text = project.getChildFile ("Project.json").loadFileAsString().toStdString();
+            REQUIRE_FALSE (text.empty());
+            REQUIRE (text.back() == '}');
+            REQUIRE_NOTHROW (nlohmann::json::parse (text));
+        }
+
+        WHEN ("Project.json ends with the NUL terminator older versions wrote") {
+            auto projectJson = project.getChildFile ("Project.json");
+            REQUIRE (projectJson.appendData ("", 1));
+
+            THEN ("it still loads") {
+                REQUIRE (cli::runInfo (makeArgs ("info " + project.getFullPathName()), context) == cli::exitOk);
+            }
         }
 
         WHEN ("create runs again on the same path") {
@@ -224,11 +241,47 @@ SCENARIO ("cli split and create-region", "[cli][region]")
             }
         }
 
+        WHEN ("create-region is given the name of an existing region") {
+            THEN ("it fails as name_taken with nothing created (#186)") {
+                nlohmann::json envelope;
+                cli::CliContext capturing;
+                capturing.envelopeSink = [&envelope] (const nlohmann::json& produced) { envelope = produced; };
+
+                REQUIRE (cli::runCreateRegion (makeArgs ("create-region " + project.getFullPathName()
+                                                         + " --name sine-0dB --start 0.25 --end 0.75 --unit seconds"),
+                                               capturing)
+                         == cli::exitFailure);
+                REQUIRE (envelope["error"]["code"] == "name_taken");
+                auto names = allRegionNames (readProjectJson (project));
+                REQUIRE (std::count (names.begin(), names.end(), "sine-0dB") == 1);
+            }
+        }
+
         WHEN ("create-region's range reaches beyond the clip") {
             REQUIRE (cli::runCreateRegion (makeArgs ("create-region " + project.getFullPathName()
                                                      + " --name tail --start 0.5 --end 2.0 --unit seconds"),
                                            context)
                      == cli::exitFailure);
+        }
+
+        WHEN ("create-region covers a late clip exactly, up to just inside its end (#186)") {
+            // the reported case: a short clip far into the timeline, range from
+            // its start to one microsecond before its end
+            REQUIRE (cli::runImport (makeArgs ("import " + project.getFullPathName() + " "
+                                               + audioFile.getFullPathName()
+                                               + " --position 950.4206349206352"),
+                                     context)
+                     == cli::exitOk);
+            REQUIRE (cli::runCreateRegion (makeArgs ("create-region " + project.getFullPathName()
+                                                     + " --name late --start 950.4206349206352"
+                                                     + " --end 951.4206339206352 --unit seconds"),
+                                           context)
+                     == cli::exitOk);
+
+            THEN ("the region exists") {
+                auto names = allRegionNames (readProjectJson (project));
+                REQUIRE (std::count (names.begin(), names.end(), "late") == 1);
+            }
         }
 
         WHEN ("create-region is missing its name or range") {
@@ -430,6 +483,20 @@ SCENARIO ("cli clip editing and set-region", "[cli][region]")
 
             THEN ("the range is clamped to the one-second source") {
                 auto range = regionRangeSeconds (readProjectJson (project), "sine-0dB");
+                REQUIRE (range.first == 0.0);
+                REQUIRE (range.second == 1.0);
+            }
+        }
+
+        WHEN ("a retrim from the start asks for more than the source holds (#189)") {
+            REQUIRE (cli::runSetRegion (makeArgs ("set-region " + projectArg
+                                                  + " --region sine-0dB --start 0 --length 1.5 --unit seconds"),
+                                        context)
+                     == cli::exitOk);
+
+            THEN ("the region is the whole source and never starts below zero") {
+                auto range = regionRangeSeconds (readProjectJson (project), "sine-0dB");
+                REQUIRE (range.first == 0.0);
                 REQUIRE (range.second == 1.0);
             }
         }
@@ -1417,6 +1484,80 @@ SCENARIO ("cli rejects out-of-range numeric options", "[cli][validation]")
             THEN ("it renders") {
                 REQUIRE (envelope["ok"] == true);
                 REQUIRE (outputFile.existsAsFile());
+            }
+        }
+    }
+
+    workDir.deleteRecursively();
+}
+
+SCENARIO ("cli import stops at the project's channel limit", "[cli][channels]")
+{
+    auto workDir = makeWorkDirectory();
+    auto project = workDir.getChildFile ("channel-limit.audium");
+    auto stereoFile = juce::File (testFilesDir + "120-funk-1-sec.wav");
+    REQUIRE (stereoFile.existsAsFile());
+
+    cli::CliContext context;
+    context.quiet = true;
+
+    const auto projectArg = project.getFullPathName();
+    auto totalChannels = [] (const nlohmann::json& projectJson) {
+        std::size_t total = 0;
+        for (auto& track : projectJson["audium"]["audio_tracks"])
+            total += track.value ("channels", nlohmann::json::array()).size();
+        return total;
+    };
+
+    GIVEN ("a mono project that stereo imports fill up to one channel below the limit") {
+        REQUIRE (cli::runCreate (makeArgs ("create " + projectArg + " --channels 1"), context) == cli::exitOk);
+
+        const int fitting = (MAX_AUDIO_CHANNELS - 1) / 2;
+        for (int i = 0; i < fitting; ++i)
+            REQUIRE (cli::runImport (makeArgs ("import " + projectArg + " " + stereoFile.getFullPathName()),
+                                     context)
+                     == cli::exitOk);
+
+        const auto before = readProjectJson (project);
+        REQUIRE (totalChannels (before) == static_cast<std::size_t> (MAX_AUDIO_CHANNELS - 1));
+
+        WHEN ("one more stereo file is imported (#190)") {
+            nlohmann::json envelope;
+            cli::CliContext capturing;
+            capturing.envelopeSink = [&envelope] (const nlohmann::json& produced) { envelope = produced; };
+
+            THEN ("the import fails and adds no track without channels") {
+                REQUIRE (cli::runImport (makeArgs ("import " + projectArg + " " + stereoFile.getFullPathName()),
+                                         capturing)
+                         == cli::exitFailure);
+                REQUIRE (envelope["error"]["code"] == "import_failed");
+                REQUIRE (envelope["error"]["message"].get<std::string>().find ("channel") != std::string::npos);
+
+                auto after = readProjectJson (project);
+                REQUIRE (after["audium"]["audio_tracks"].size() == before["audium"]["audio_tracks"].size());
+                for (auto& track : after["audium"]["audio_tracks"])
+                    REQUIRE_FALSE (track.value ("channels", nlohmann::json::array()).empty());
+            }
+        }
+
+        WHEN ("a project from before the check has a track without channels") {
+            // what older versions left behind once the limit was hit
+            auto projectJson = readProjectJson (project);
+            auto& tracks = projectJson["audium"]["audio_tracks"];
+            const auto lastTrack = static_cast<int> (tracks.size()) - 1;
+            tracks[static_cast<std::size_t> (lastTrack)].erase ("channels");
+            REQUIRE (project.getChildFile ("Project.json").replaceWithText (projectJson.dump (2)));
+
+            THEN ("clip-gain on its clip fails instead of reporting an empty success") {
+                nlohmann::json envelope;
+                cli::CliContext capturing;
+                capturing.envelopeSink = [&envelope] (const nlohmann::json& produced) { envelope = produced; };
+
+                REQUIRE (cli::runClipGain (makeArgs ("clip-gain " + projectArg + " --at 0.5 --unit seconds"
+                                                     + " --track " + juce::String (lastTrack) + " --gain -6 --db"),
+                                           capturing)
+                         == cli::exitFailure);
+                REQUIRE (envelope["error"]["code"] == "no_channels");
             }
         }
     }

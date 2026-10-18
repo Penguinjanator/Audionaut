@@ -42,6 +42,13 @@ Shortcuts marked *Ctrl* use the Control key on every platform.
 | Create Audio Track… | Cmd+Shift+N |
 | Create Region… | Cmd+R |
 
+## Options
+
+| Action | Shortcut |
+|---|---|
+| Follow Transport | Ctrl+F |
+| Snap to Grid | Cmd+G |
+
 ## View
 
 | Action | Shortcut |
@@ -50,4 +57,3 @@ Shortcuts marked *Ctrl* use the Control key on every platform.
 | Open File Browser | Shift+NumPad 5 |
 | Zoom In / Zoom Out | Cmd++ / Cmd+- |
 | Page Left / Page Right | ← / → |
-| Follow Transport | Ctrl+F |

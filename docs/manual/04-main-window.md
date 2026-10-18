@@ -79,7 +79,8 @@ and can be dragged, trimmed and split. A bar/beat grid underlies everything
 beats — can be displayed over the material.
 
 Navigation: **Cmd++** / **Cmd+-** zoom, **←** / **→** page left and right,
-*View → Follow Transport* (**Ctrl+F**) keeps the view on the playhead.
+*Options → Follow Transport* (**Ctrl+F**) keeps the view on the playhead.
+*Options → Snap to Grid* (**Cmd+G**) switches snapping to the grid on and off.
 
 ## Right panel
 

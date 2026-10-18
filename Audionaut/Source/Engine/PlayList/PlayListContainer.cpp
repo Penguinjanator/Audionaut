@@ -217,6 +217,28 @@ bool PlayListContainer::exitsInPlayList(const AudioRegion* region)
     return it != playListItems.getObjects().end();
 }
 
+bool PlayListContainer::detachSharedRegion(PlayListItem& item)
+{
+    auto region = item.getRegion();
+    const auto shared = std::any_of(playListItems.getObjects().begin(), playListItems.getObjects().end(),
+                                    [&](const auto& other) {
+        return other.get() != &item && other->getRegion() == region;
+    });
+    if (! shared)
+        return false;
+
+    auto resourceGroup = region->getResourceGroup();
+    auto regionContainer = resourceGroup->getAudioRegionContainer();
+    auto copy = regionContainer->createRegion(regionContainer->getUniqueName(region->getName()),
+                                              item.getRegionData(audium::clocks),
+                                              region->getAudioTrack(),
+                                              resourceGroup,
+                                              region,
+                                              audium::clocks);
+    item.setRegion(copy);
+    return true;
+}
+
 const std::vector<std::shared_ptr<PlayListItem>> &PlayListContainer::getPlayListItems() const
 {
     return playListItems.getObjects();
@@ -443,6 +465,70 @@ bool PlayListContainer::sortedByPosition() const
     }
     
     return true;
+}
+
+std::vector<PlayListItem*> PlayListContainer::crossfadeOverlappingNeighbours(const std::vector<PlayListItem*>& selectedItemsIn)
+{
+    const auto context = audium::clocks;
+    std::set<std::pair<PlayListItem*, PlayListItem*>> pairs;
+
+    for (auto* item : selectedItemsIn) {
+        if (item == nullptr || getPlayListItemIndex(item) < 0)
+            continue;
+
+        const auto range = item->getAbsolutePositionRange(context);
+        PlayListItem* left = nullptr;
+        PlayListItem* right = nullptr;
+        auto leftOverlap = 0.0, rightOverlap = 0.0;
+
+        // the partner on each side with the largest partial overlap; a clip
+        // containing the other (or contained by it) has no joint to fade
+        for (auto& other : playListItems.getObjects()) {
+            if (other.get() == item)
+                continue;
+
+            const auto otherRange = other->getAbsolutePositionRange(context);
+            if (otherRange.getStart() < range.getStart()
+                && otherRange.getEnd() > range.getStart()
+                && otherRange.getEnd() < range.getEnd()
+                && otherRange.getEnd() - range.getStart() > leftOverlap) {
+                left = other.get();
+                leftOverlap = otherRange.getEnd() - range.getStart();
+            }
+            if (otherRange.getStart() > range.getStart()
+                && otherRange.getStart() < range.getEnd()
+                && otherRange.getEnd() > range.getEnd()
+                && range.getEnd() - otherRange.getStart() > rightOverlap) {
+                right = other.get();
+                rightOverlap = range.getEnd() - otherRange.getStart();
+            }
+        }
+
+        if (left != nullptr)
+            pairs.insert({ left, item });
+        if (right != nullptr)
+            pairs.insert({ item, right });
+    }
+
+    std::vector<PlayListItem*> fadedItems;
+    for (auto& [left, right] : pairs) {
+        const auto leftRange = left->getAbsolutePositionRange(context);
+        const auto rightRange = right->getAbsolutePositionRange(context);
+        const auto overlap = leftRange.getEnd() - rightRange.getStart();
+
+        // fades are fractions of the clip; the timeline length scales the
+        // same way as the source window, so this also holds for stretched
+        // and re-pitched clips
+        left->getDynamics().setFadeOutEnd(0.0);
+        left->getDynamics().setFadeOut(overlap / leftRange.getLength());
+        right->getDynamics().setFadeInStart(0.0);
+        right->getDynamics().setFadeIn(overlap / rightRange.getLength());
+
+        fadedItems.push_back(left);
+        fadedItems.push_back(right);
+    }
+
+    return fadedItems;
 }
 
 double PlayListContainer::findNextFreePosition(double position, audium::TimeContextType context) const
