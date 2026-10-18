@@ -189,7 +189,7 @@ the one-gesture crossfade UX on top:
   (`PlayListContainer::crossfadeOverlappingNeighbours`,
   `PlayListItemDraggerControl::afterPositionCommit`); the undo step covers
   the whole playlist. Fades stay when clips separate later; no preference.
-  Snap bypass moved Shift → Ctrl. Drops, paste and CLI verbs don't
+  Snap bypass replaced by *Options → Snap to Grid* (Cmd+G). Drops, paste and CLI verbs don't
   crossfade. Original notes: When a clip is
   dragged/trimmed so it overlaps its neighbour on the same playlist, create
   the crossfade automatically: the left clip gets a fade-out over the overlap

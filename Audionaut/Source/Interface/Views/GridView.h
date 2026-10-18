@@ -55,7 +55,7 @@ public:
             juce::Rectangle<float> gridLine(x, drawingArea.getY(), 1.f, drawingArea.getHeight());
 
             if (!range.isEmpty() &&
-                !juce::ModifierKeys::currentModifiers.isCtrlDown() &&
+                SnapToGridHandler::isEnabled() &&
                 (std::abs(static_cast<double>(x) - std::max(range.getStart(), 0.0)) < 10.0 ||
                  std::abs(static_cast<double>(x) - range.getEnd()) < 10.0)) {
                 

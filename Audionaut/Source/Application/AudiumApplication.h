@@ -63,6 +63,7 @@ public:
     PopupMenu createFileMenu();
     PopupMenu createEditMenu();
     PopupMenu createCreateMenu();
+    PopupMenu createOptionsMenu();
     PopupMenu createViewMenu();
     void handleMainMenuCommand (int menuItemID);
     PopupMenu createExtraAppleMenuItems();
