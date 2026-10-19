@@ -6,4 +6,5 @@ compatibility_date = "2026-09-01"
 GITHUB_REPO = "kvoltmer/Audionaut"
 LABELS_FEATURE = "enhancement,agent-request"
 LABELS_BUG = "bug,agent-report"
+LABELS_RELAYED = "community"
 # GITHUB_TOKEN is a secret: `wrangler secret put GITHUB_TOKEN`
