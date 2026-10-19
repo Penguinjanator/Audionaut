@@ -7,6 +7,9 @@
 #include "Engine/Analysis/AnalysisCache.h"
 #include "Engine/Analysis/AnalysisWorker.h"
 #include "Engine/Resource/AudioResourceContainer.h"
+#include "Engine/PlayList/PlayListItem.h"
+#include "Engine/PlayList/PlayListContainer.h"
+#include "Engine/Group/AudioTrack.h"
 
 using namespace audium;
 
@@ -144,6 +147,52 @@ SCENARIO("a command session does not queue background analysis",
         auto worker = session->getAudioResourceContainer()->getAnalysisWorker();
         REQUIRE_FALSE (worker->isAutoAnalysisEnabled());
         REQUIRE (worker->getRemainingCount() == 0);
+    }
+
+    workDir.deleteRecursively();
+}
+
+// Only an isolated verb (export) renders. A session that reads or edits the
+// model gets clips without a playback chain: building and prefilling one
+// per clip was most of a verb's time on a long MP3 project (#204).
+SCENARIO("only an isolated session gives clips a playback chain",
+         "[cli][session][voice]")
+{
+    auto workDir = makeSessionWorkDirectory();
+    auto project = workDir.getChildFile ("no-voices.audium");
+    cli::CliContext context;
+    context.quiet = true;
+
+    REQUIRE (cli::runCreate (juce::ArgumentList ("audionaut-cli", "create " + project.getFullPathName()),
+                             context) == cli::exitOk);
+    const auto audio = juce::String (CURRENT_SOURCE_DIR) + "/TestFiles/120-funk-1-sec.wav";
+    REQUIRE (cli::runImport (juce::ArgumentList ("audionaut-cli", "import " + project.getFullPathName() + " " + audio),
+                             context) == cli::exitOk);
+
+    const auto projectJson = project.getChildFile (ProjectFileStore::projectFileName);
+
+    auto numVoiceSources = [] (const cli::ProjectSession& session) {
+        size_t count = 0;
+        for (auto track : session->getAudioTrackContainer()->getAudioTracks())
+            for (const auto& item : track->getPlayListContainer()->getPlayListItems())
+                count += item->getVoiceSources().size();
+        return count;
+    };
+
+    for (auto access : { cli::CommandAccess::readOnly, cli::CommandAccess::mutating }) {
+        int failure = cli::exitFailure;
+        auto session = cli::openProjectSession (projectJson, access, context, failure);
+        REQUIRE (static_cast<bool> (session));
+        REQUIRE_FALSE (session->getAudioResourceContainer()->transportSourcesEnabled());
+        REQUIRE (numVoiceSources (session) == 0);
+    }
+
+    {
+        int failure = cli::exitFailure;
+        auto session = cli::openProjectSession (projectJson, cli::CommandAccess::isolated, context, failure);
+        REQUIRE (static_cast<bool> (session));
+        REQUIRE (session->getAudioResourceContainer()->transportSourcesEnabled());
+        REQUIRE (numVoiceSources (session) >= 1);
     }
 
     workDir.deleteRecursively();

@@ -81,6 +81,18 @@ public:
      * is the default; a scratch engine clears it right after construction.
      */
     void setOwnsTemporaryDirectory(bool shouldOwn) noexcept { ownsTemporaryDirectory = shouldOwn; }
+
+    /**
+     * @brief Whether clips build their playback chain (voice sources).
+     *
+     * A session that only edits the model - the CLI's and the agent host's
+     * non-rendering verbs - never plays a clip, yet every clip it loads
+     * would build and prefill a read-ahead chain, which on a long MP3 is
+     * most of a verb's time. Off, PlayListItem::init() leaves clips without
+     * voice sources; nothing may render on such an engine. On by default.
+     */
+    void setTransportSourcesEnabled(bool shouldCreate) noexcept { transportSourcesEnabledFlag = shouldCreate; }
+    bool transportSourcesEnabled() const noexcept { return transportSourcesEnabledFlag; }
     
     /**
      * @brief Creates a temporary project directory.
@@ -304,6 +316,9 @@ public:
 private:
     /// False for a scratch container sharing another session's temp directory.
     bool ownsTemporaryDirectory = true;
+
+    /// False on a session that edits the model without ever rendering.
+    bool transportSourcesEnabledFlag = true;
 
     /// Cancels pending background analysis of the file unless another loaded
     /// resource still references it.

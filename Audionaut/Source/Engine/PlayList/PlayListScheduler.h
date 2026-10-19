@@ -153,6 +153,14 @@ public:
             process(data.transportPositionClocks, numSamples, loopResult);
             
         }
+        else {
+            // Stopped, nothing renders - but take the snapshots over anyway.
+            // Every edit retires the voice sources of the clips it rebuilt,
+            // and they are released only once this thread has pulled a
+            // snapshot without them. Left to the next play, a stopped
+            // editing session kept every retired chain alive (#204).
+            pullSnapshots();
+        }
         
         audioBusInterface->process(context);
     }
@@ -239,6 +247,11 @@ public:
     
 private:
     
+    /** Audio thread, stopped transport: takes over the committed voice and
+        clip snapshots without rendering, so retired voice sources can be
+        released at the next commit (see VoiceSourceContainer::commit). */
+    void pullSnapshots() noexcept;
+
     // process sequencing
     void process(double absolutePosition,
                  int numSamples,
