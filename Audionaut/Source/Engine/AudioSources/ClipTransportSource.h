@@ -163,6 +163,12 @@ public:
     */
     void setStretchMode (StretchMode newMode) noexcept;
 
+    /// Off the audio thread: gives the stretch node its Rubber Band
+    /// instances (about 5 MB per channel each, two lanes). The clip model
+    /// calls it when the clip enters Stretch mode; until then an enabled
+    /// node passes through. Idempotent.
+    void allocateStretcher();
+
     void setGain (float newGain) noexcept;
     float getGain() const noexcept;
     

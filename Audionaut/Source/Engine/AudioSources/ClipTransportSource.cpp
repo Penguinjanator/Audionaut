@@ -85,7 +85,8 @@ void ClipTransportSource::setSource (juce::PositionableAudioSource* const newSou
             // the pitch-preserving node lives in the chain permanently and
             // is bypassed in RePitch mode - see setStretchMode
             newMasterSource = newStretchSource
-                = new StretchAudioSource (newResamplerSource, maxNumChannels);
+                = new StretchAudioSource (newResamplerSource, maxNumChannels,
+                                          StretchAudioSource::Stretchers::onDemand);
 
             // The stretcher primes with a large look-ahead right after a
             // position jump, which the read-ahead thread has not buffered
@@ -455,6 +456,12 @@ void ClipTransportSource::setSpeedRatio (double newSpeedRatio) noexcept
 
     if (isPrepared)
         updateSpeedChain();
+}
+
+void ClipTransportSource::allocateStretcher()
+{
+    if (stretchSource != nullptr)
+        stretchSource->allocateStretchers();
 }
 
 void ClipTransportSource::setStretchMode (StretchMode newMode) noexcept

@@ -5,6 +5,8 @@
 
 #include "WaveFormViewBase.h"
 
+#include <map>
+
 void WaveFormViewBase::paint (juce::Graphics& g)
 {
     paintBackground(g);
@@ -160,12 +162,23 @@ std::shared_ptr<audium::AudioThumbnail> WaveFormViewBase::createThumbnailForReso
         audioResource->audioFormatReader == nullptr)
         return nullptr;
 
+    // One thumbnail per file, shared by every view that shows it: the level
+    // data is the whole file at 64 samples per point (~2 MB for a 7-minute
+    // stereo file), and the two channel resources of a stereo file and every
+    // clip cut from it would otherwise each hold a copy. Weak entries: the
+    // views own the thumbnail, the registry only finds it again.
+    static std::map<juce::String, std::weak_ptr<audium::AudioThumbnail>> sharedThumbnails;
+    const auto key = audioResource->getUrl().toString(true);
+    if (auto existing = sharedThumbnails[key].lock())
+        return existing;
+
     auto thumbnailCache = audiumEngine->getAudioResourceContainer()->getAudioThumbnailCache().get();
     auto formatManager = audiumEngine->getAudioResourceContainer()->getAudioFormatManager().get();
     auto sourceSamplesPerThumbnailSample = 64;
     auto thumbnail = std::make_shared<audium::AudioThumbnail>(sourceSamplesPerThumbnailSample,
                                                               *formatManager,
                                                               *thumbnailCache);
+    sharedThumbnails[key] = thumbnail;
     // reuse shared_ptr if the file is memory mapped
     if (dynamic_cast<MemoryMappedAudioFormatReader*> (audioResource->audioFormatReader.get()) != nullptr) {
         auto hashCode = audioResource->getUrl().toString(true).hashCode64();

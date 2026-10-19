@@ -169,6 +169,7 @@ SCENARIO ("a clip at another sample rate plays its whole speed range without gro
 
         WHEN ("the standby lane is primed for a wrap in Stretch mode")
         {
+            transport.allocateStretcher();   // what the clip model does on entering Stretch mode
             transport.setStretchMode (StretchMode::Stretch);
             render (transport, 4, blockSize);   // primes the live stretcher
 

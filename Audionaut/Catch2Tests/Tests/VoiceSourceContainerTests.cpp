@@ -164,3 +164,60 @@ SCENARIO("retired voice sources are released while the transport is stopped", "[
         }
     }
 }
+
+// Retired sources are released at the next commit - or, since an edit
+// retires chains the size of the clips it rebuilt, by a timer as soon as
+// the audio thread has pulled the snapshot without them.
+SCENARIO("retired voice sources are released by a timer once pulled", "[engine][voice][snapshot][memory]")
+{
+    TestEngine engine;
+    auto tracks = engine->getAudioTrackContainer();
+    auto scheduler = engine->getPlayListScheduler();
+
+    auto audioFile = File(voiceTestFilesDirectory + "120-funk-1-sec.wav");
+    REQUIRE(audioFile.existsAsFile());
+
+    GIVEN("a clip that was rebuilt and committed") {
+        engine->getProjectSerializer()->createNewProject();
+        REQUIRE(tracks->addAudioFiles({ audioFile.getFullPathName() }, 0.0, nullptr, false));
+
+        std::shared_ptr<AudioTrack> clipTrack;
+        for (auto i = 0; i < tracks->getNumItems(); ++i)
+            if (tracks->getAudioTrack(i)->getPlayListContainer()->playListItems.size() > 0)
+                clipTrack = tracks->getAudioTrack(i);
+        REQUIRE(clipTrack != nullptr);
+
+        auto container = clipTrack->getVoiceSourceContainer();
+        auto item = clipTrack->getPlayListContainer()->playListItems.getObjects()[0];
+        const auto numVoices = item->getVoiceSources().size();
+        std::weak_ptr<VoiceSource> watch = item->getVoiceSources()[0];
+
+        scheduler->commitPlayListData();
+        REQUIRE(container->pull());
+
+        item->init();
+        scheduler->commitPlayListData();           // the old sources are excluded from this snapshot
+        REQUIRE(container->getNumRetired() == numVoices);
+
+        WHEN("the audio thread pulls that snapshot and the timer fires, with no further commit") {
+            REQUIRE(container->pull());
+            juce::Thread::sleep(80);
+            juce::Timer::callPendingTimersSynchronously();
+
+            THEN("the retired sources are gone") {
+                REQUIRE(container->getNumRetired() == 0);
+                REQUIRE(watch.expired());
+            }
+        }
+
+        WHEN("the timer fires before the audio thread pulled") {
+            juce::Thread::sleep(80);
+            juce::Timer::callPendingTimersSynchronously();
+
+            THEN("nothing is released yet") {
+                REQUIRE(container->getNumRetired() == numVoices);
+                REQUIRE_FALSE(watch.expired());
+            }
+        }
+    }
+}

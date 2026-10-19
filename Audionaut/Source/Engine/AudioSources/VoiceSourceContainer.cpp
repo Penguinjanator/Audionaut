@@ -107,6 +107,18 @@ void VoiceSourceContainer::commit()
     for (const auto& voiceSource : voiceSources)
         producer.push_back(voiceSource.get());
     snapshot.commit();
+
+    // 4. what was excluded goes as soon as the audio thread has let it go
+    if (! retiredCommitted.empty())
+        startTimer(50);
+}
+
+void VoiceSourceContainer::timerCallback()
+{
+    releaseRetired();
+
+    if (retiredCommitted.empty())
+        stopTimer();
 }
 
 void VoiceSourceContainer::releaseRetired()
