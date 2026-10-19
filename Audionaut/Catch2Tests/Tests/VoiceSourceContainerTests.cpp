@@ -201,8 +201,12 @@ SCENARIO("retired voice sources are released by a timer once pulled", "[engine][
 
         WHEN("the audio thread pulls that snapshot and the timer fires, with no further commit") {
             REQUIRE(container->pull());
-            juce::Thread::sleep(80);
-            juce::Timer::callPendingTimersSynchronously();
+            // the timer thread has to count the interval down first; give a
+            // starved runner time, but stop as soon as the release happened
+            for (int i = 0; i < 100 && container->getNumRetired() > 0; ++i) {
+                juce::Thread::sleep(20);
+                juce::Timer::callPendingTimersSynchronously();
+            }
 
             THEN("the retired sources are gone") {
                 REQUIRE(container->getNumRetired() == 0);
@@ -211,7 +215,7 @@ SCENARIO("retired voice sources are released by a timer once pulled", "[engine][
         }
 
         WHEN("the timer fires before the audio thread pulled") {
-            juce::Thread::sleep(80);
+            juce::Thread::sleep(120);
             juce::Timer::callPendingTimersSynchronously();
 
             THEN("nothing is released yet") {

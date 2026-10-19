@@ -1212,11 +1212,12 @@ SCENARIO("a clip allocates its stretchers only in Stretch mode", "[engine][clips
             }
         }
 
-        WHEN("a Stretch clip is rebuilt from JSON, as undo and agent edits do") {
-            item->setStretchMode(StretchMode::Stretch);
+        WHEN("a RePitch clip reads a Stretch state from JSON, as a project load does") {
             json state;
             REQUIRE(item->writeToJson(state));
-            REQUIRE(item->readFromJson(state, false));   // deinit + init
+            state["stretch_mode"] = 1;
+            REQUIRE_FALSE(hasStretchers());
+            REQUIRE(item->readFromJson(state, false));   // deinit + init with the old mode, then the new one
 
             THEN("the new voice sources have their stretchers") {
                 REQUIRE(item->getStretchMode() == StretchMode::Stretch);
@@ -1224,14 +1225,15 @@ SCENARIO("a clip allocates its stretchers only in Stretch mode", "[engine][clips
             }
         }
 
-        WHEN("a stretched clip plays") {
+        WHEN("a stretched clip plays at half speed") {
             item->setSpeedRatio(0.5);
             item->setStretchMode(StretchMode::Stretch);
             fixture.commit();
             auto stretched = fixture.bounce();
 
-            THEN("the on-demand stretchers render it at length") {
+            THEN("the on-demand stretchers hold the pitch, so this is not the pass-through") {
                 REQUIRE(stretched.getNumSamples() == Catch::Approx(4.0 * 44100.0).margin(512));
+                REQUIRE(measureFrequency(stretched, 0.5, 3.5) == Catch::Approx(440.0).epsilon(0.02));
             }
         }
     }

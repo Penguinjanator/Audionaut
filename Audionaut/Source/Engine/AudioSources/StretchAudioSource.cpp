@@ -113,7 +113,9 @@ void StretchAudioSource::setStandbyInput (juce::AudioSource* standbyInputSource)
 
 void StretchAudioSource::primeStandby (juce::int64 positionKey, double ratio, int blocksLeft)
 {
-    if (! prepared || standbyInput == nullptr || standbyBackend == nullptr)
+    // the stretchers are published as one (allocateStretchers): this must
+    // not see one of them half-built, whatever order the scheduler calls in
+    if (! prepared || standbyInput == nullptr || ! stretchersReady.load (std::memory_order_acquire))
         return;
 
     StandbyClaim claim (standbyBusy);

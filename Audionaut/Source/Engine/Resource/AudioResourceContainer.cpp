@@ -556,4 +556,26 @@ void AudioResourceContainer::onRecordingFinished()
     }
 }
 
+std::shared_ptr<AudioThumbnail> AudioResourceContainer::getThumbnailForResource(const std::shared_ptr<AudioResource>& resource)
+{
+    if (resource == nullptr || resource->audioFormatReader == nullptr)
+        return nullptr;
+
+    const auto key = resource->getUrl().toString(true);
+    if (auto existing = sharedThumbnails[key].lock())
+        return existing;
+
+    constexpr int sourceSamplesPerThumbnailSample = 64;
+    auto thumbnail = std::make_shared<AudioThumbnail>(sourceSamplesPerThumbnailSample, *formatManager, *audioThumbnailCache);
+    sharedThumbnails[key] = thumbnail;
+
+    // a memory-mapped reader is shared with the thumbnail, anything else gets its own input source
+    if (dynamic_cast<MemoryMappedAudioFormatReader*>(resource->audioFormatReader.get()) != nullptr)
+        thumbnail->setReader(resource->audioFormatReader, key.hashCode64());
+    else
+        thumbnail->setSource(new juce::URLInputSource(resource->getUrl()));
+
+    return thumbnail;
+}
+
 } // namespace audium

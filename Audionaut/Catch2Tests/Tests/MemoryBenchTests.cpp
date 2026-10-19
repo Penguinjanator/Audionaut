@@ -9,7 +9,6 @@
 // RePitch clip must not carry one (StretchAudioSource::Stretchers::onDemand),
 // and a clip of a stereo file should cost well under a megabyte.
 #include <catch2/catch_test_macros.hpp>
-#include <malloc/malloc.h>
 #include <iomanip>
 
 #include "Engine/Factory/AudiumFactory.h"
@@ -30,9 +29,13 @@
 #include <rubberband/RubberBandStretcher.h>
 #include "Engine/Resource/AudioResourceContainer.h"
 #include "Engine/Resource/AudioResource.h"
-#include "Interface/Views/WaveFormViewBase.h"
 #include "Interface/Widgets/audium_AudioThumbnail.h"
 #include "TestEngine.h"
+
+// Exact live-heap numbers come from Darwin's libmalloc; the bench is hidden
+// anyway, so the other platforms simply do without it.
+#if JUCE_MAC
+#include <malloc/malloc.h>
 
 using namespace audium;
 
@@ -134,12 +137,19 @@ TEST_CASE("memory per chain part", "[.][bench][memory]")
     measure ("VoiceSource via the resource container (what a clip gets per resource)", [&] {
         return resource->getContainer().createTransportSourceForAudioResource (resource);
     });
-    measure ("AudioThumbnail on the memory-mapped reader, 64 samples per point, fully loaded", [&] {
-        auto thumbnail = WaveFormViewBase::createThumbnailForResource (std::shared_ptr<AudiumEngine> (&*engine, [] (AudiumEngine*) {}), resource);
+    measure ("AudioThumbnail copy on the memory-mapped reader, 64 samples per point, fully loaded", [&] {
+        // built directly, not through the views' per-file registry: this is
+        // what every view used to hold
+        auto thumbnail = std::make_shared<audium::AudioThumbnail> (64, *engine->getAudioResourceContainer()->getAudioFormatManager(),
+                                                                   *engine->getAudioResourceContainer()->getAudioThumbnailCache());
+        thumbnail->setReader (resource->audioFormatReader, resource->getUrl().toString (true).hashCode64());
         for (int i = 0; i < 400 && ! thumbnail->isFullyLoaded(); ++i)
             juce::Thread::sleep (25);
         REQUIRE(thumbnail->isFullyLoaded());
         return thumbnail;
+    });
+    measure ("AudioThumbnail through the resource container's per-file registry", [&] {
+        return resource->getContainer().getThumbnailForResource (resource);
     });
 }
 
@@ -180,3 +190,5 @@ TEST_CASE("memory per clip chain", "[.][bench][memory]")
               << (after - before) / (double) numVoices() << " MB per voice source)\n"
               << "  undo history grew by " << (engine->getUndoManager()->getNumberOfUnitsTakenUpByStoredCommands() - unitsBefore) / 64 << " units per split" << std::endl;
 }
+
+#endif // JUCE_MAC

@@ -222,7 +222,15 @@ private:
     class CachedWindow;
 
     std::unique_ptr<LevelDataSource> source;
-    std::unique_ptr<CachedWindow> window;
+
+    // One cached window per view of this thumbnail (it is shared per file,
+    // and every clip cut from the file draws its own range): a draw reuses
+    // the window with its parameters, or takes the least recently used one.
+    static constexpr int maxCachedWindows = 32;
+    std::vector<std::unique_ptr<CachedWindow>> windows;
+    uint32 windowUseCounter = 0;
+    CachedWindow& windowFor (int numSamples, double startTime, double endTime);
+    void invalidateWindows();
     OwnedArray<ThumbData> channels;
 
     int32 samplesPerThumbSample = 0;
