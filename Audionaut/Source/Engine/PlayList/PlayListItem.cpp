@@ -45,8 +45,15 @@ void PlayListItem::init()
 
 void PlayListItem::createTransportSources()
 {
+    auto& resourceContainer = owner.getAudioTrack().getAudioResourceContainer();
+
+    // an engine that never renders (CLI / agent scratch session) leaves the
+    // clip without a playback chain - see setTransportSourcesEnabled
+    if (! resourceContainer.transportSourcesEnabled())
+        return;
+
     for (const auto &resource : getRegion()->getAudioResources()) {
-        auto voiceSource = owner.getAudioTrack().getAudioResourceContainer().createTransportSourceForAudioResource(resource);
+        auto voiceSource = resourceContainer.createTransportSourceForAudioResource(resource);
         if (voiceSource != nullptr)
             voiceSources.emplace_back(voiceSource);
     }
