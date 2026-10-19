@@ -112,7 +112,12 @@ public:
             return;
         }
 
-        run (argv, workingDirectory, request.value ("stream", false));
+        const auto groupField = request.value ("group", json::object());
+        const ProjectFileStore::AgentEditGroup group {
+            juce::String (groupField.value ("session", std::string())),
+            juce::String (groupField.value ("task", std::string())) };
+
+        run (argv, workingDirectory, request.value ("stream", false), group);
         host.busy = false;
     }
 
@@ -127,7 +132,8 @@ private:
         sendMessage (toBlock (makeResult (exitCode, envelope, log)));
     }
 
-    void run (const juce::StringArray& argv, const juce::File& workingDirectory, bool stream)
+    void run (const juce::StringArray& argv, const juce::File& workingDirectory, bool stream,
+              const ProjectFileStore::AgentEditGroup& group)
     {
         json envelope;
         juce::StringArray log;
@@ -186,7 +192,7 @@ private:
             exitCode = performCliCommand (arguments, context);
 
             if (exitCode == exitOk && HostedSessionScope::hasStagedState())
-                applyStaged (argv[0], liveState, HostedSessionScope::takeStagedState(),
+                applyStaged (liveState, HostedSessionScope::takeStagedState(), group,
                              exitCode, envelope);
         });
 
@@ -201,15 +207,17 @@ private:
         reply (exitCode, envelope, log);
     }
 
-    /** Message thread. Puts the verb's result on the live document as one
-        undoable step - unless the user changed it while we worked. */
-    void applyStaged (const juce::String& verb, const json& liveStateAtStart,
-                      json staged, int& exitCode, json& envelope)
+    /** Message thread. Puts the verb's result on the live document, in the
+        undo step of the task it belongs to - unless the user changed the
+        document while we worked. */
+    void applyStaged (const json& liveStateAtStart, json staged,
+                      const ProjectFileStore::AgentEditGroup& group,
+                      int& exitCode, json& envelope)
     {
         json liveStateNow;
         host.engine->getProjectSerializer()->writeToJson (liveStateNow);
 
-        if (documentOf (liveStateNow) != documentOf (liveStateAtStart)) {
+        if (ProjectFileStore::documentOf (liveStateNow) != ProjectFileStore::documentOf (liveStateAtStart)) {
             // Applying now would take the user's edit with it.
             exitCode = exitFailure;
             envelope = errorEnvelope ("project_changed",
@@ -220,9 +228,8 @@ private:
 
         std::string error;
         const auto applied = host.engine->getProjectFileStore()
-            ->applyStateAsUndoableReload (std::move (staged), true, true,
-                                          "Agent: " + verb,
-                                          [&error] (std::string message) { error = message; });
+            ->applyAgentState (std::move (staged), group,
+                               [&error] (std::string message) { error = message; });
 
         if (! applied) {
             exitCode = exitFailure;
@@ -233,18 +240,6 @@ private:
 
         if (host.onProjectMutated != nullptr)
             host.onProjectMutated();
-    }
-
-    /** The state minus what moves without the user editing anything - the
-        playhead while playing, scroll and zoom - and which applying keeps
-        live anyway. */
-    static json documentOf (json state)
-    {
-        if (auto audium = state.find ("audium"); audium != state.end() && audium->is_object()) {
-            audium->erase ("scheduler");
-            audium->erase ("ui_state");
-        }
-        return state;
     }
 
     AgentHost& host;

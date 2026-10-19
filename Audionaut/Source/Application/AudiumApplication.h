@@ -24,6 +24,7 @@ namespace cli { namespace agent { class AgentHost; } } class UsageAnalytics; cla
 class AudiumApplication  : public juce::JUCEApplication,
                            public AudioImporter,
                            private juce::AsyncUpdater,
+                           private juce::ChangeListener,
                            private juce::ApplicationCommandManagerListener
 {
 public:
@@ -160,6 +161,10 @@ private:
 
     void applyAnalysisPreferences();
     void handleAsyncUpdate() override;
+
+    /// The undo manager changed: the Edit menu's Undo/Redo items carry the
+    /// step names, so the menus are rebuilt.
+    void changeListenerCallback (juce::ChangeBroadcaster*) override;
     
     void showAboutWindow();
     void showFileBrowserWindow();
