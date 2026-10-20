@@ -146,6 +146,10 @@
         <FILE id="aJEqT2" name="Main.cpp" compile="1" resource="0" file="Source/Application/Main.cpp"/>
         <FILE id="UsgAn1" name="UsageAnalytics.cpp" compile="1" resource="0"
               file="Source/Application/UsageAnalytics.cpp"/>
+        <FILE id="CrRep1" name="CrashReporter.cpp" compile="1" resource="0"
+              file="Source/Application/CrashReporter.cpp"/>
+        <FILE id="CrRep2" name="CrashReporter.h" compile="0" resource="0"
+              file="Source/Application/CrashReporter.h"/>
         <FILE id="UpdCh1" name="UpdateChecker.cpp" compile="1" resource="0"
               file="Source/Application/UpdateChecker.cpp"/>
         <FILE id="UpdCh2" name="UpdateChecker.h" compile="0" resource="0"

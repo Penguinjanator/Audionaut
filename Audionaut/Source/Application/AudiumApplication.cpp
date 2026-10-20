@@ -21,6 +21,7 @@
 #include "Cli/AgentHost.h"
 #include "Util/EngineAccess.h"
 #include "Util/Preferences.h"
+#include "CrashReporter.h"
 #include "UpdateChecker.h"
 #include "UsageAnalytics.h"
 #include "AudiumMainWindow.h"
@@ -158,6 +159,9 @@ void AudiumApplication::initialise (const juce::String& commandLine)
         return;
     }
 
+    // GUI runs only: a CLI verb's crash surfaces to its caller instead
+    CrashReporter::install();
+
     LookAndFeel::setDefaultLookAndFeel (&lookAndFeel);
 
     splashScreen = std::make_unique<AboutSplashScreen>();
@@ -245,6 +249,11 @@ void AudiumApplication::handleAsyncUpdate()
     }
 
     askForUsageStatisticsConsent();
+
+    crashReporter = std::make_unique<CrashReporter> ([this] (const juce::String& name, const juce::StringPairArray& params) {
+        logUsageEvent (name, params);
+    });
+    crashReporter->offerPendingReport();
 
     updateChecker = std::make_unique<audium::UpdateChecker> (getPreferences());
     updateChecker->checkOnStartupIfDue();

@@ -19,7 +19,7 @@ class AboutSplashScreen;
 class MainComponent;
 
 namespace audium {
-namespace cli { namespace agent { class AgentHost; } } class UsageAnalytics; class UpdateChecker; class ProjectMonitor; class ProjectFileStore; class ProjectSerializer; }
+namespace cli { namespace agent { class AgentHost; } } class UsageAnalytics; class UpdateChecker; class CrashReporter; class ProjectMonitor; class ProjectFileStore; class ProjectSerializer; }
 
 class AudiumApplication  : public juce::JUCEApplication,
                            public AudioImporter,
@@ -127,6 +127,7 @@ private:
     std::unique_ptr<audium::Preferences> preferences;
     std::unique_ptr<audium::UsageAnalytics> usageAnalytics;
     std::unique_ptr<audium::UpdateChecker> updateChecker;
+    std::unique_ptr<audium::CrashReporter> crashReporter;
     std::unique_ptr<AudiumMenuModel> menuModel;
     std::unique_ptr<juce::FileChooser> chooser;
     std::unique_ptr<ImportOptionsComponent> importOptions;  // the Import... chooser's placement option, outlives the async dialog
