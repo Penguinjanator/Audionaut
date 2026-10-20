@@ -34,6 +34,7 @@ struct AgentEditBatch
     json after;                   ///< the document after the latest edit: what redo restores
     int numEdits = 0;
     juce::Time lastEdit;
+    juce::Time transactionTime; ///< the undo manager's stamp on the step, read after the first perform
 };
 
 /**
@@ -47,7 +48,7 @@ struct AgentEditBatch
 struct UndoableAgentBatchAction final : public juce::UndoableAction
 {
     UndoableAgentBatchAction (ProjectSerializer& serializer_, ProjectFileStore& store_,
-                              std::shared_ptr<AgentEditBatch> batch_) noexcept :
+                              std::shared_ptr<AgentEditBatch> batch_) :
         serializer (serializer_),
         store (store_),
         batch (std::move (batch_)),

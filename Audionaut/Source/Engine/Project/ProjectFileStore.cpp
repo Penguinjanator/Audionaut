@@ -201,6 +201,7 @@ bool ProjectFileStore::open (juce::File inFile, std::function<void (std::string)
                 if (serializer->readFromJson(projectJson, true)) {
                     currentProjectFile = inFile;
                     undoManager->clearUndoHistory();
+                    currentAgentBatch = nullptr;
                     playListScheduler->commitPlayListData();
                     refreshDiskStamps();
                     changedExternally = false;
@@ -322,6 +323,7 @@ bool ProjectFileStore::save (const juce::File& file_, std::function<void (std::s
 
             currentProjectFile = file;
             undoManager->clearUndoHistory();
+            currentAgentBatch = nullptr;
 
             // Persist analysis results alongside the project file.
             audioTrackContainer->getAnalysisProvider()->getCache()->saveToFolder(projectDirectory);
@@ -567,11 +569,23 @@ bool ProjectFileStore::applyStateAsUndoableReload (json afterState,
     return false;
 }
 
+static void eraseSelection (json& node)
+{
+    if (node.is_object()) {
+        node.erase ("selected");
+        for (auto& [key, value] : node.items()) eraseSelection (value);
+    }
+    else if (node.is_array()) {
+        for (auto& value : node) eraseSelection (value);
+    }
+}
+
 json ProjectFileStore::documentOf (json state)
 {
     if (auto audium = state.find ("audium"); audium != state.end() && audium->is_object()) {
         audium->erase ("scheduler");
         audium->erase ("ui_state");
+        eraseSelection (*audium); // clip selection: a click, not an edit
     }
     return state;
 }
@@ -581,12 +595,15 @@ bool ProjectFileStore::canExtendAgentBatch (const AgentEditBatch& batch,
                                             const json& liveState,
                                             juce::Time now) const
 {
-    if (batch.key != group.key())
+    // a bare CLI call carries no session: every verb is a step of its own
+    if (group.session.isEmpty() || batch.key != group.key())
         return false;
 
     // ours has to be the last step still: an undo, or any other edit's step
-    // since, ends the batch (a redo of ours brings it back)
-    if (undoManager->getUndoDescription() != batch.transactionName)
+    // since, ends the batch (a redo of ours brings it back). The name alone
+    // would also match another step named like ours, hence the time.
+    if (undoManager->getUndoDescription() != batch.transactionName
+        || undoManager->getTimeOfUndoTransaction() != batch.transactionTime)
         return false;
 
     // a user edit between two verbs leaves a document that is not the one
@@ -662,8 +679,10 @@ bool ProjectFileStore::applyAgentState (json afterState,
             return false;
         }
 
+        batch->transactionTime = undoManager->getTimeOfUndoTransaction();
         undoManager->beginNewTransaction();
-        currentAgentBatch = std::move (batch);
+        // nothing to extend without a session; the next verb starts its own step
+        currentAgentBatch = group.session.isNotEmpty() ? std::move (batch) : nullptr;
         return true;
     }
     catch (std::exception &ex)

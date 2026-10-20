@@ -498,7 +498,8 @@ void AudiumApplication::shutdown()
 
     // Add your application's shutdown code here..
     agentHost.reset();      // withdraw the marker and stop serving
-    audiumEngine->getUndoManager()->removeChangeListener (this);
+    if (audiumEngine != nullptr) // a second launch quits before creating one
+        audiumEngine->getUndoManager()->removeChangeListener (this);
     projectMonitor.reset(); // stop polling before the engine goes away
     mainWindow.reset(); // (deletes our window)
 
@@ -648,6 +649,12 @@ void AudiumApplication::changeListenerCallback (ChangeBroadcaster*)
 void AudiumApplication::applicationCommandInvoked(const ApplicationCommandTarget::InvocationInfo& info)
 {
     auto name = commandManager->getNameOfCommand(info.commandID);
+    // undo/redo are named after the step they would take back ("Undo Agent:
+    // remove pauses"); the step's text is the user's, not a dimension
+    if (info.commandID == StandardApplicationCommandIDs::undo)
+        name = "undo";
+    else if (info.commandID == StandardApplicationCommandIDs::redo)
+        name = "redo";
     if (name.isEmpty())
         name = "0x" + String::toHexString((int) info.commandID);
 

@@ -212,7 +212,9 @@ public:
      * `agentBatchIdleMinutes`. Extending applies the state directly and
      * moves the batch's redo state; nothing is added to the undo history.
      * Otherwise a batch starts: one `UndoableAgentBatchAction`, named after
-     * the task ("Agent: <task>") or "Agent edits".
+     * the task ("Agent: <task>") or "Agent edits". A group without a
+     * session (a bare CLI call, an older MCP server) never extends: each
+     * of its verbs is a step of its own.
      */
     bool applyAgentState(json afterState,
                          const AgentEditGroup& group,
@@ -220,8 +222,8 @@ public:
 
     /**
      * @brief The state minus what moves without the user editing anything:
-     *        the playhead while playing, scroll and zoom. Two states that
-     *        agree on this are the same document.
+     *        the playhead while playing, scroll and zoom, the clip
+     *        selection. Two states that agree on this are the same document.
      */
     static json documentOf(json state);
 

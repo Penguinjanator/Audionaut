@@ -112,7 +112,11 @@ public:
             return;
         }
 
-        const auto groupField = request.value ("group", json::object());
+        // no group field, or one that is not an object (an older client, a
+        // hand-written request): the verb belongs to no task and gets its own step
+        auto groupField = request.value ("group", json::object());
+        if (! groupField.is_object())
+            groupField = json::object();
         const ProjectFileStore::AgentEditGroup group {
             juce::String (groupField.value ("session", std::string())),
             juce::String (groupField.value ("task", std::string())) };

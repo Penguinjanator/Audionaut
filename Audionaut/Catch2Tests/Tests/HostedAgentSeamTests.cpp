@@ -316,13 +316,41 @@ SCENARIO("the verbs of one agent task share one undo step",
         }
     }
 
-    GIVEN("verbs that name no session and no task") {
+    GIVEN("verbs that name no session") {
         REQUIRE(store->applyAgentState(stateWithGain(0.5), {}, nullptr));
-        REQUIRE(store->applyAgentState(stateWithGain(0.25), {}, nullptr));
+        REQUIRE(store->applyAgentState(stateWithGain(0.25), { "", "remove pauses" }, nullptr));
 
-        THEN("they still share one step, under a generic name") {
-            REQUIRE(numUndoSteps() == 1);
+        THEN("each is a step of its own, the unnamed one under a generic name") {
+            REQUIRE(numUndoSteps() == 2);
+            REQUIRE(undoManager->getUndoDescription() == "Agent: remove pauses");
+            REQUIRE(undoManager->undo());
             REQUIRE(undoManager->getUndoDescription() == "Agent edits");
+        }
+    }
+
+    GIVEN("a step of the user's that carries the task's name and leaves the same document") {
+        REQUIRE(store->applyAgentState(stateWithGain(0.5), pauses, nullptr));
+        REQUIRE(undoManager->undo());
+        juce::Thread::sleep(2); // the undo manager stamps steps in milliseconds
+        REQUIRE(store->applyStateAsUndoableReload(stateWithGain(0.5), true, false, "Agent: remove pauses", nullptr));
+        REQUIRE(store->applyAgentState(stateWithGain(0.25), pauses, nullptr));
+
+        THEN("the agent's next verb does not extend into it") {
+            REQUIRE(numUndoSteps() == 2);
+            REQUIRE(undoManager->undo());
+            REQUIRE(container->getMasterGain() == Catch::Approx(0.5f));
+            REQUIRE(undoManager->getUndoDescription() == "Agent: remove pauses");
+        }
+    }
+
+    GIVEN("two states that differ only in which clip is selected") {
+        json selected = { { "audium", { { "tracks", json::array ({ { { "play_list_vector", json::array ({ { { "selected", true } } }) } } }) } } } };
+        json unselected = selected;
+        unselected["audium"]["tracks"][0]["play_list_vector"][0]["selected"] = false;
+        REQUIRE(selected != unselected);
+
+        THEN("they are the same document: a click is not an edit") {
+            REQUIRE(ProjectFileStore::documentOf(selected) == ProjectFileStore::documentOf(unselected));
         }
     }
 }
