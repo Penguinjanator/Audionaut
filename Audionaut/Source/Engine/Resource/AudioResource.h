@@ -189,7 +189,8 @@ public:
      * @param input The JSON object containing the URL data.
      * @return The created `juce::URL`.
      */
-    static const juce::URL urlFromJson (json& input);
+    /** @param baseDirectory What a relative path resolves against (ProjectDirectories::getSerializationBaseDirectory). */
+    static const juce::URL urlFromJson (json& input, const juce::File& baseDirectory);
     
     /**
      * @brief Tests the validity of a URL.

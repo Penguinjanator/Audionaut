@@ -77,3 +77,46 @@ private:
 
     JUCE_DECLARE_NON_COPYABLE(TestEngine)
 };
+
+/// A disposable copy of a checked-in session package (or legacy project
+/// file) from TestFiles/Sessions.
+///
+/// Opening a fixture in place makes it the engine's project directory, so
+/// anything the test then imports or records lands in the repository. The
+/// copy lives in a work directory of its own under the temp location and is
+/// deleted with this object. Declare it BEFORE the TestEngine (or engine)
+/// that opens it: the copy has to outlive the engine's readers.
+///
+///     FixtureSessionCopy session("move-channels.audium");
+///     TestEngine engine;
+///     REQUIRE(session.ok());
+///     REQUIRE(engine.open(session.file()));
+class FixtureSessionCopy
+{
+public:
+    explicit FixtureSessionCopy(const juce::String& sessionName)
+    {
+        const auto source = juce::File(CURRENT_SOURCE_DIR).getChildFile("TestFiles/Sessions").getChildFile(sessionName);
+        workDirectory = juce::File::getSpecialLocation(juce::File::tempDirectory)
+                            .getChildFile("audionaut-fixture-" + sessionName)
+                            .getNonexistentSibling();
+        package = workDirectory.getChildFile(sessionName);
+        copied = source.isDirectory() ? source.copyDirectoryTo(package)
+                                      : source.copyFileTo(package);
+    }
+
+    ~FixtureSessionCopy() { workDirectory.deleteRecursively(); }
+
+    /// Whether the fixture existed and was copied.
+    bool ok() const { return copied; }
+
+    /// The copied package (or project file): what to open.
+    const juce::File& file() const { return package; }
+
+private:
+    juce::File workDirectory;
+    juce::File package;
+    bool copied = false;
+
+    JUCE_DECLARE_NON_COPYABLE(FixtureSessionCopy)
+};

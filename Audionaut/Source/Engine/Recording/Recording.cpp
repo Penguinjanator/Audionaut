@@ -4,15 +4,18 @@
 //    Audionaut uses a GPL/commercial licence - see LICENCE.md for details.
 
 #include "Recording.h"
+#include "Engine/Resource/AudioResourceContainer.h"
 
 
 namespace audium {
 
 int Recording::recordingCounter = 0;
 
-Recording::Recording() :
+Recording::Recording(std::shared_ptr<ProjectDirectories> projectDirectories_) :
+    projectDirectories(std::move(projectDirectories_)),
     audioThumbnailCache(64)
 {
+    jassert(projectDirectories != nullptr);
     formatManager.registerBasicFormats();
 }
 
@@ -43,8 +46,11 @@ void Recording::record(bool start,
             if (start) {
                 recordingStartPositionClocks[channelNumber] = positionClocks;
                 // std::cout << "start rec " << channelNumber << " pos " << positionClocks << std::endl;
-                setRecordedFile(channelNumber, recorder->prepareRecording(Recording::recordingCounter,
-                                                                          channelNumber,
+                // the package's audio directory for a saved project, the session's temp package otherwise
+                const auto audioDirectory = AudioResourceContainer::getAudioFileDirectory(projectDirectories->getSerializationBaseDirectory());
+                setRecordedFile(channelNumber, recorder->prepareRecording(AudioResourceContainer::getAudioRecordingFile(audioDirectory,
+                                                                                                                        Recording::recordingCounter,
+                                                                                                                        channelNumber),
                                                                           sampleRate));
                 recorder->createRecordingThumbnail(formatManager, audioThumbnailCache);
                 recorder->start();

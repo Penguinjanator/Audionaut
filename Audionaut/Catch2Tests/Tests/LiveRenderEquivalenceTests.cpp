@@ -20,6 +20,7 @@
 #include "Engine/Project/ProjectFileStore.h"
 
 #include "LiveRenderHarness.h"
+#include "TestEngine.h"
 
 // The bounce and the live device callback drive the same scheduler, but
 // only the bounce had a test. These scenarios render a session through the
@@ -50,20 +51,14 @@ constexpr int kNumChannels = 2;
 /// arithmetic.
 constexpr float kTolerance = 1.0e-6f;
 
-const juce::File sessionsDir()
-{
-    return juce::File (juce::String (CURRENT_SOURCE_DIR)).getChildFile ("TestFiles/Sessions");
-}
-
 using Decorate = std::function<void (AudiumEngine&)>;
 
-/// A fresh engine with the session open and decorated.
-std::shared_ptr<AudiumEngine> openSession (const juce::String& name, const Decorate& decorate)
+/// A fresh engine with the session (a FixtureSessionCopy's file) open and decorated.
+std::shared_ptr<AudiumEngine> openSession (const juce::File& package, const Decorate& decorate)
 {
     auto engine = AudiumFactory::createAudiumEngine();
-    const auto session = sessionsDir().getChildFile (name);
-    REQUIRE (session.exists());
-    REQUIRE (engine->getProjectFileStore()->open (session, nullptr));
+    REQUIRE (package.exists());
+    REQUIRE (engine->getProjectFileStore()->open (package, nullptr));
     if (decorate)
         decorate (*engine);
     engine->getPlayListScheduler()->commitPlayListData();
@@ -168,17 +163,19 @@ SCENARIO ("the live callback renders what the bounce renders", "[engine][live][e
         DYNAMIC_SECTION (c.name)
         {
             constexpr int blockSize = 512;
+            FixtureSessionCopy session (c.session);
+            REQUIRE (session.ok());
 
             GIVEN ("the span bounced offline")
             {
-                auto bounceEngine = openSession (c.session, c.decorate);
+                auto bounceEngine = openSession (session.file(), c.decorate);
                 const auto bounce = bounceProject (*bounceEngine, c.startSeconds, c.lengthSeconds,
                                                    blockSize, kSampleRate, kNumChannels);
                 bounceEngine = nullptr;
 
                 WHEN ("the same span plays through the device callback at the same block size")
                 {
-                    auto liveEngine = openSession (c.session, c.decorate);
+                    auto liveEngine = openSession (session.file(), c.decorate);
                     LiveTrace trace;
                     const auto live = renderLive (*liveEngine, c, blockSize, &trace);
                     liveEngine = nullptr;
@@ -191,7 +188,7 @@ SCENARIO ("the live callback renders what the bounce renders", "[engine][live][e
 
                 WHEN ("it plays at the smaller block size of a typical device")
                 {
-                    auto liveEngine = openSession (c.session, c.decorate);
+                    auto liveEngine = openSession (session.file(), c.decorate);
                     LiveTrace trace;
                     const auto live = renderLive (*liveEngine, c, 256, &trace);
                     liveEngine = nullptr;
@@ -223,10 +220,12 @@ SCENARIO ("bouncing and then playing on one engine renders the same audio", "[en
         DYNAMIC_SECTION (c.name)
         {
             constexpr int blockSize = 512;
+            FixtureSessionCopy session (c.session);
+            REQUIRE (session.ok());
 
             GIVEN ("one engine with the session open")
             {
-                auto engine = openSession (c.session, c.decorate);
+                auto engine = openSession (session.file(), c.decorate);
 
                 WHEN ("the span is bounced, then played live, then bounced again")
                 {
@@ -265,17 +264,19 @@ SCENARIO ("the first device callback after Play renders the bounce's first block
     // the blocks built over the device's channel arrays.
     const auto& c = cases()[1];   // a start inside a clip: audio from sample 0
     constexpr int blockSize = 512;
+    FixtureSessionCopy session (c.session);
+    REQUIRE (session.ok());
 
     GIVEN ("the span bounced offline")
     {
-        auto bounceEngine = openSession (c.session, c.decorate);
+        auto bounceEngine = openSession (session.file(), c.decorate);
         const auto bounce = bounceProject (*bounceEngine, c.startSeconds, c.lengthSeconds,
                                            blockSize, kSampleRate, kNumChannels);
         bounceEngine = nullptr;
 
         WHEN ("Play is pressed and the device runs its first callback")
         {
-            auto engine = openSession (c.session, c.decorate);
+            auto engine = openSession (session.file(), c.decorate);
             juce::AudioBuffer<float> block;
             {
                 FakeAudioIODevice device (kSampleRate, blockSize, 2, kNumChannels);
@@ -313,17 +314,19 @@ SCENARIO ("the comparison tells a live render that left the loop from the bounce
     // the render) where the looping bounce is still at full scale.
     const auto& c = cases()[2];   // playback across the loop wraps
     constexpr int blockSize = 512;
+    FixtureSessionCopy session (c.session);
+    REQUIRE (session.ok());
 
     GIVEN ("the span bounced offline with the loop active")
     {
-        auto bounceEngine = openSession (c.session, c.decorate);
+        auto bounceEngine = openSession (session.file(), c.decorate);
         const auto bounce = bounceProject (*bounceEngine, c.startSeconds, c.lengthSeconds,
                                            blockSize, kSampleRate, kNumChannels);
         bounceEngine = nullptr;
 
         WHEN ("it plays live with the loop switched off")
         {
-            auto engine = openSession (c.session, c.decorate);
+            auto engine = openSession (session.file(), c.decorate);
             engine->getPlayListScheduler()->getTransportLoop()->setLoopActive (false);
             Case straight = c;
             straight.minLoopWraps = 0;

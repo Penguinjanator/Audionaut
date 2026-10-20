@@ -277,7 +277,7 @@ void AudiumApplication::offerOrphanedTempProjectRestore()
 {
     // crash recovery for never-saved projects: a leftover temp package with an
     // autosave means a previous session died with unsaved work
-    const auto orphanedTempProject = ProjectFileStore::findOrphanedTempAutosave();
+    const auto orphanedTempProject = audiumEngine->getProjectFileStore()->findOrphanedTempAutosave();
     if (orphanedTempProject == File())
         return;
 

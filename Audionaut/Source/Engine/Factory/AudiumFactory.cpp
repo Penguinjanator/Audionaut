@@ -21,6 +21,7 @@
 #include "Engine/Recording/RecordingActionHandler.h"
 #include "Engine/Analysis/AnalysisProvider.h"
 #include "Engine/Analysis/AnalysisWorker.h"
+#include "Engine/Project/ProjectDirectories.h"
 #include "Engine/Project/ProjectFileStore.h"
 #include "Engine/Project/ProjectSerializer.h"
 
@@ -32,6 +33,9 @@ std::shared_ptr<AudiumEngine> AudiumFactory::createAudiumEngine(std::shared_ptr<
         userPrompter = std::make_shared<HeadlessUserPrompter>();
 
     auto undoManager                = std::make_shared<juce::UndoManager>();
+
+    // where this engine's project lives on disk; one per engine, never static
+    auto projectDirectories         = std::make_shared<ProjectDirectories>();
     
     auto selectionManager           = std::make_shared<SelectionManager>();
     
@@ -49,7 +53,7 @@ std::shared_ptr<AudiumEngine> AudiumFactory::createAudiumEngine(std::shared_ptr<
     
     auto playback                   = std::make_shared<audium::Playback>();
     
-    auto recording                  = std::make_shared<audium::Recording>();
+    auto recording                  = std::make_shared<audium::Recording>(projectDirectories);
     
     auto audioBusRenderer           = std::make_shared<AudioBusRenderer<float>>(playback, recording);
     
@@ -76,7 +80,8 @@ std::shared_ptr<AudiumEngine> AudiumFactory::createAudiumEngine(std::shared_ptr<
                                                                                tempoProvider,
                                                                                voiceSourceContainer,
                                                                                analysisWorker,
-                                                                               userPrompter);
+                                                                               userPrompter,
+                                                                               projectDirectories);
 
     auto lockFreeCommander          = std::make_shared<LockFreeCommander>(256);
     
@@ -117,7 +122,8 @@ std::shared_ptr<AudiumEngine> AudiumFactory::createAudiumEngine(std::shared_ptr<
     auto projectFileStore           = std::make_shared<ProjectFileStore>(audioTrackContainer,
                                                                          audioResourceContainer,
                                                                          playListScheduler,
-                                                                         undoManager);
+                                                                         undoManager,
+                                                                         projectDirectories);
 
     auto projectSerializer          = std::make_shared<ProjectSerializer>(audioTrackContainer,
                                                                           audioResourceContainer,

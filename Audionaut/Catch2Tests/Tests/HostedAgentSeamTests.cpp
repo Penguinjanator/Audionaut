@@ -156,35 +156,47 @@ SCENARIO("a second engine leaves the session's temp directory alone",
          "[engine][hosted][temp]")
 {
     TestEngine engine;
+    auto store = engine->getProjectFileStore();
     engine->getProjectSerializer()->createNewProject();
 
-    const auto sessionTemp = ProjectFileStore::tempDirectory;
+    const auto sessionTemp = store->getTemporaryDirectory();
     REQUIRE(sessionTemp != File());
     REQUIRE(sessionTemp.isDirectory());
 
-    GIVEN("a scratch engine that does not own the temp directory") {
+    GIVEN("a scratch engine that borrows the session's directories") {
         {
             auto scratch = AudiumFactory::createAudiumEngine();
-            scratch->getAudioResourceContainer()->setOwnsTemporaryDirectory(false);
-            REQUIRE(ProjectFileStore::tempDirectory == sessionTemp);
+            auto scratchStore = scratch->getProjectFileStore();
+            scratchStore->getProjectDirectories()->borrowFrom(*store->getProjectDirectories());
+            REQUIRE(scratchStore->getTemporaryDirectory() == sessionTemp);
+            REQUIRE_FALSE(scratchStore->getProjectDirectories()->ownsTemporaryDirectory());
+
+            // not even an explicit reset may take it
+            scratch->getAudioResourceContainer()->createTemporaryProjectDirectory(true);
+            REQUIRE(scratchStore->getTemporaryDirectory() == sessionTemp);
         }
 
-        THEN("its teardown leaves the directory and the static in place") {
-            REQUIRE(ProjectFileStore::tempDirectory == sessionTemp);
+        THEN("its teardown leaves the directory in place, still the session's") {
+            REQUIRE(store->getTemporaryDirectory() == sessionTemp);
             REQUIRE(sessionTemp.isDirectory());
         }
     }
 
-    GIVEN("a second engine that does own it (the default)") {
+    GIVEN("a second engine of its own") {
+        File secondTemp;
         {
-            auto owning = AudiumFactory::createAudiumEngine();
-            REQUIRE(ProjectFileStore::tempDirectory == sessionTemp);
+            auto second = AudiumFactory::createAudiumEngine();
+            second->getProjectSerializer()->createNewProject();
+            secondTemp = second->getProjectFileStore()->getTemporaryDirectory();
+            REQUIRE(secondTemp != File());
+            REQUIRE(secondTemp != sessionTemp);
+            REQUIRE(secondTemp.isDirectory());
         }
 
-        THEN("its teardown takes the shared directory with it") {
-            // documents why the ownership flag has to exist
-            REQUIRE(ProjectFileStore::tempDirectory == File());
-            REQUIRE_FALSE(sessionTemp.isDirectory());
+        THEN("it had a temp directory of its own and took only that with it") {
+            REQUIRE_FALSE(secondTemp.exists());
+            REQUIRE(store->getTemporaryDirectory() == sessionTemp);
+            REQUIRE(sessionTemp.isDirectory());
         }
     }
 }

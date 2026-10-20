@@ -37,8 +37,8 @@ SCENARIO("autosave writes a snapshot without touching the project file", "[engin
         THEN("the snapshot goes to the session's temp directory, with a pid file") {
             REQUIRE(store->writeAutosave());
 
-            const auto tempAutosave = ProjectFileStore::tempDirectory.getChildFile(ProjectFileStore::autosaveFileName);
-            const auto tempPidFile = ProjectFileStore::tempDirectory.getChildFile(ProjectFileStore::autosavePidFileName);
+            const auto tempAutosave = store->getTemporaryDirectory().getChildFile(ProjectFileStore::autosaveFileName);
+            const auto tempPidFile = store->getTemporaryDirectory().getChildFile(ProjectFileStore::autosavePidFileName);
             REQUIRE(tempAutosave.existsAsFile());
             REQUIRE(tempPidFile.existsAsFile());
 
@@ -104,8 +104,8 @@ SCENARIO("orphaned temp autosaves are found, live sessions are left alone", "[en
     engine->getProjectSerializer()->createNewProject();
 
     // leftovers from previous test runs must not leak into the assertions
-    for (auto stale = ProjectFileStore::findOrphanedTempAutosave(); stale != File();
-         stale = ProjectFileStore::findOrphanedTempAutosave())
+    for (auto stale = store->findOrphanedTempAutosave(); stale != File();
+         stale = store->findOrphanedTempAutosave())
         stale.deleteRecursively();
 
     const auto tempRoot = File::getSpecialLocation(File::tempDirectory);
@@ -116,7 +116,7 @@ SCENARIO("orphaned temp autosaves are found, live sessions are left alone", "[en
         REQUIRE(orphan.getChildFile(ProjectFileStore::autosaveFileName).replaceWithText("{}"));
 
         THEN("the scan finds it") {
-            REQUIRE(ProjectFileStore::findOrphanedTempAutosave() == orphan);
+            REQUIRE(store->findOrphanedTempAutosave() == orphan);
         }
 
         WHEN("its pid file names a live process (this one)") {
@@ -124,7 +124,7 @@ SCENARIO("orphaned temp autosaves are found, live sessions are left alone", "[en
                   .replaceWithText(String(currentTestProcessId()));
 
             THEN("the scan leaves it alone") {
-                REQUIRE(ProjectFileStore::findOrphanedTempAutosave() == File());
+                REQUIRE(store->findOrphanedTempAutosave() == File());
             }
         }
 
@@ -133,7 +133,7 @@ SCENARIO("orphaned temp autosaves are found, live sessions are left alone", "[en
             orphan.getChildFile(ProjectFileStore::autosavePidFileName).replaceWithText("999999");
 
             THEN("the scan claims it") {
-                REQUIRE(ProjectFileStore::findOrphanedTempAutosave() == orphan);
+                REQUIRE(store->findOrphanedTempAutosave() == orphan);
             }
         }
 
@@ -141,7 +141,7 @@ SCENARIO("orphaned temp autosaves are found, live sessions are left alone", "[en
             orphan.getChildFile(ProjectFileStore::projectFileName).replaceWithText("{}");
 
             THEN("the scan leaves it alone") {
-                REQUIRE(ProjectFileStore::findOrphanedTempAutosave() == File());
+                REQUIRE(store->findOrphanedTempAutosave() == File());
             }
         }
     }
@@ -150,8 +150,8 @@ SCENARIO("orphaned temp autosaves are found, live sessions are left alone", "[en
         REQUIRE(store->writeAutosave());
 
         THEN("the scan skips it - a pid file of a live process guards it, and it is the current session") {
-            const auto found = ProjectFileStore::findOrphanedTempAutosave();
-            REQUIRE(found != ProjectFileStore::tempDirectory);
+            const auto found = store->findOrphanedTempAutosave();
+            REQUIRE(found != store->getTemporaryDirectory());
         }
 
         store->deleteAutosave();
@@ -173,7 +173,7 @@ SCENARIO("a never-saved project with audio restores from its temp package", "[en
         REQUIRE(store->open(audioFile, nullptr));
         REQUIRE(store->writeAutosave());
 
-        const auto orphanDir = ProjectFileStore::tempDirectory;
+        const auto orphanDir = store->getTemporaryDirectory();
 
         THEN("resource paths are relative to the temp package, not garbage") {
             FileInputStream in(orphanDir.getChildFile(ProjectFileStore::autosaveFileName));
@@ -188,10 +188,10 @@ SCENARIO("a never-saved project with audio restores from its temp package", "[en
         WHEN("the session crashes and a fresh one finds and restores the orphan") {
             // simulate the crash + relaunch: the temp directory is no longer
             // this session's, and its owning process is gone
-            ProjectFileStore::tempDirectory = File();
+            store->getProjectDirectories()->setTemporaryDirectory(File());
             orphanDir.getChildFile(ProjectFileStore::autosavePidFileName).replaceWithText("999999");
 
-            REQUIRE(ProjectFileStore::findOrphanedTempAutosave() == orphanDir);
+            REQUIRE(store->findOrphanedTempAutosave() == orphanDir);
 
             // promote the snapshot and open the temp package, as the app does
             REQUIRE(orphanDir.getChildFile(ProjectFileStore::autosaveFileName)
@@ -206,7 +206,7 @@ SCENARIO("a never-saved project with audio restores from its temp package", "[en
         }
 
         // cleanup for the non-crash branch
-        if (orphanDir.exists() && orphanDir == ProjectFileStore::tempDirectory)
+        if (orphanDir.exists() && orphanDir == store->getTemporaryDirectory())
             store->deleteAutosave();
     }
 }

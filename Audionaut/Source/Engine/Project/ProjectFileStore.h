@@ -10,6 +10,8 @@
 #include <JuceHeader.h>
 #include <nlohmann/json.hpp>
 
+#include "Engine/Project/ProjectDirectories.h"
+
 using json = nlohmann::json;
 
 namespace audium {
@@ -29,7 +31,7 @@ class ProjectSerializer;
  * `ProjectSerializer` owns what the document JSON contains and how it is
  * applied to the graph; this class owns everything about how and what reaches
  * disk, plus the persistence session state (currentProjectFile, the
- * external-change marker, the path statics).
+ * external-change marker, the engine's ProjectDirectories).
  *
  * Wired in `AudiumFactory`: constructed with the graph collaborators, then
  * given the serializer via `setSerializer()` (the serializer holds this store
@@ -41,7 +43,8 @@ public:
     ProjectFileStore(std::shared_ptr<AudioTrackContainer> audioTrackContainer_,
                      std::shared_ptr<AudioResourceContainer> audioResourceContainer_,
                      std::shared_ptr<PlayListScheduler> playListScheduler_,
-                     std::shared_ptr<juce::UndoManager> undoManager_);
+                     std::shared_ptr<juce::UndoManager> undoManager_,
+                     std::shared_ptr<ProjectDirectories> projectDirectories_);
 
     // project file format constants
     static const char* projectFileExtension;
@@ -55,22 +58,27 @@ public:
      */
     static constexpr int fileVersion = 1;
 
-    // project file paths (session-wide)
-    static juce::File projectDirectory;
-    static juce::File tempDirectory;
+    /** The engine's project and temp directories (shared with the resource container). */
+    std::shared_ptr<ProjectDirectories> getProjectDirectories() const { return projectDirectories; }
+
+    /** The package of the open project; invalid while it was never saved. */
+    juce::File getProjectDirectory() const { return projectDirectories->getProjectDirectory(); }
+
+    /** The session's temp package: audio of a never-saved project, crash-recovery snapshots. */
+    juce::File getTemporaryDirectory() const { return projectDirectories->getTemporaryDirectory(); }
 
     /**
      * @brief The directory resource paths are serialized relative to: the
      *        project package for saved projects, the session's temp directory
      *        (where the audio actually lives) for never-saved ones.
      */
-    static juce::File getSerializationBaseDirectory();
+    juce::File getSerializationBaseDirectory() const;
 
     /**
      * @brief The directory autosave snapshots go to: the project package for
      *        saved projects, the session's temp directory otherwise.
      */
-    static juce::File getAutosaveDirectory();
+    juce::File getAutosaveDirectory() const;
 
     /**
      * @brief Whether a process with this id is still running.
@@ -264,7 +272,7 @@ public:
      *        autosave owned by a no-longer-running process.
      * @return The newest such directory, or an invalid File if none.
      */
-    static juce::File findOrphanedTempAutosave();
+    juce::File findOrphanedTempAutosave() const;
     static juce::File findOrphanedTempAutosave(const juce::File& currentTempDirectory);
 
     // ==== file primitives (stamps by explicit file, pid/autosave files) =====
@@ -308,6 +316,7 @@ private:
     std::shared_ptr<AudioResourceContainer> audioResourceContainer;
     std::shared_ptr<PlayListScheduler> playListScheduler;
     std::shared_ptr<juce::UndoManager> undoManager;
+    std::shared_ptr<ProjectDirectories> projectDirectories;
 
     /**
      * @brief The document serializer (set by the factory after construction;

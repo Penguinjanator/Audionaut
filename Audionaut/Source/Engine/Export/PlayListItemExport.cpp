@@ -52,7 +52,7 @@ bool PlayListItemExport::exportItem()
         return false;
     }
     else {
-        config->fileName = File(ProjectFileStore::tempDirectory.getFullPathName() + File::getSeparatorString() + audioRegion->getName() + ".wav");
+        config->fileName = audiumEngine->getProjectFileStore()->getTemporaryDirectory().getChildFile(audioRegion->getName() + ".wav");
         // create the thread
         
         

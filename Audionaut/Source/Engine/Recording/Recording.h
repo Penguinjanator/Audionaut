@@ -9,6 +9,7 @@
 
 #include "AudioRecorder.h"
 #include "Engine/Playback/PlaybackDefines.h"
+#include "Engine/Project/ProjectDirectories.h"
 
 namespace audium {
 
@@ -24,7 +25,8 @@ namespace audium {
 class Recording {
 
 public:
-    Recording();
+    /** @param projectDirectories_ Where recorded takes go (the project package or the session temp dir). */
+    explicit Recording(std::shared_ptr<ProjectDirectories> projectDirectories_);
     ~Recording();
 
     /**
@@ -111,7 +113,9 @@ private:
     double sampleRate = 0.0;
     
     
-    juce::AudioFormatManager formatManager;
+    juce::AudioFormatManager formatManager;
+
+    std::shared_ptr<ProjectDirectories> projectDirectories;
 
     juce::AudioThumbnailCache audioThumbnailCache;
     
