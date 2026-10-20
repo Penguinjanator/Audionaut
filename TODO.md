@@ -253,6 +253,25 @@ the one-gesture crossfade UX on top:
     apart ~17 samples over 0.75 s - compare short windows in tests), and its
     start alignment after a prime is off by 20-35 samples at 128-sample
     blocks (the in-block restart is worse than the standby one).
+- [ ] **One profiling and optimisation round before publishing the playback
+  benchmark.** The hidden `[playback][bench]` scenario (PR #173, re-run
+  2026-10-20 on an M5) gives, in % of the callback budget at 128 samples:
+  plain stereo tracks 8 → 1.1, 16 → 3.5, 32 → 11.4, 64 → 22.2 (mean, no
+  overruns); time-stretched (R3, ×0.9) ≈ 8 % per track at every buffer
+  size, bursty (p99 ≈ 4× mean at ≤ 128 samples), 4 tracks overrun at
+  128, 8 even at 512, 16 over budget on average. A "Performance" page
+  with charts and tables is drafted in the website repo
+  (`Audionaut-Web/docs/performance.md`, uncommitted) but should go live
+  only after at least one round of work on the two findings:
+  - the plain-track cost grows superlinearly (8 → 32 tracks ≈ 10× the
+    load for 4× the tracks) - profile the callback with 32 and 64 tracks
+    to see what scales worse than the voice count (per-block container
+    walks, cache misses in the clip chain, the bus mixing);
+  - stretched clips: render ahead on a worker thread (the clip positions
+    are known) so the hops stop landing in the callback, or find a
+    cheaper per-track configuration of the stretcher.
+  Then re-run the bench, refresh the page's numbers and "Last run" line,
+  and publish.
 
 ## Memory — follow-ups (found 2026-10-19 in PR #207)
 
