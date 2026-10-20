@@ -12,6 +12,8 @@
 #include "Engine/Group/AudioTrack.h"
 #include "Engine/Group/ResourceGroup.h"
 #include "Engine/Provider/TempoProvider.h"
+#include "Interface/Widgets/audium_AudioThumbnail.h"
+#include <map>
 
 namespace audium {
 
@@ -273,6 +275,17 @@ public:
      * @return A shared pointer to the `AudioThumbnailCache`.
      */
     std::shared_ptr<juce::AudioThumbnailCache> getAudioThumbnailCache() const { return audioThumbnailCache; }
+
+    /**
+     * @brief Returns the thumbnail of a file-based resource, one per file.
+     *
+     * The level data is the whole file at 64 samples per point (~2 MB for a
+     * 7-minute stereo file). The two channel resources of a stereo file and
+     * every clip cut from it share one thumbnail; the views own it, this
+     * container only finds it again while a view still holds it.
+     * @return nullptr for resources without a reader (live recordings).
+     */
+    std::shared_ptr<AudioThumbnail> getThumbnailForResource(const std::shared_ptr<AudioResource>& resource);
     
     /**
      * @brief Retrieves the `TempoProvider`.
@@ -335,6 +348,9 @@ private:
 
     /// Shared pointer to the `AudioThumbnailCache`.
     std::shared_ptr<juce::AudioThumbnailCache> audioThumbnailCache;
+
+    /// One thumbnail per file URL, held weakly: the views own them.
+    std::map<juce::String, std::weak_ptr<AudioThumbnail>> sharedThumbnails;
 
     /// Shared pointer to the `TempoProvider`.
     std::shared_ptr<TempoProvider> tempoProvider;
