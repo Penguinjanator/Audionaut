@@ -9,9 +9,10 @@
 
 #include "AudioRecorder.h"
 #include "Engine/Playback/PlaybackDefines.h"
-#include "Engine/Project/ProjectDirectories.h"
 
 namespace audium {
+
+class AudioResourceContainer;
 
 /**
  * @brief Owns one `AudioRecorder` per armed channel.
@@ -25,17 +26,18 @@ namespace audium {
 class Recording {
 
 public:
-    /** @param projectDirectories_ Where recorded takes go (the project package or the session temp dir). */
-    explicit Recording(std::shared_ptr<ProjectDirectories> projectDirectories_);
+    /** @param audioResourceContainer_ Decides where recorded takes go (the project package, else the session temp dir). */
+    explicit Recording(std::shared_ptr<AudioResourceContainer> audioResourceContainer_);
     ~Recording();
 
     /**
-     * @brief Global take counter: incremented by `AudioBusInterface::record`
-     *        when a recording starts, read for naming the recorded file and
-     *        its take region.
+     * @brief The number of the take being (or last) recorded, counted from
+     *        1 every time a recording starts; 0 before the first. Names the
+     *        recorded file and its take region. One count per engine.
      */
-    static int recordingCounter;
+    int getCurrentTake() const { return takeCounter; }
 
+    /** Starts (counting a new take) or stops recording on the channel, or on every armed one for a negative channel. */
     void record(bool start, const int channelNumber, const double positionClocks);
 
     /**
@@ -89,6 +91,10 @@ private:
     /** Destroys retired recorders whose publish command the audio thread has run (message thread). */
     void releaseRetiredRecorders();
 
+    void recordChannel(bool start, const int channelNumber, const double positionClocks);
+
+    int takeCounter = 0;
+
     // message thread: the owning side
     std::shared_ptr<AudioRecorder> recorders[MAX_AUDIO_CHANNELS];
 
@@ -113,9 +119,9 @@ private:
     double sampleRate = 0.0;
     
     
-    juce::AudioFormatManager formatManager;
+    juce::AudioFormatManager formatManager;
 
-    std::shared_ptr<ProjectDirectories> projectDirectories;
+    std::shared_ptr<AudioResourceContainer> audioResourceContainer;
 
     juce::AudioThumbnailCache audioThumbnailCache;
     

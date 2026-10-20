@@ -101,8 +101,10 @@ public:
                             .getChildFile("audionaut-fixture-" + sessionName)
                             .getNonexistentSibling();
         package = workDirectory.getChildFile(sessionName);
-        copied = source.isDirectory() ? source.copyDirectoryTo(package)
-                                      : source.copyFileTo(package);
+        // copyFileTo (unlike copyDirectoryTo) does not create parents
+        copied = workDirectory.createDirectory()
+              && (source.isDirectory() ? source.copyDirectoryTo(package)
+                                       : source.copyFileTo(package));
     }
 
     ~FixtureSessionCopy() { workDirectory.deleteRecursively(); }

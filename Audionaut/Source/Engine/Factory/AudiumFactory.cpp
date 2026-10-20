@@ -52,11 +52,7 @@ std::shared_ptr<AudiumEngine> AudiumFactory::createAudiumEngine(std::shared_ptr<
     auto audioThumbnailCache        = std::make_shared<juce::AudioThumbnailCache>(512);
     
     auto playback                   = std::make_shared<audium::Playback>();
-    
-    auto recording                  = std::make_shared<audium::Recording>(projectDirectories);
-    
-    auto audioBusRenderer           = std::make_shared<AudioBusRenderer<float>>(playback, recording);
-    
+
     auto voiceSourceContainer   = std::make_shared<VoiceSourceContainer>(playback);
 
     // A single analysis provider (and its cache) is shared across all tracks
@@ -82,6 +78,11 @@ std::shared_ptr<AudiumEngine> AudiumFactory::createAudiumEngine(std::shared_ptr<
                                                                                analysisWorker,
                                                                                userPrompter,
                                                                                projectDirectories);
+
+    // takes go where the resource container puts imports
+    auto recording                  = std::make_shared<audium::Recording>(audioResourceContainer);
+
+    auto audioBusRenderer           = std::make_shared<AudioBusRenderer<float>>(playback, recording);
 
     auto lockFreeCommander          = std::make_shared<LockFreeCommander>(256);
     

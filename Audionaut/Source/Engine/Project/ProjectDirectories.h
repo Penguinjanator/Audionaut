@@ -57,7 +57,9 @@ public:
      *
      * The scratch engine then reads and writes the live session's package and
      * temp dir but must not delete the temp dir on teardown - that would take
-     * the running session's audio with it.
+     * the running session's audio with it. Nor does it ever get a temp dir of
+     * its own: `AudioResourceContainer::createTemporaryProjectDirectory` only
+     * names one while none is set, and recreates a missing one at its path.
      */
     void borrowFrom (const ProjectDirectories& live)
     {

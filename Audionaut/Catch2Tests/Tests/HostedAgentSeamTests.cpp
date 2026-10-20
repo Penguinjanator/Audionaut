@@ -199,4 +199,32 @@ SCENARIO("a second engine leaves the session's temp directory alone",
             REQUIRE(sessionTemp.isDirectory());
         }
     }
+
+    GIVEN("the session's temp directory vanished (a purged cache)") {
+        REQUIRE(sessionTemp.deleteRecursively());
+
+        WHEN("a scratch engine that borrowed it needs somewhere for an import") {
+            auto scratch = AudiumFactory::createAudiumEngine();
+            auto scratchStore = scratch->getProjectFileStore();
+            scratchStore->getProjectDirectories()->borrowFrom(*store->getProjectDirectories());
+            const auto audioDir = scratch->getAudioResourceContainer()->getCurrentAudioFileDirectory();
+
+            THEN("it is the session's directory again, not one of the scratch engine's own") {
+                REQUIRE(audioDir.isDirectory());
+                REQUIRE(audioDir.isAChildOf(sessionTemp));
+                REQUIRE(scratchStore->getTemporaryDirectory() == sessionTemp);
+                REQUIRE(store->getTemporaryDirectory() == sessionTemp);
+            }
+        }
+
+        WHEN("the session itself needs it") {
+            const auto audioDir = engine->getAudioResourceContainer()->getCurrentAudioFileDirectory();
+
+            THEN("it comes back at the same path, so relative resource paths still hold") {
+                REQUIRE(audioDir.isDirectory());
+                REQUIRE(audioDir.isAChildOf(sessionTemp));
+                REQUIRE(store->getTemporaryDirectory() == sessionTemp);
+            }
+        }
+    }
 }

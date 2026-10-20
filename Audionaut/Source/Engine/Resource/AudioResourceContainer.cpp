@@ -25,10 +25,8 @@ AudioResourceContainer::~AudioResourceContainer()
 {
     audioResources.clear();
 
-    // a scratch container borrows a live session's directories and must
-    // leave its temp directory alone
-    if (projectDirectories->ownsTemporaryDirectory())
-        deleteTemporaryProjectDirectory();
+    // a no-op for a scratch container that borrows a live session's directories
+    deleteTemporaryProjectDirectory();
 }
 
 const juce::File AudioResourceContainer::getAudioFileDirectory(const juce::File projectRoot)
@@ -55,7 +53,7 @@ const juce::File AudioResourceContainer::getAudioRecordingFile(const juce::File&
     auto now = juce::Time::getCurrentTime();
     auto formattedStr = now.formatted ("[%Y-%m-%d_%H-%M-%S]");
     
-    auto takeString = juce::String(AudioRegionContainer::formatNumber(take + 1));
+    auto takeString = juce::String(AudioRegionContainer::formatNumber(take));
     auto channelString = juce::String(AudioRegionContainer::formatNumber(channel + 1));
     
     auto fileName = "take" + takeString + "-chan" + channelString + "-" + formattedStr +".wav";
@@ -81,8 +79,12 @@ bool AudioResourceContainer::createTemporaryProjectDirectory(bool reset)
 {
     if (reset)
         deleteTemporaryProjectDirectory();
-    
-    if (!projectDirectories->getTemporaryDirectory().exists()) {
+
+    // A directory that is set but gone (the OS purged its cache, a borrowed
+    // live session's dir) is made again at its path: the resources whose
+    // relative paths point there, and the live session, stay valid. Only a
+    // never-set one gets a name.
+    if (projectDirectories->getTemporaryDirectory() == File()) {
         // use a unique directory within the temp location
         // example: ~/Library/Containers/com.voltmer-systems.audionaut/Data/Library/Caches/Audionaut/temp-50a181e5/Media/Audio
         auto uniqueName = "temp-" + String::toHexString (Random::getSystemRandom().nextInt()) + ProjectFileStore::projectFileExtension;

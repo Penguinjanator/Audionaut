@@ -9,13 +9,11 @@
 
 namespace audium {
 
-int Recording::recordingCounter = 0;
-
-Recording::Recording(std::shared_ptr<ProjectDirectories> projectDirectories_) :
-    projectDirectories(std::move(projectDirectories_)),
+Recording::Recording(std::shared_ptr<AudioResourceContainer> audioResourceContainer_) :
+    audioResourceContainer(std::move(audioResourceContainer_)),
     audioThumbnailCache(64)
 {
-    jassert(projectDirectories != nullptr);
+    jassert(audioResourceContainer != nullptr);
     formatManager.registerBasicFormats();
 }
 
@@ -33,37 +31,47 @@ void Recording::record(bool start,
 {
     releaseRetiredRecorders();
 
+    if (start)
+        ++takeCounter;
+
     if (channelNumber < 0) {
-        
         for (auto i = 0; i < MAX_AUDIO_CHANNELS; ++i) {
             if (auto recorder = getAudioRecorder(i)) {
-                record(start, i, positionClocks); // recursion
+                recordChannel(start, i, positionClocks);
             }
         }
     }
     else {
-        if (auto recorder = getAudioRecorder(channelNumber)) {
-            if (start) {
-                recordingStartPositionClocks[channelNumber] = positionClocks;
-                // std::cout << "start rec " << channelNumber << " pos " << positionClocks << std::endl;
-                // the package's audio directory for a saved project, the session's temp package otherwise
-                const auto audioDirectory = AudioResourceContainer::getAudioFileDirectory(projectDirectories->getSerializationBaseDirectory());
-                setRecordedFile(channelNumber, recorder->prepareRecording(AudioResourceContainer::getAudioRecordingFile(audioDirectory,
-                                                                                                                        Recording::recordingCounter,
-                                                                                                                        channelNumber),
-                                                                          sampleRate));
-                recorder->createRecordingThumbnail(formatManager, audioThumbnailCache);
-                recorder->start();
-            }
-            else {
-                recorder->stop();
-            }
+        recordChannel(start, channelNumber, positionClocks);
+    }
+}
+
+void Recording::recordChannel(bool start,
+                              const int channelNumber,
+                              const double positionClocks)
+{
+    if (auto recorder = getAudioRecorder(channelNumber)) {
+        if (start) {
+            recordingStartPositionClocks[channelNumber] = positionClocks;
+            // std::cout << "start rec " << channelNumber << " pos " << positionClocks << std::endl;
+            // where imports go too: the package's audio directory where
+            // there is one, else the session's temp package
+            const auto audioDirectory = audioResourceContainer->getCurrentAudioFileDirectory();
+            setRecordedFile(channelNumber, recorder->prepareRecording(AudioResourceContainer::getAudioRecordingFile(audioDirectory,
+                                                                                                                    takeCounter,
+                                                                                                                    channelNumber),
+                                                                      sampleRate));
+            recorder->createRecordingThumbnail(formatManager, audioThumbnailCache);
+            recorder->start();
         }
         else {
-            // starting needs an armed channel; stopping one that was
-            // disarmed mid-take is fine, its take closed at retirement
-            jassert(! start);
+            recorder->stop();
         }
+    }
+    else {
+        // starting needs an armed channel; stopping one that was
+        // disarmed mid-take is fine, its take closed at retirement
+        jassert(! start);
     }
 }
 

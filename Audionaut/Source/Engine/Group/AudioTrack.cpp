@@ -788,8 +788,8 @@ std::shared_ptr<PlayListItem> AudioTrack::createDefaultPlayListItem(std::shared_
     // an empty name indicates a recording
     if (region->getName().isEmpty()) {
         jassert(audioResource->isRecording());
-        auto take = Recording::recordingCounter;
-        auto takeString = juce::String(AudioRegionContainer::formatNumber(take + 1));
+        auto take = getAudioTrackContainer().getAudioBusInterface()->getCurrentTake();
+        auto takeString = juce::String(AudioRegionContainer::formatNumber(take));
         
         // Format as [Year-Month-Day Hour-Minute-Second]
         auto now = juce::Time::getCurrentTime();

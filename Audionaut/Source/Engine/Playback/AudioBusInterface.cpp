@@ -69,10 +69,12 @@ void AudioBusInterface::setRecordEnabled(const int channelNumber,
 
 void AudioBusInterface::record(bool start, const int channelNumber, const double positionClocks)
 {
-    if (start)
-        Recording::recordingCounter++;
-    
     audioBusRenderer->getRecording()->record(start, channelNumber, positionClocks);
+}
+
+int AudioBusInterface::getCurrentTake() const
+{
+    return audioBusRenderer->getRecording()->getCurrentTake();
 }
 
 std::shared_ptr<audium::AudioThumbnail> AudioBusInterface::getRecordingThumbnail(int channelNumber) const

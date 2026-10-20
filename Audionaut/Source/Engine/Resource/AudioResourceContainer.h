@@ -119,6 +119,8 @@ public:
     /**
      * @brief Names the file a recording take goes to.
      * @param audioDirectory The audio directory it goes to.
+     * @param take The take's number, counted from 1 (Recording::getCurrentTake).
+     * @param channel The channel's index, counted from 0.
      */
     static const juce::File getAudioRecordingFile(const juce::File& audioDirectory,
                                                   const int take,

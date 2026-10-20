@@ -3,6 +3,7 @@
 
 #include "Engine/Factory/AudiumFactory.h"
 #include "Engine/Project/ProjectSerializer.h"
+#include "Engine/Project/ProjectFileStore.h"
 #include "Engine/Resource/AudioResourceContainer.h"
 #include "Engine/Factory/AudioTrackFactory.h"
 #include "Engine/Resource/ChannelMapping.h"
@@ -12,6 +13,7 @@
 #include "Engine/PlayList/ClipTempo.h"
 #include "Engine/PlayList/PlayListContainer.h"
 #include "Engine/Region/AudioRegion.h"
+#include "Engine/Region/AudioRegionContainer.h"
 
 #include "Engine/PlayList/TransportLoop.h"
 #include "Engine/Provider/TempoProvider.h"
@@ -126,6 +128,62 @@ SCENARIO("recording scenario", "[engine][recording]")
     juce::MessageManager::deleteInstance();
 }
 
+
+// Opening a legacy single-file project makes its parent folder the project
+// directory, which has no Media/Audio package layout. A take then has to go
+// where an import would: the session's temp package.
+SCENARIO("a take in a project without a package goes to the temp directory", "[engine][recording][legacy]")
+{
+    MessageManager::getInstance();
+    MessageManagerLock mmLock(Thread::getCurrentThread());
+
+    auto inputFile = createSlowSawAudioFile(1, false, false);
+    auto inBuffer = audioFileToAudioBuffer(inputFile);
+
+    GIVEN("a project whose directory is a plain folder, as a legacy open leaves it")
+    {
+        auto engine = AudiumFactory::createAudiumEngine();
+        engine->getProjectSerializer()->createNewProject(1);
+        auto store = engine->getProjectFileStore();
+
+        auto plainFolder = File::getSpecialLocation(File::tempDirectory)
+                               .getChildFile("audionaut-legacy-folder").getNonexistentSibling();
+        REQUIRE(plainFolder.createDirectory());
+        store->getProjectDirectories()->setProjectDirectory(plainFolder);
+        REQUIRE_FALSE(engine->getAudioResourceContainer()->getAudioFileDirectory().exists());
+
+        auto bus = engine->getPlayListScheduler()->getAudioBusInterface();
+        // the take count is the engine's own: nothing another engine in this
+        // process recorded shows here
+        REQUIRE(bus->getCurrentTake() == 0);
+
+        WHEN("a take is recorded")
+        {
+            const auto recordingLength = 0.5;
+            engine->getPlayListScheduler()->recordFromAudioBuffer(inBuffer, recordingLength);
+            auto recordedFile = bus->getRecordedAudioFile(0);
+
+            THEN("it lands in the session's temp package, named after the engine's take count")
+            {
+                REQUIRE(recordedFile.existsAsFile());
+                REQUIRE(recordedFile.isAChildOf(store->getTemporaryDirectory()));
+                REQUIRE_FALSE(recordedFile.isAChildOf(plainFolder));
+                CAPTURE(recordedFile.getFileName().toStdString());
+                REQUIRE(bus->getCurrentTake() == 1);
+                REQUIRE(recordedFile.getFileName().startsWith("take01-"));
+            }
+        }
+
+        engine = nullptr;
+        plainFolder.deleteRecursively();
+    }
+
+    if (inputFile.existsAsFile())
+        inputFile.deleteFile();
+
+    juce::DeletedAtShutdown::deleteAll();
+    juce::MessageManager::deleteInstance();
+}
 
 // isRecordEnabled/isRecording took channel 0 for "any channel" while
 // setRecordEnabled took it for the first channel, so asking about channel

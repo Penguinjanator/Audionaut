@@ -180,7 +180,9 @@ public:
     int getChannelOffset(std::shared_ptr<const AudioTrack> searchTrack) const;
     
     std::shared_ptr<AudioTrack> getDefaultGroup() const;
-    
+
+    std::shared_ptr<AudioBusInterface> getAudioBusInterface() const { return audioBusInterface; }
+
     const std::vector<std::shared_ptr<AudioTrack>> &getAudioTracks() const { return audioTracks; }
     
     juce::SparseSet<int> getSelectedRows() const;
