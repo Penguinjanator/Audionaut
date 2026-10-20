@@ -14,6 +14,8 @@
 #include "Engine/Project/ProjectFileStore.h"
 #include "Engine/Project/ProjectSerializer.h"
 #include "Engine/Group/AudioTrackContainer.h"
+#include "Engine/Group/AudioTrack.h"
+#include "Engine/PlayList/PlayListContainer.h"
 #include "Engine/PlayList/PlayListScheduler.h"
 
 using namespace audium;
@@ -54,6 +56,20 @@ void setEnvironmentVariable (const char* name, const char* value)
         ::setenv (name, value, 1);
 #endif
 }
+
+/** Sets a variable for the scope and unsets it on the way out - also past a
+    failed REQUIRE, so no later scenario inherits it. */
+struct ScopedEnvironmentVariable
+{
+    ScopedEnvironmentVariable (const char* name_, const char* value) : name (name_)
+    {
+        setEnvironmentVariable (name, value);
+    }
+
+    ~ScopedEnvironmentVariable() { setEnvironmentVariable (name, nullptr); }
+
+    const char* name;
+};
 
 } // namespace
 
@@ -292,6 +308,96 @@ SCENARIO("a hosted verb changes the open document, not the project file",
 
                 REQUIRE (engine->getUndoManager()->undo());
                 REQUIRE (scheduler->data.transportPositionClocks == 480.0);
+            }
+        }
+
+        host.setProject (juce::File());
+    }
+
+    engine = nullptr;
+    workDir.deleteRecursively();
+    DeletedAtShutdown::deleteAll();
+    MessageManager::deleteInstance();
+}
+
+SCENARIO("the hosted verbs of one agent task become one undo step",
+         "[cli][agent][routing][undo]")
+{
+    MessageManager::getInstance();
+    MessageManagerLock mmLock (Thread::getCurrentThread());
+
+    auto workDir = makeRoutingWorkDirectory();
+    auto package = workDir.getChildFile ("task.audium");
+    auto projectJson = package.getChildFile (ProjectFileStore::projectFileName);
+
+    CliContext setup;
+    setup.quiet = true;
+    REQUIRE (runCreate (argsFor ("create " + package.getFullPathName()), setup) == exitOk);
+    const auto sourceAudio = juce::String (CURRENT_SOURCE_DIR) + "/TestFiles/120-funk-1-sec.wav";
+    REQUIRE (runImport (argsFor ("import " + package.getFullPathName() + " " + sourceAudio), setup) == exitOk);
+
+    auto engine = AudiumFactory::createAudiumEngine();
+    REQUIRE (engine->getProjectFileStore()->open (projectJson, nullptr));
+    auto undoManager = engine->getUndoManager();
+
+    CliContext context;
+    context.quiet = true;
+    context.json = true;
+    json envelope;
+    context.envelopeSink = [&envelope] (const json& produced) { envelope = produced; };
+
+    auto runHosted = [&] (const juce::String& verb, const juce::String& options) {
+        auto outcome = agent::routeCommand (argsFor (verb + " " + package.getFullPathName() + " " + options),
+                                            verb, agent::isHostableVerb (verb), context);
+        return outcome.handled && outcome.exitCode == exitOk && envelope.value ("ok", false);
+    };
+
+    auto numClips = [&] {
+        int count = 0;
+        for (auto& track : engine->getAudioTrackContainer()->getAudioTracks())
+            count += track->getPlayListContainer()->getNumItems();
+        return count;
+    };
+
+    json original;
+    engine->getProjectSerializer()->writeToJson (original);
+    REQUIRE (numClips() == 1);
+
+    GIVEN("the app hosting it and an MCP session working on a named task") {
+        agent::AgentHost host (engine, inlineExecutor());
+        host.setProject (projectJson);
+        REQUIRE (host.isHosting());
+
+        // what the MCP server sets for every CLI it spawns
+        const ScopedEnvironmentVariable session ("AUDIONAUT_AGENT_SESSION", "session-1");
+        const ScopedEnvironmentVariable task ("AUDIONAUT_AGENT_TASK", "trim the intro");
+
+        WHEN("it splits a clip and then changes a gain") {
+            REQUIRE (runHosted ("split", "--at 0.5 --unit seconds"));
+            REQUIRE (runHosted ("clip-gain", "--at 0.25 --unit seconds --gain 0.5"));
+
+            THEN("the document shows both, as one step named after the task") {
+                REQUIRE (undoManager->getUndoDescriptions().size() == 1);
+                REQUIRE (undoManager->getUndoDescription() == "Agent: trim the intro");
+                REQUIRE (numClips() == 2);
+
+                AND_THEN("one undo takes the whole task back") {
+                    REQUIRE (undoManager->undo());
+                    json undone;
+                    engine->getProjectSerializer()->writeToJson (undone);
+                    REQUIRE (ProjectFileStore::documentOf (undone) == ProjectFileStore::documentOf (original));
+                }
+            }
+
+            AND_WHEN("a bare CLI call with no session follows") {
+                setEnvironmentVariable ("AUDIONAUT_AGENT_SESSION", nullptr);
+                setEnvironmentVariable ("AUDIONAUT_AGENT_TASK", nullptr);
+                REQUIRE (runHosted ("clip-gain", "--at 0.75 --unit seconds --gain 0.5"));
+
+                THEN("it is a step of its own") {
+                    REQUIRE (undoManager->getUndoDescriptions().size() == 2);
+                    REQUIRE (undoManager->getUndoDescription() == "Agent edits");
+                }
             }
         }
 

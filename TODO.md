@@ -253,3 +253,27 @@ the one-gesture crossfade UX on top:
     apart ~17 samples over 0.75 s - compare short windows in tests), and its
     start alignment after a prime is off by 20-35 samples at 128-sample
     blocks (the in-block restart is worse than the standby one).
+
+## Memory — follow-ups (found 2026-10-19 in PR #207)
+
+- [ ] **Each undo step keeps two container snapshots.** An
+  `UndoableContainerAction` stores the whole `AudioTrackContainer` twice
+  as binary streams, `oldMemoryBlock` before the edit and `newMemoryBlock`
+  after it, so the undo history grows with project size times steps:
+  about 100 KB per split, measured in the live app while cutting one
+  clip into 129. Clip-only edits
+  already use the smaller `UndoablePlayListItemAction`. Options: store the
+  new state as a diff against the old one, or move more edit kinds onto
+  per-item actions. `getSizeInUnits` already counts both snapshots, so the
+  UndoManager's trimming budget sees the real cost meanwhile.
+- [ ] **Every edit still re-initialises every clip, about 20 ms per clip.**
+  `PlayListItem::readFromJson` always calls `deinit()` and then `init()`,
+  also on the non-rebuild read that applies an edit to the live
+  container. So an agent verb applied to the open document retires and
+  rebuilds the playback chain of every clip on the track, not only the
+  ones it changed: measured in PR #205, the verb time grows by about
+  20 ms per clip (1.65 s at 2 clips, 2.56 s at 40). The deinit is there
+  because undo replays JSON into reused item objects whose region may
+  change. Fix: on a non-rebuild read, keep the chain when region,
+  resources and speed are unchanged and only refresh the cheap state
+  (position, gain, fades).

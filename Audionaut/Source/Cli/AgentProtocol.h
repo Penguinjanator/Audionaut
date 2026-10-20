@@ -92,6 +92,10 @@ json makeHello (const juce::File& project, int hostPid);
 /**
  * @brief A verb and the client's working directory, for the host to run.
  *
+ * `group` says which agent session and task the command belongs to
+ * (`{"session", "task"}`, either may be empty): the host groups the edits of
+ * one task into one undo step. A host that predates it ignores the field.
+ *
  * `stream` asks the host to send the verb's log lines and progress as they
  * happen (makeLog / makeProgress) instead of collecting the log into the
  * result. A host that predates streaming ignores the field and batches, and a
@@ -99,7 +103,8 @@ json makeHello (const juce::File& project, int hostPid);
  * protocol bump to talk to the other.
  */
 json makeCommand (const juce::File& project, const juce::File& workingDirectory,
-                  const juce::StringArray& argv, bool stream = true);
+                  const juce::StringArray& argv, bool stream = true,
+                  const json& group = json::object());
 
 /** @brief A finished verb: its exit code, its result envelope and its log. */
 json makeResult (int exitCode, const json& envelope, const juce::StringArray& log);

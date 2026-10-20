@@ -163,6 +163,12 @@ a local stand-in.
 | `AUDIONAUT_FEATURE_REQUEST_URL` | Issue relay for `request_feature`/`report_bug`; empty skips it |
 | `AUDIONAUT_DISABLE_FEATURE_REQUESTS` | `1` never files issues; replies carry a prefilled link instead |
 
+The server sets two variables for every Audionaut it runs, which the open
+app uses to group an agent's edits into undo steps: `AUDIONAUT_AGENT_SESSION`
+(one id per server process) and `AUDIONAUT_AGENT_TASK` (the editing tool's
+`task` parameter). Edits with the same session and task share one undo step
+in the user's app; a user edit, an undo or ten idle minutes start a new one.
+
 ## Developing: building the CLI from source
 
 From a clone of the repo, the server prefers a CMake build of the

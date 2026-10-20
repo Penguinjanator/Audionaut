@@ -59,7 +59,7 @@ std::shared_ptr<audium::AudioThumbnail> ClipFadeOverlay::getOrCreateThumbnail(
     if (it != thumbnails.end())
         return it->second;
 
-    auto thumbnail = WaveFormViewBase::createThumbnailForResource(audiumEngine, resource);
+    auto thumbnail = audiumEngine->getAudioResourceContainer()->getThumbnailForResource(resource);
     if (thumbnail != nullptr) {
         thumbnail->addChangeListener(this);
         // don't cache the nullptr case: a recording resource may gain a

@@ -20,6 +20,7 @@ class AudioTrackContainer;
 class AudioResourceContainer;
 class PlayListScheduler;
 class ProjectSerializer;
+struct AgentEditBatch;
 
 /**
  * @class ProjectFileStore
@@ -196,6 +197,61 @@ public:
                                     std::function<void(std::string)> callback);
 
     /**
+     * @brief What the edits of one agent task have in common. Both parts
+     *        travel with the hosted command; either may be empty.
+     */
+    struct AgentEditGroup
+    {
+        juce::String session; ///< the agent session (one MCP server process); empty for a bare CLI call
+        juce::String task;    ///< the task the agent named its edits with, if any
+
+        juce::String key() const { return session + "/" + task; }
+    };
+
+    /**
+     * @brief Applies an agent verb's result to the running document, as part
+     *        of the current agent batch when it continues one, else as a new
+     *        undo step. Touches no file; sets the external-change marker.
+     *
+     * A verb extends the current batch when it belongs to the same group,
+     * the batch's step is still the last one in the undo history (no undo,
+     * no other edit's step since, nothing left to redo), the document is
+     * the one the batch left (no user edit since) and the batch saw an
+     * edit within `agentBatchIdleMinutes`. Extending applies the state
+     * directly and moves the batch's redo state; nothing is added to the
+     * undo history. Otherwise a batch starts: one `UndoableAgentBatchAction`,
+     * named after the task ("Agent: <task>") or "Agent edits". A group
+     * without a session (a bare CLI call, an older MCP server) never
+     * extends: each of its verbs is a step of its own.
+     *
+     * The user's view and clip selection win over the verb's: the applied
+     * state carries the live `ui_state` and `selected` flags.
+     *
+     * @param liveState The document as it is now, when the caller already
+     *                  serialised it; the other overload does so itself.
+     */
+    bool applyAgentState(json afterState,
+                         json liveState,
+                         const AgentEditGroup& group,
+                         std::function<void(std::string)> callback);
+    bool applyAgentState(json afterState,
+                         const AgentEditGroup& group,
+                         std::function<void(std::string)> callback);
+
+    /**
+     * @brief The state minus what moves without the user editing anything:
+     *        the playhead while playing, scroll and zoom, the clip
+     *        selection. Two states that agree on this are the same document.
+     */
+    static json documentOf(json state);
+
+    /** A batch with no edit for this long closes; the next verb starts a new step. */
+    static constexpr int agentBatchIdleMinutes = 10;
+
+    /** Tests: the clock `applyAgentState` reads for the idle limit. */
+    void setClock(std::function<juce::Time()> clock_) { clock = std::move(clock_); }
+
+    /**
      * @brief Reloads the current project file from disk as an undoable action
      *        (external/agent change). The pre-reload in-memory state becomes
      *        the undo step; undo/redo never touches the file on disk.
@@ -334,6 +390,19 @@ private:
      * @brief See `wasChangedExternally()`.
      */
     bool changedExternally = false;
+
+    /// Whether `group`'s verb may extend `batch` rather than start a step.
+    /// `liveDocument` is `documentOf` the document as it is now.
+    bool canExtendAgentBatch(const AgentEditBatch& batch,
+                             const AgentEditGroup& group,
+                             const json& liveDocument,
+                             juce::Time now) const;
+
+    /// The agent batch that the last applied verb belongs to, if any. The
+    /// undo step owns it: once the undo manager drops the step, this expires.
+    std::weak_ptr<AgentEditBatch> currentAgentBatch;
+
+    std::function<juce::Time()> clock = [] { return juce::Time::getCurrentTime(); };
 
     /**
      * @brief On-disk modification times recorded after the app's own writes.

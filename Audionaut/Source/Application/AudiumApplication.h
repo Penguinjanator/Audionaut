@@ -19,7 +19,7 @@ class AboutSplashScreen;
 class MainComponent;
 
 namespace audium {
-namespace cli { namespace agent { class AgentHost; } } class UsageAnalytics; class UpdateChecker; class ProjectMonitor; class ProjectFileStore; class ProjectSerializer; }
+namespace cli { namespace agent { class AgentHost; } } class UsageAnalytics; class UpdateChecker; class CrashReporter; class ProjectMonitor; class ProjectFileStore; class ProjectSerializer; }
 
 class AudiumApplication  : public juce::JUCEApplication,
                            public AudioImporter,
@@ -127,6 +127,7 @@ private:
     std::unique_ptr<audium::Preferences> preferences;
     std::unique_ptr<audium::UsageAnalytics> usageAnalytics;
     std::unique_ptr<audium::UpdateChecker> updateChecker;
+    std::unique_ptr<audium::CrashReporter> crashReporter;
     std::unique_ptr<AudiumMenuModel> menuModel;
     std::unique_ptr<juce::FileChooser> chooser;
     std::unique_ptr<ImportOptionsComponent> importOptions;  // the Import... chooser's placement option, outlives the async dialog
@@ -140,8 +141,10 @@ private:
     void initCommandManager();
     void initPreferences();
 
-    // handleAsyncUpdate startup steps
-    void offerOrphanedTempProjectRestore();
+    // handleAsyncUpdate startup steps. The prompts among them are async and
+    // each takes what comes next as a continuation, so they appear one at a
+    // time instead of stacked.
+    void offerOrphanedTempProjectRestore(std::function<void ()> then);
     void restoreOrphanedTempProject(juce::File packageDirectory);
     void loadStartupProject();
     void startProjectMonitor();
@@ -152,7 +155,9 @@ private:
 
     /** Points the host at whatever project is current now (none, after New). */
     void updateAgentHost();
-    void askForUsageStatisticsConsent();
+
+    /** Asks once; `then` runs after the answer, or at once if it was given before. */
+    void askForUsageStatisticsConsent(std::function<void ()> then);
 
     // logs every invoked command (menus and shortcuts) as a usage event
     void applicationCommandInvoked(const juce::ApplicationCommandTarget::InvocationInfo&) override;
@@ -160,7 +165,7 @@ private:
 
     void applyAnalysisPreferences();
     void handleAsyncUpdate() override;
-    
+
     void showAboutWindow();
     void showFileBrowserWindow();
     void showSettingsDialog();
