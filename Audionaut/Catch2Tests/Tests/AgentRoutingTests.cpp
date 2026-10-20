@@ -57,6 +57,20 @@ void setEnvironmentVariable (const char* name, const char* value)
 #endif
 }
 
+/** Sets a variable for the scope and unsets it on the way out - also past a
+    failed REQUIRE, so no later scenario inherits it. */
+struct ScopedEnvironmentVariable
+{
+    ScopedEnvironmentVariable (const char* name_, const char* value) : name (name_)
+    {
+        setEnvironmentVariable (name, value);
+    }
+
+    ~ScopedEnvironmentVariable() { setEnvironmentVariable (name, nullptr); }
+
+    const char* name;
+};
+
 } // namespace
 
 // The point of routing: when the app holds a project, a verb must see what the
@@ -355,8 +369,8 @@ SCENARIO("the hosted verbs of one agent task become one undo step",
         REQUIRE (host.isHosting());
 
         // what the MCP server sets for every CLI it spawns
-        setEnvironmentVariable ("AUDIONAUT_AGENT_SESSION", "session-1");
-        setEnvironmentVariable ("AUDIONAUT_AGENT_TASK", "trim the intro");
+        const ScopedEnvironmentVariable session ("AUDIONAUT_AGENT_SESSION", "session-1");
+        const ScopedEnvironmentVariable task ("AUDIONAUT_AGENT_TASK", "trim the intro");
 
         WHEN("it splits a clip and then changes a gain") {
             REQUIRE (runHosted ("split", "--at 0.5 --unit seconds"));
@@ -387,8 +401,6 @@ SCENARIO("the hosted verbs of one agent task become one undo step",
             }
         }
 
-        setEnvironmentVariable ("AUDIONAUT_AGENT_SESSION", nullptr);
-        setEnvironmentVariable ("AUDIONAUT_AGENT_TASK", nullptr);
         host.setProject (juce::File());
     }
 

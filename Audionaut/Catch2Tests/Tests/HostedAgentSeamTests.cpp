@@ -5,6 +5,9 @@
 #include "Engine/Project/ProjectSerializer.h"
 #include "Engine/Project/ProjectFileStore.h"
 #include "Engine/Group/AudioTrackContainer.h"
+#include "Engine/Group/AudioTrack.h"
+#include "Engine/PlayList/PlayListContainer.h"
+#include "Engine/PlayList/PlayListItem.h"
 #include "Engine/Resource/AudioResourceContainer.h"
 #include "TestEngine.h"
 
@@ -328,10 +331,47 @@ SCENARIO("the verbs of one agent task share one undo step",
         }
     }
 
+    GIVEN("the user undoes a later step of their own, leaving it to redo") {
+        REQUIRE(store->applyAgentState(stateWithGain(0.5), pauses, nullptr));
+        REQUIRE(store->applyStateAsUndoableReload(stateWithGain(0.6), true, false, "Set Master Gain", nullptr));
+        REQUIRE(undoManager->undo());
+        REQUIRE(undoManager->canRedo());
+        REQUIRE(store->applyAgentState(stateWithGain(0.3), pauses, nullptr));
+
+        THEN("the agent's next verb is a step of its own, and the redo is gone") {
+            REQUIRE(numUndoSteps() == 2);
+            REQUIRE_FALSE(undoManager->canRedo());
+            REQUIRE(container->getMasterGain() == Catch::Approx(0.3f));
+            REQUIRE(undoManager->undo());
+            REQUIRE(container->getMasterGain() == Catch::Approx(0.5f));
+        }
+    }
+
+    GIVEN("a clip the user selects while a verb runs") {
+        juce::StringArray names { seamTestFilesDirectory + "120-funk-1-sec.wav" };
+        REQUIRE(container->addAudioFiles(names, 0.0, [] (std::string) {}, false));
+        undoManager->clearUndoHistory();
+
+        // the import made a track of its own after the empty first one
+        auto firstClip = [&] { return container->getAudioTracks().back()->getPlayListContainer()->getPlayListItems().front(); };
+        firstClip()->setSelected(false);
+        auto staged = stateWithGain(0.5); // what the verb's engine computed: the clip unselected
+        firstClip()->setSelected(true);   // the click, after the verb's engine took its copy
+
+        REQUIRE(store->applyAgentState(staged, pauses, nullptr));
+
+        THEN("the applied state keeps the selection, and so does a redo") {
+            REQUIRE(firstClip()->isSelected());
+            REQUIRE(container->getMasterGain() == Catch::Approx(0.5f));
+            REQUIRE(undoManager->undo());
+            REQUIRE(undoManager->redo());
+            REQUIRE(firstClip()->isSelected());
+        }
+    }
+
     GIVEN("a step of the user's that carries the task's name and leaves the same document") {
         REQUIRE(store->applyAgentState(stateWithGain(0.5), pauses, nullptr));
         REQUIRE(undoManager->undo());
-        juce::Thread::sleep(2); // the undo manager stamps steps in milliseconds
         REQUIRE(store->applyStateAsUndoableReload(stateWithGain(0.5), true, false, "Agent: remove pauses", nullptr));
         REQUIRE(store->applyAgentState(stateWithGain(0.25), pauses, nullptr));
 
@@ -344,9 +384,9 @@ SCENARIO("the verbs of one agent task share one undo step",
     }
 
     GIVEN("two states that differ only in which clip is selected") {
-        json selected = { { "audium", { { "tracks", json::array ({ { { "play_list_vector", json::array ({ { { "selected", true } } }) } } }) } } } };
+        json selected = { { "audium", { { "audio_tracks", json::array ({ { { "play_list_vector", json::array ({ { { "selected", true } } }) } } }) } } } };
         json unselected = selected;
-        unselected["audium"]["tracks"][0]["play_list_vector"][0]["selected"] = false;
+        unselected["audium"]["audio_tracks"][0]["play_list_vector"][0]["selected"] = false;
         REQUIRE(selected != unselected);
 
         THEN("they are the same document: a click is not an edit") {

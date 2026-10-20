@@ -25,6 +25,9 @@ namespace audium
  * reads both at undo/redo time, so extending a batch never touches the undo
  * history. See `ProjectFileStore::applyAgentState` for what starts a new
  * batch.
+ *
+ * The action owns the batch; the store only watches it, so the two
+ * snapshots die with the undo step.
  */
 struct AgentEditBatch
 {
@@ -32,9 +35,16 @@ struct AgentEditBatch
     juce::String transactionName; ///< the undo step's name, fixed when the batch starts
     json before;                  ///< the document before the first edit: what undo restores
     json after;                   ///< the document after the latest edit: what redo restores
+    json afterDocument;           ///< `ProjectFileStore::documentOf (after)`, kept beside it
     int numEdits = 0;
     juce::Time lastEdit;
-    juce::Time transactionTime; ///< the undo manager's stamp on the step, read after the first perform
+    bool applied = false; ///< whether `after` is on the document: set by perform/redo, cleared by undo
+
+    void setAfter (json state)
+    {
+        after = std::move (state);
+        afterDocument = ProjectFileStore::documentOf (after);
+    }
 };
 
 /**
@@ -53,19 +63,20 @@ struct UndoableAgentBatchAction final : public juce::UndoableAction
         store (store_),
         batch (std::move (batch_)),
         markerBefore (store_.wasChangedExternally()),
-        // KB of the before-state: the UndoManager reads this once, at insertion
-        sizeInUnits ((int) juce::jmax ((size_t) 1, batch->before.dump().size() / 1024))
+        // KB of both states as inserted: the UndoManager reads this once, so
+        // growth from later extensions goes unaccounted
+        sizeInUnits ((int) juce::jmax ((size_t) 1, (batch->before.dump().size() + batch->after.dump().size()) / 1024))
     {
     }
 
     bool perform() override
     {
-        return apply (batch->after, batch->before, true);
+        return apply (batch->after, batch->before, true, true);
     }
 
     bool undo() override
     {
-        return apply (batch->before, batch->after, markerBefore);
+        return apply (batch->before, batch->after, markerBefore, false);
     }
 
     int getSizeInUnits() override { return sizeInUnits; }
@@ -73,11 +84,12 @@ struct UndoableAgentBatchAction final : public juce::UndoableAction
 private:
     /** Applies `state`; on failure restores `fallback` so a rejected state
         does not leave a half-mutated document. */
-    bool apply (json& state, json& fallback, bool markerAfterwards)
+    bool apply (json& state, json& fallback, bool markerAfterwards, bool appliedAfterwards)
     {
         try {
             if (serializer.applyProjectJson (state, true)) {
                 store.setChangedExternally (markerAfterwards);
+                batch->applied = appliedAfterwards;
                 return true;
             }
         }

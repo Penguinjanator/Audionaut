@@ -345,7 +345,6 @@ void AudiumApplication::startProjectMonitor()
     // watch the open package for external (agent) writes and drive the
     // autosave cadence
     projectMonitor = std::make_unique<ProjectMonitor>(audiumEngine);
-    audiumEngine->getUndoManager()->addChangeListener (this);
 
     projectMonitor->onExternalChange = [this] {
         projectMonitor->setSuspended(true);
@@ -498,8 +497,6 @@ void AudiumApplication::shutdown()
 
     // Add your application's shutdown code here..
     agentHost.reset();      // withdraw the marker and stop serving
-    if (audiumEngine != nullptr) // a second launch quits before creating one
-        audiumEngine->getUndoManager()->removeChangeListener (this);
     projectMonitor.reset(); // stop polling before the engine goes away
     mainWindow.reset(); // (deletes our window)
 
@@ -636,14 +633,6 @@ void AudiumApplication::logUsageEvent(const juce::String& name, const juce::Stri
 {
     if (usageAnalytics != nullptr)
         usageAnalytics->logEvent(name, parameters);
-}
-
-void AudiumApplication::changeListenerCallback (ChangeBroadcaster*)
-{
-    // "Undo Move Clip" / "Redo Agent: remove pauses": the names live in the
-    // command info, which the native menu only re-reads on a status change
-    if (commandManager != nullptr)
-        commandManager->commandStatusChanged();
 }
 
 void AudiumApplication::applicationCommandInvoked(const ApplicationCommandTarget::InvocationInfo& info)

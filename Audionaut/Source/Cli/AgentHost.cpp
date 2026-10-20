@@ -74,10 +74,10 @@ public:
         if (! decode (block, request))
             return;
 
-        if (request.value ("kind", std::string()) != "command")
+        if (stringField (request, "kind") != "command")
             return;
 
-        if (request.value ("protocol", 0) > protocolVersion) {
+        if (integerField (request, "protocol") > protocolVersion) {
             reply (exitFailure, errorEnvelope ("protocol_mismatch",
                                                "this Audionaut is older than the client; update the app"), {});
             return;
@@ -102,7 +102,7 @@ public:
             return;
         }
 
-        const juce::File workingDirectory (juce::String (request.value ("cwd", std::string())));
+        const juce::File workingDirectory (juce::String (stringField (request, "cwd")));
 
         // One command at a time: a separation runs for minutes, and two verbs
         // interleaving on one document would each undo the other's work.
@@ -114,18 +114,45 @@ public:
 
         // no group field, or one that is not an object (an older client, a
         // hand-written request): the verb belongs to no task and gets its own step
-        auto groupField = request.value ("group", json::object());
-        if (! groupField.is_object())
-            groupField = json::object();
+        const auto groupField = request.value ("group", json::object());
         const ProjectFileStore::AgentEditGroup group {
-            juce::String (groupField.value ("session", std::string())),
-            juce::String (groupField.value ("task", std::string())) };
+            juce::String (stringField (groupField, "session")),
+            juce::String (stringField (groupField, "task")) };
 
-        run (argv, workingDirectory, request.value ("stream", false), group);
+        run (argv, workingDirectory, booleanField (request, "stream"), group);
         host.busy = false;
     }
 
 private:
+    // A request is whatever a client sent: a field of the wrong type reads
+    // as absent rather than throwing out of the message thread.
+    static std::string stringField (const json& object, const char* key)
+    {
+        if (! object.is_object())
+            return {};
+        if (auto field = object.find (key); field != object.end() && field->is_string())
+            return field->get<std::string>();
+        return {};
+    }
+
+    static int integerField (const json& object, const char* key)
+    {
+        if (! object.is_object())
+            return 0;
+        if (auto field = object.find (key); field != object.end() && field->is_number_integer())
+            return field->get<int>();
+        return 0;
+    }
+
+    static bool booleanField (const json& object, const char* key)
+    {
+        if (! object.is_object())
+            return false;
+        if (auto field = object.find (key); field != object.end() && field->is_boolean())
+            return field->get<bool>();
+        return false;
+    }
+
     static json errorEnvelope (const std::string& code, const std::string& message)
     {
         return { { "ok", false }, { "error", { { "code", code }, { "message", message } } } };
@@ -232,7 +259,7 @@ private:
 
         std::string error;
         const auto applied = host.engine->getProjectFileStore()
-            ->applyAgentState (std::move (staged), group,
+            ->applyAgentState (std::move (staged), std::move (liveStateNow), group,
                                [&error] (std::string message) { error = message; });
 
         if (! applied) {

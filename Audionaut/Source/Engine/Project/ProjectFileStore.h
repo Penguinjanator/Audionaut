@@ -207,15 +207,25 @@ public:
      *
      * A verb extends the current batch when it belongs to the same group,
      * the batch's step is still the last one in the undo history (no undo,
-     * no other edit's step since), the document is the one the batch left
-     * (no user edit since) and the batch saw an edit within
-     * `agentBatchIdleMinutes`. Extending applies the state directly and
-     * moves the batch's redo state; nothing is added to the undo history.
-     * Otherwise a batch starts: one `UndoableAgentBatchAction`, named after
-     * the task ("Agent: <task>") or "Agent edits". A group without a
-     * session (a bare CLI call, an older MCP server) never extends: each
-     * of its verbs is a step of its own.
+     * no other edit's step since, nothing left to redo), the document is
+     * the one the batch left (no user edit since) and the batch saw an
+     * edit within `agentBatchIdleMinutes`. Extending applies the state
+     * directly and moves the batch's redo state; nothing is added to the
+     * undo history. Otherwise a batch starts: one `UndoableAgentBatchAction`,
+     * named after the task ("Agent: <task>") or "Agent edits". A group
+     * without a session (a bare CLI call, an older MCP server) never
+     * extends: each of its verbs is a step of its own.
+     *
+     * The user's view and clip selection win over the verb's: the applied
+     * state carries the live `ui_state` and `selected` flags.
+     *
+     * @param liveState The document as it is now, when the caller already
+     *                  serialised it; the other overload does so itself.
      */
+    bool applyAgentState(json afterState,
+                         json liveState,
+                         const AgentEditGroup& group,
+                         std::function<void(std::string)> callback);
     bool applyAgentState(json afterState,
                          const AgentEditGroup& group,
                          std::function<void(std::string)> callback);
@@ -373,13 +383,15 @@ private:
     bool changedExternally = false;
 
     /// Whether `group`'s verb may extend `batch` rather than start a step.
+    /// `liveDocument` is `documentOf` the document as it is now.
     bool canExtendAgentBatch(const AgentEditBatch& batch,
                              const AgentEditGroup& group,
-                             const json& liveState,
+                             const json& liveDocument,
                              juce::Time now) const;
 
-    /// The agent batch that the last applied verb belongs to, if any.
-    std::shared_ptr<AgentEditBatch> currentAgentBatch;
+    /// The agent batch that the last applied verb belongs to, if any. The
+    /// undo step owns it: once the undo manager drops the step, this expires.
+    std::weak_ptr<AgentEditBatch> currentAgentBatch;
 
     std::function<juce::Time()> clock = [] { return juce::Time::getCurrentTime(); };
 
