@@ -52,6 +52,8 @@ namespace PreferenceKeys
     static const char* const openLastProjectOnLaunch = "OpenLastProjectOnLaunch";
     static const char* const initialOpenDirectory   = "InitialOpenDirectory";
     static const char* const initialSaveDirectory   = "InitialSaveDirectory";
+    static const char* const importPlacement        = "ImportPlacement";
+    static const char* const trackImportPlacement   = "TrackImportPlacement";
     static const char* const recentFiles            = "RecentProjectFiles";
     static const char* const audioDeviceSettings    = "AudioDeviceSettings";
     static const char* const mainWindowState        = "MainWindowState";
@@ -71,6 +73,7 @@ namespace PreferenceKeys
     static const char* const separationMuteSource   = "SeparationMuteSource";
     static const char* const usageStatsEnabled      = "UsageStatsEnabled";
     static const char* const updateCheckEnabled     = "UpdateCheckEnabled";
+    static const char* const snapToGridEnabled      = "SnapToGridEnabled";
     static const char* const lastUpdateCheckTime    = "LastUpdateCheckTime";
     static const char* const lastNotifiedVersion    = "LastNotifiedVersion";
     static const char* const analyticsClientId      = "AnalyticsClientId";

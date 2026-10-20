@@ -53,9 +53,17 @@ public:
     
     bool snapToGrid(const ZoomHandler& zoomHandler, double &clocks);
     bool snapToGrid(const ZoomHandler& zoomHandler, juce::Range<double> &clocks);
-    
+
+    // View -> Snap to Grid. An app setting rather than per handler: the app
+    // restores it from the preferences at launch and the menu toggles it
+    // (message thread only).
+    static void setEnabled(bool shouldSnap) { enabled = shouldSnap; }
+    static bool isEnabled() { return enabled; }
+
 private:
-    
+
+    inline static bool enabled = true;
+
     juce::Range<double> clockRange;
     bool excludeSelectedItems = false;
     

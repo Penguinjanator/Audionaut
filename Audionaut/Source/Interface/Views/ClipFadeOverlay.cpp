@@ -59,7 +59,7 @@ std::shared_ptr<audium::AudioThumbnail> ClipFadeOverlay::getOrCreateThumbnail(
     if (it != thumbnails.end())
         return it->second;
 
-    auto thumbnail = WaveFormViewBase::createThumbnailForResource(audiumEngine, resource);
+    auto thumbnail = audiumEngine->getAudioResourceContainer()->getThumbnailForResource(resource);
     if (thumbnail != nullptr) {
         thumbnail->addChangeListener(this);
         // don't cache the nullptr case: a recording resource may gain a
@@ -180,7 +180,7 @@ void ClipFadeOverlay::paintItemExtensions (juce::Graphics& g,
 
     // the curves are editing UI, drawn only while the clip is selected; the
     // ghost waveform always shows since it represents audible material
-    auto itemSelected = item.isSelected();
+    auto itemSelected = item.isSelected() || item.isCrossfadePartner();
 
     // one continuation band per channel row, so each row's FadeInOutView
     // ramp reads as an unbroken curve across the clip edge

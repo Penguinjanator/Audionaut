@@ -457,6 +457,20 @@ public:
         cacheNeedsRefilling = true;
     }
 
+    /// Whether this window holds the range a draw with these parameters
+    /// asks for - the keys refillCache compares.
+    bool matches (int numSamples, double startTime, double endTime) const noexcept
+    {
+        if (numSamples <= 0 || numSamples != numSamplesCached)
+            return false;
+
+        const auto timePerPixel = (endTime - startTime) / numSamples;
+        return approximatelyEqual (startTime, cachedStart)
+            && approximatelyEqual (timePerPixel, cachedTimePerPixel);
+    }
+
+    uint32 lastUsed = 0;
+
     void drawChannel (Graphics& g, const Rectangle<int>& area,
                       const double startTime, const double endTime,
                       const int channelNum, const float verticalZoomFactor,
@@ -673,7 +687,6 @@ AudioThumbnail::AudioThumbnail (const int originalSamplesPerThumbnailSample,
                                 AudioThumbnailCache& cacheToUse)
     : formatManagerToUse (formatManager),
       cache (cacheToUse),
-      window (new CachedWindow()),
       samplesPerThumbSample (originalSamplesPerThumbnailSample)
 {
 }
@@ -690,9 +703,41 @@ void AudioThumbnail::clear()
     clearChannelData();
 }
 
+void AudioThumbnail::invalidateWindows()
+{
+    for (auto& window : windows)
+        window->invalidate();
+}
+
+AudioThumbnail::CachedWindow& AudioThumbnail::windowFor (int numSamples, double startTime, double endTime)
+{
+    CachedWindow* leastRecent = nullptr;
+
+    for (auto& window : windows)
+    {
+        if (window->matches (numSamples, startTime, endTime))
+        {
+            window->lastUsed = ++windowUseCounter;
+            return *window;
+        }
+
+        if (leastRecent == nullptr || window->lastUsed < leastRecent->lastUsed)
+            leastRecent = window.get();
+    }
+
+    if (leastRecent == nullptr || (int) windows.size() < maxCachedWindows)
+    {
+        windows.push_back (std::make_unique<CachedWindow>());
+        leastRecent = windows.back().get();
+    }
+
+    leastRecent->lastUsed = ++windowUseCounter;
+    return *leastRecent;
+}
+
 void AudioThumbnail::clearChannelData()
 {
-    window->invalidate();
+    invalidateWindows();
     channels.clear();
     totalSamples = numSamplesFinished = 0;
     numChannels = 0;
@@ -895,7 +940,7 @@ void AudioThumbnail::setLevels (const MinMaxValue* const* values, int thumbIndex
         numSamplesFinished = end;
 
     totalSamples = jmax (numSamplesFinished, totalSamples);
-    window->invalidate();
+    invalidateWindows();
     sendChangeMessage();
 }
 
@@ -972,9 +1017,10 @@ void AudioThumbnail::drawChannel (Graphics& g, const Rectangle<int>& area, doubl
 {
     const ScopedLock sl (lock);
 
-    window->drawChannel (g, area, startTime, endTime, channelNum, verticalZoomFactor,
-                         sampleRate, numChannels, samplesPerThumbSample, source.get(), channels,
-                         envelope);
+    windowFor (area.getWidth(), startTime, endTime)
+        .drawChannel (g, area, startTime, endTime, channelNum, verticalZoomFactor,
+                      sampleRate, numChannels, samplesPerThumbSample, source.get(), channels,
+                      envelope);
 }
 
 void AudioThumbnail::drawChannels (Graphics& g, const Rectangle<int>& area, double startTimeSeconds,

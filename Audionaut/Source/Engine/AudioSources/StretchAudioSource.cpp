@@ -8,13 +8,42 @@
 
 namespace audium {
 
-StretchAudioSource::StretchAudioSource (juce::AudioSource* inputSource, int numChannels_) :
+StretchAudioSource::StretchAudioSource (juce::AudioSource* inputSource, int numChannels_,
+                                        Stretchers stretchers) :
     input (inputSource),
-    numChannels (numChannels_),
-    backend (std::make_unique<RubberBandStretchBackend>())
+    numChannels (numChannels_)
 {
     jassert (input != nullptr);
     jassert (numChannels > 0);
+
+    if (stretchers == Stretchers::allocateNow)
+        allocateStretchers();
+}
+
+void StretchAudioSource::allocateStretchers()
+{
+    if (backend != nullptr)
+        return;
+
+    backend = std::make_unique<RubberBandStretchBackend>();
+    if (standbyInput != nullptr)
+        standbyBackend = std::make_unique<RubberBandStretchBackend>();
+
+    if (prepared)
+    {
+        backend->prepare (numChannels, preparedSampleRate, preparedBlockSize,
+                          ClipSpeed::minSpeedRatio, ClipSpeed::maxSpeedRatio);
+        if (standbyBackend != nullptr)
+            standbyBackend->prepare (numChannels, preparedSampleRate, preparedBlockSize,
+                                     ClipSpeed::minSpeedRatio, ClipSpeed::maxSpeedRatio);
+
+        // the audio thread touches the scratch only once the stretchers are
+        // published below, so it may still be resized here
+        inputScratch.setSize (numChannels, juce::jmax (1, backend->maxInputLength()));
+        inputScratch.clear();
+    }
+
+    stretchersReady.store (true, std::memory_order_release);
 }
 
 StretchAudioSource::~StretchAudioSource() = default;
@@ -26,22 +55,24 @@ void StretchAudioSource::prepareToPlay (int samplesPerBlockExpected, double samp
     preparedBlockSize = samplesPerBlockExpected;
     preparedSampleRate = sampleRate;
 
-    // off the audio thread: the stretcher allocates everything it will
-    // ever need now
-    backend->prepare (numChannels, sampleRate, samplesPerBlockExpected,
-                      ClipSpeed::minSpeedRatio, ClipSpeed::maxSpeedRatio);
+    // off the audio thread: a stretcher allocates everything it will
+    // ever need now (none yet on an on-demand node, see allocateStretchers)
+    if (backend != nullptr)
+        backend->prepare (numChannels, sampleRate, samplesPerBlockExpected,
+                          ClipSpeed::minSpeedRatio, ClipSpeed::maxSpeedRatio);
 
     if (standbyInput != nullptr)
     {
         standbyInput->prepareToPlay (samplesPerBlockExpected, sampleRate);
-        standbyBackend->prepare (numChannels, sampleRate, samplesPerBlockExpected,
-                                 ClipSpeed::minSpeedRatio, ClipSpeed::maxSpeedRatio);
+        if (standbyBackend != nullptr)
+            standbyBackend->prepare (numChannels, sampleRate, samplesPerBlockExpected,
+                                     ClipSpeed::minSpeedRatio, ClipSpeed::maxSpeedRatio);
     }
     standby = {};
     prepared = true;
 
     // The scratch must fit the biggest single pull the stretcher may ask for.
-    inputScratch.setSize (numChannels, juce::jmax (1, backend->maxInputLength()));
+    inputScratch.setSize (numChannels, backend != nullptr ? juce::jmax (1, backend->maxInputLength()) : 1);
     inputScratch.clear();
 
     deferredOutputSamples = 0;
@@ -67,19 +98,24 @@ void StretchAudioSource::setStandbyInput (juce::AudioSource* standbyInputSource)
         return;
     }
 
-    standbyBackend = std::make_unique<RubberBandStretchBackend>();
+    // the lane's stretcher follows the live one: none until allocateStretchers()
+    if (backend != nullptr)
+        standbyBackend = std::make_unique<RubberBandStretchBackend>();
 
     if (prepared)
     {
         standbyInput->prepareToPlay (preparedBlockSize, preparedSampleRate);
-        standbyBackend->prepare (numChannels, preparedSampleRate, preparedBlockSize,
-                                 ClipSpeed::minSpeedRatio, ClipSpeed::maxSpeedRatio);
+        if (standbyBackend != nullptr)
+            standbyBackend->prepare (numChannels, preparedSampleRate, preparedBlockSize,
+                                     ClipSpeed::minSpeedRatio, ClipSpeed::maxSpeedRatio);
     }
 }
 
 void StretchAudioSource::primeStandby (juce::int64 positionKey, double ratio, int blocksLeft)
 {
-    if (! prepared || standbyInput == nullptr)
+    // the stretchers are published as one (allocateStretchers): this must
+    // not see one of them half-built, whatever order the scheduler calls in
+    if (! prepared || standbyInput == nullptr || ! stretchersReady.load (std::memory_order_acquire))
         return;
 
     StandbyClaim claim (standbyBusy);
@@ -200,7 +236,9 @@ void StretchAudioSource::prime (double ratio)
 
 void StretchAudioSource::getNextAudioBlock (const juce::AudioSourceChannelInfo& info)
 {
-    if (! enabled.load())
+    // no stretchers yet (a RePitch clip, or Stretch before the model
+    // allocated them): pass through, the resampler upstream carries the speed
+    if (! enabled.load() || ! stretchersReady.load (std::memory_order_acquire))
     {
         input->getNextAudioBlock (info);
         return;

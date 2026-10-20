@@ -48,6 +48,15 @@ struct ProjectSession::Impl
         access (access_)
     {
         engineSession.emplace();
+        configureRendering (*engineSession->get(), access);
+    }
+
+    /** Only an isolated verb (export) renders; every other session edits or
+        reads the model, so its clips need no playback chain - building and
+        prefilling one per clip was most of a verb's time on a long MP3. */
+    static void configureRendering (AudiumEngine& engine, CommandAccess access)
+    {
+        engine.getAudioResourceContainer()->setTransportSourcesEnabled (access == CommandAccess::isolated);
     }
 
     /** Hosted read: borrows the live engine; there is nothing to open or save. */
@@ -75,6 +84,7 @@ struct ProjectSession::Impl
 
         auto engineRef = engineSession->get();
         engineRef->getAudioResourceContainer()->setOwnsTemporaryDirectory (false);
+        configureRendering (*engineRef, access);
 
         // No device drains this engine's command fifo, so it pumps its own -
         // the live engine's device is draining as usual and must not.

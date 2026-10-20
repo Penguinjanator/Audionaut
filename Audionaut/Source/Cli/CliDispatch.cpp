@@ -179,7 +179,8 @@ const std::vector<CliCommandSpec>& getCliCommands()
           "                          [--unit bars|beats|seconds|clocks] [--json]",
           "Creates a named region from a timeline range.",
           "Creates a named region from the given range on every track whose clip fully contains it "
-          "(the GUI's Create Region command). Bars/beats are 1-based (4/4). Default unit: bars.",
+          "(the GUI's Create Region command). The name must not be taken by another region. "
+          "Bars/beats are 1-based (4/4). Default unit: bars.",
           runCreateRegion },
 
         { "set-region",

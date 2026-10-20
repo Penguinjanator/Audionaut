@@ -16,6 +16,8 @@
 #include "Engine/PlayList/ClipSpeed.h"
 #include "Engine/PlayList/ClipTempo.h"
 #include "Engine/AudioSources/VoiceSource.h"
+#include "Engine/AudioSources/StretchAudioSource.h"
+#include "Engine/AudioSources/ClipTransportSource.h"
 #include "Engine/Analysis/AnalysisProvider.h"
 #include "Engine/Analysis/AnalysisCache.h"
 #include "Engine/PlayList/PlayListScheduler.h"
@@ -1167,6 +1169,71 @@ SCENARIO("stretch mode handles every source sample rate", "[engine][clipspeed][s
                     REQUIRE(onset >= 0);
                     REQUIRE(onset / 44100.0 == Catch::Approx(2.0).margin(0.05));
                 }
+            }
+        }
+    }
+
+    DeletedAtShutdown::deleteAll();
+    MessageManager::deleteInstance();
+}
+
+// A Rubber Band instance costs ~5 MB per channel and every voice source
+// carries two lanes, so a clip gets its stretchers only once it is in
+// Stretch mode (#204 follow-up: memory grew with every clip).
+SCENARIO("a clip allocates its stretchers only in Stretch mode", "[engine][clipspeed][stretch][memory]")
+{
+    MessageManager::getInstance();
+    MessageManagerLock mmLock(Thread::getCurrentThread());
+
+    {
+        auto fixture = makeFixture(createSineAudioFile(440.0, 2.0));
+        auto item = fixture.item();
+        REQUIRE_FALSE(item->getVoiceSources().empty());
+
+        auto hasStretchers = [&] {
+            for (auto& voice : item->getVoiceSources())
+                if (! voice->getClipTransportSource().getStretchSource()->hasStretchers())
+                    return false;
+            return true;
+        };
+
+        THEN("a RePitch clip has none") {
+            REQUIRE(item->getStretchMode() == StretchMode::RePitch);
+            REQUIRE_FALSE(hasStretchers());
+        }
+
+        WHEN("it enters Stretch mode") {
+            item->setStretchMode(StretchMode::Stretch);
+
+            THEN("every voice source has its stretchers, and keeps them in RePitch") {
+                REQUIRE(hasStretchers());
+                item->setStretchMode(StretchMode::RePitch);
+                REQUIRE(hasStretchers());
+            }
+        }
+
+        WHEN("a RePitch clip reads a Stretch state from JSON, as a project load does") {
+            json state;
+            REQUIRE(item->writeToJson(state));
+            state["stretch_mode"] = 1;
+            REQUIRE_FALSE(hasStretchers());
+            REQUIRE(item->readFromJson(state, false));   // deinit + init with the old mode, then the new one
+
+            THEN("the new voice sources have their stretchers") {
+                REQUIRE(item->getStretchMode() == StretchMode::Stretch);
+                REQUIRE(hasStretchers());
+            }
+        }
+
+        WHEN("a stretched clip plays at half speed") {
+            item->setSpeedRatio(0.5);
+            item->setStretchMode(StretchMode::Stretch);
+            fixture.commit();
+            auto stretched = fixture.bounce();
+
+            THEN("the on-demand stretchers hold the pitch, so this is not the pass-through") {
+                REQUIRE(stretched.getNumSamples() == Catch::Approx(4.0 * 44100.0).margin(512));
+                REQUIRE(measureFrequency(stretched, 0.5, 3.5) == Catch::Approx(440.0).epsilon(0.02));
             }
         }
     }

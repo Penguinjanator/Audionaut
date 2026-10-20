@@ -12,6 +12,8 @@
 #include "Engine/Group/AudioTrack.h"
 #include "Engine/Group/ResourceGroup.h"
 #include "Engine/Provider/TempoProvider.h"
+#include "Interface/Widgets/audium_AudioThumbnail.h"
+#include <map>
 
 namespace audium {
 
@@ -81,6 +83,18 @@ public:
      * is the default; a scratch engine clears it right after construction.
      */
     void setOwnsTemporaryDirectory(bool shouldOwn) noexcept { ownsTemporaryDirectory = shouldOwn; }
+
+    /**
+     * @brief Whether clips build their playback chain (voice sources).
+     *
+     * A session that only edits the model - the CLI's and the agent host's
+     * non-rendering verbs - never plays a clip, yet every clip it loads
+     * would build and prefill a read-ahead chain, which on a long MP3 is
+     * most of a verb's time. Off, PlayListItem::init() leaves clips without
+     * voice sources; nothing may render on such an engine. On by default.
+     */
+    void setTransportSourcesEnabled(bool shouldCreate) noexcept { transportSourcesEnabledFlag = shouldCreate; }
+    bool transportSourcesEnabled() const noexcept { return transportSourcesEnabledFlag; }
     
     /**
      * @brief Creates a temporary project directory.
@@ -261,6 +275,17 @@ public:
      * @return A shared pointer to the `AudioThumbnailCache`.
      */
     std::shared_ptr<juce::AudioThumbnailCache> getAudioThumbnailCache() const { return audioThumbnailCache; }
+
+    /**
+     * @brief Returns the thumbnail of a file-based resource, one per file.
+     *
+     * The level data is the whole file at 64 samples per point (~2 MB for a
+     * 7-minute stereo file). The two channel resources of a stereo file and
+     * every clip cut from it share one thumbnail; the views own it, this
+     * container only finds it again while a view still holds it.
+     * @return nullptr for resources without a reader (live recordings).
+     */
+    std::shared_ptr<AudioThumbnail> getThumbnailForResource(const std::shared_ptr<AudioResource>& resource);
     
     /**
      * @brief Retrieves the `TempoProvider`.
@@ -305,6 +330,9 @@ private:
     /// False for a scratch container sharing another session's temp directory.
     bool ownsTemporaryDirectory = true;
 
+    /// False on a session that edits the model without ever rendering.
+    bool transportSourcesEnabledFlag = true;
+
     /// Cancels pending background analysis of the file unless another loaded
     /// resource still references it.
     void cancelAnalysisIfUnloaded(const juce::File& audioFile);
@@ -320,6 +348,9 @@ private:
 
     /// Shared pointer to the `AudioThumbnailCache`.
     std::shared_ptr<juce::AudioThumbnailCache> audioThumbnailCache;
+
+    /// One thumbnail per file URL, held weakly: the views own them.
+    std::map<juce::String, std::weak_ptr<AudioThumbnail>> sharedThumbnails;
 
     /// Shared pointer to the `TempoProvider`.
     std::shared_ptr<TempoProvider> tempoProvider;

@@ -141,6 +141,13 @@ bool PlayListScheduler::scheduleClip(const audium::DspClip &dspClip,
     return true;
 }
 
+void PlayListScheduler::pullSnapshots() noexcept
+{
+    // same order as process(): voices first, then the clips indexing them
+    voiceSourceContainer->pull();
+    audioClipContainer->pull();
+}
+
 void PlayListScheduler::process(double transportPositionClocks,
                                 int numSamples,
                                 const TransportLoop::LoopResult loopResult)

@@ -181,7 +181,16 @@ waveform + lane overlay ramps), and playback/export render them (equal-power
 sqrt curves, overlapping clips sum as independent voices). What is missing is
 the one-gesture crossfade UX on top:
 
-- [ ] **Auto-create symmetric fades when clips overlap.** When a clip is
+- [x] **Auto-create symmetric fades when clips overlap.** Done 2026-10-15
+  (feature/overlap-crossfade) as a **Shift-drag** gesture: while Shift is
+  held during a horizontal clip drag (move/trim/stretch), every partial
+  overlap of the dragged clips gets left fade-out = right fade-in = overlap
+  (offsets reset to the edges), live per drag step from the drag-start fades
+  (`PlayListContainer::crossfadeOverlappingNeighbours`,
+  `PlayListItemDraggerControl::afterPositionCommit`); the undo step covers
+  the whole playlist. Fades stay when clips separate later; no preference.
+  Snap bypass replaced by *Options → Snap to Grid* (Cmd+G). Drops, paste and CLI verbs don't
+  crossfade. Original notes: When a clip is
   dragged/trimmed so it overlaps its neighbour on the same playlist, create
   the crossfade automatically: the left clip gets a fade-out over the overlap
   (`setFadeOut`), the right clip a fade-in (`setFadeIn`), each clamped to the
@@ -192,15 +201,31 @@ the one-gesture crossfade UX on top:
   every overlap change vs. only on first contact (protect user-edited fades),
   and whether a preference toggles the behavior.
 
-- [ ] **Drag one handle across a cut to shape both clips at once.** At a butt
-  joint (clip A ends where clip B starts, typically after a split), dragging
-  A's fade-out-end handle past the cut should simultaneously set B's
-  fade-in-start to the mirrored negative offset (and vice versa), producing a
-  symmetric crossfade without touching clip positions. The handle wiring
-  lives in `PlayListItemComponent::setPlayListItem` (onValueChange lambdas);
-  the neighbour is found via the playlist container (items are kept sorted by
-  position). Needs a paired undo action (one gesture = one transaction across
-  two items) and the lane `ClipFadeOverlay` already draws both sides.
+## Arrangement editing
+
+- [x] **Trimming a clip whose region is used elsewhere should edit a copy,
+  not the shared region.** Done 2026-10-15 (feature/trim-shared-region,
+  stacked on feature/overlap-crossfade): clip edge trims (not stretch, not
+  moves) call `PlayListContainer::detachSharedRegion` in
+  `PlayListItemDraggerControl::beforeFirstCommit`, right after the drag's
+  undo snapshot; `UndoablePlayListItemAction` now records the clip's region,
+  undo re-points the clip and removes the copy, redo re-adds it
+  (`AudioRegionContainer::addAudioRegion`). No voice rebuild: the copy has
+  the same resources. CLI `set-region` still retrims every clip, by design.
+  Original notes: A `PlayListItem` holds a
+  `std::shared_ptr<AudioRegion>`, so changing a clip's start/end/length on
+  the timeline mutates the region every other clip referencing it plays —
+  trimming one instance silently reshapes the others. When a trim gesture
+  begins **on drag start** (`DraggerControl::mouseDown` /
+  `DraggingHandle`), check whether the item's region is referenced by any
+  other `PlayListItem` on the arrangement; if so, clone it first
+  (`AudioRegionContainer::createRegion`) and point this item at the copy,
+  so the whole gesture — including live preview while dragging — edits
+  the private copy. On drag start specifically, not on mouse-up: the
+  shared region must never be touched mid-gesture. The clone wants to be
+  part of the same undo transaction as the trim (one gesture = one undo
+  step), and naming should follow the existing duplicate convention in
+  the Regions list.
 
 ## Playback / time stretch — follow-ups (found 2026-09-21 in PR #105)
 
@@ -228,3 +253,27 @@ the one-gesture crossfade UX on top:
     apart ~17 samples over 0.75 s - compare short windows in tests), and its
     start alignment after a prime is off by 20-35 samples at 128-sample
     blocks (the in-block restart is worse than the standby one).
+
+## Memory — follow-ups (found 2026-10-19 in PR #207)
+
+- [ ] **Each undo step keeps two container snapshots.** An
+  `UndoableContainerAction` stores the whole `AudioTrackContainer` twice
+  as binary streams, `oldMemoryBlock` before the edit and `newMemoryBlock`
+  after it, so the undo history grows with project size times steps:
+  about 100 KB per split, measured in the live app while cutting one
+  clip into 129. Clip-only edits
+  already use the smaller `UndoablePlayListItemAction`. Options: store the
+  new state as a diff against the old one, or move more edit kinds onto
+  per-item actions. `getSizeInUnits` already counts both snapshots, so the
+  UndoManager's trimming budget sees the real cost meanwhile.
+- [ ] **Every edit still re-initialises every clip, about 20 ms per clip.**
+  `PlayListItem::readFromJson` always calls `deinit()` and then `init()`,
+  also on the non-rebuild read that applies an edit to the live
+  container. So an agent verb applied to the open document retires and
+  rebuilds the playback chain of every clip on the track, not only the
+  ones it changed: measured in PR #205, the verb time grows by about
+  20 ms per clip (1.65 s at 2 clips, 2.56 s at 40). The deinit is there
+  because undo replays JSON into reused item objects whose region may
+  change. Fix: on a non-rebuild read, keep the chain when region,
+  resources and speed are unchanged and only refresh the cheap state
+  (position, gain, fades).
