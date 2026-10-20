@@ -235,7 +235,6 @@ void AudiumApplication::handleAsyncUpdate()
     if (getPreferences().getValue(PreferenceKeys::browserWindowOpen) == "true")
         showFileBrowserWindow();
 
-    offerOrphanedTempProjectRestore();
     loadStartupProject();
 
     updateUI();
@@ -248,12 +247,18 @@ void AudiumApplication::handleAsyncUpdate()
         splashScreen.release(); // SplashScreen deletes itself (DeletedAtShutdown) once the delay/click fires
     }
 
-    askForUsageStatisticsConsent();
-
     crashReporter = std::make_unique<CrashReporter> ([this] (const juce::String& name, const juce::StringPairArray& params) {
         logUsageEvent (name, params);
     });
-    crashReporter->offerPendingReport();
+
+    // one prompt at a time: restore first (it is about the user's work),
+    // then consent (the crash event is only logged with it decided), then
+    // the crash report
+    offerOrphanedTempProjectRestore ([this] {
+        askForUsageStatisticsConsent ([this] {
+            crashReporter->offerPendingReport();
+        });
+    });
 
     updateChecker = std::make_unique<audium::UpdateChecker> (getPreferences());
     updateChecker->checkOnStartupIfDue();
@@ -282,13 +287,15 @@ void AudiumApplication::loadStartupProject()
         serializer->createNewProject();
 }
 
-void AudiumApplication::offerOrphanedTempProjectRestore()
+void AudiumApplication::offerOrphanedTempProjectRestore(std::function<void ()> then)
 {
     // crash recovery for never-saved projects: a leftover temp package with an
     // autosave means a previous session died with unsaved work
     const auto orphanedTempProject = ProjectFileStore::findOrphanedTempAutosave();
-    if (orphanedTempProject == File())
+    if (orphanedTempProject == File()) {
+        NullCheckedInvocation::invoke (then);
         return;
+    }
 
     auto options = MessageBoxOptions::makeOptionsYesNo (MessageBoxIconType::QuestionIcon,
                                                         TRANS ("Restore unsaved project?"),
@@ -297,17 +304,20 @@ void AudiumApplication::offerOrphanedTempProjectRestore()
                                                         TRANS ("Restore"),
                                                         TRANS ("Discard"));
 
-    NativeMessageBox::showAsync(options, [this, orphanedTempProject] (int result) {
+    NativeMessageBox::showAsync(options, [this, orphanedTempProject, then] (int result) {
         if (result != 0) {
             orphanedTempProject.deleteRecursively();
+            NullCheckedInvocation::invoke (then);
             return;
         }
 
         // the user may have recorded or edited while the dialog was up, and
         // opening replaces the session (and deletes its temp directory) -
-        // go through the usual dirty check first
-        askToSaveIfDirtyAndInvoke([this, orphanedTempProject] {
+        // go through the usual dirty check first. A cancel there ends the
+        // chain: what was to follow is offered again on the next launch.
+        askToSaveIfDirtyAndInvoke([this, orphanedTempProject, then] {
             restoreOrphanedTempProject(orphanedTempProject);
+            NullCheckedInvocation::invoke (then);
         });
     });
 }
@@ -468,10 +478,12 @@ void AudiumApplication::updateAgentHost()
         agentHost->setProject (fileStore->getCurrentProjectFile());
 }
 
-void AudiumApplication::askForUsageStatisticsConsent()
+void AudiumApplication::askForUsageStatisticsConsent(std::function<void ()> then)
 {
-    if (UsageAnalytics::isConsentDecided (getPreferences()))
+    if (UsageAnalytics::isConsentDecided (getPreferences())) {
+        NullCheckedInvocation::invoke (then);
         return;
+    }
 
     auto options = MessageBoxOptions::makeOptionsOkCancel (MessageBoxIconType::QuestionIcon,
                                                            TRANS ("Share anonymous usage statistics?"),
@@ -482,12 +494,14 @@ void AudiumApplication::askForUsageStatisticsConsent()
                                                            TRANS ("Share"),
                                                            TRANS ("No thanks"));
 
-    NativeMessageBox::showAsync (options, [this] (int result) {
+    NativeMessageBox::showAsync (options, [this, then] (int result) {
         const auto accepted = result == 0;
         setUsageStatisticsEnabled (accepted);
 
         if (accepted)
             logAppLaunch (*usageAnalytics);
+
+        NullCheckedInvocation::invoke (then);
     });
 }
 

@@ -4,12 +4,18 @@
 //    Audionaut uses a GPL/commercial licence - see LICENCE.md for details.
 
 #include "CrashReporter.h"
+#include "Util/Preferences.h"
 
 #include <cstdint>
 #include <cstring>
 
 #if JUCE_WINDOWS
+ #ifndef PSAPI_VERSION
+  #define PSAPI_VERSION 2 // K32* entry points in kernel32, no psapi.lib
+ #endif
  #include <windows.h>
+ #include <psapi.h>
+ #include <csignal>
 #else
  #include <csignal>
  #include <execinfo.h>
@@ -33,10 +39,14 @@ namespace {
 const char* const relayUrl = "https://audionaut-feature-requests.feature-request-relay.workers.dev";
 const char* const newIssueUrl = "https://github.com/kvoltmer/Audionaut/issues/new";
 
-// The relay caps issue bodies at 8000 characters; a prefilled browser URL
-// has to stay well below the usual ~8 KB URL limits after percent-encoding.
+// The relay caps issue bodies at 8000 characters. A prefilled browser URL
+// has to stay below the usual ~8 KB URL limits once percent-encoded, which
+// triples every space and newline of a backtrace: the body is cut until
+// the encoded URL fits.
 constexpr int relayBodyLimit = 7800;
 constexpr int urlBodyLimit = 3000;
+constexpr int urlBodyStep = 500;
+constexpr int urlLengthLimit = 7000;
 
 //==============================================================================
 // Crash-time state. The handler runs inside a dying process (often inside
@@ -44,14 +54,33 @@ constexpr int urlBodyLimit = 3000;
 // writes is prepared here by install(). This is process-wide state by
 // nature - a crash handler is per process, not per engine.
 
-char reportPath[2048] {};
 char reportHeader[2048] {};
 
 #if JUCE_WINDOWS
 wchar_t reportPathWide[1024] {};
 using ReportHandle = HANDLE;
+
+// The modules as loaded at install time. Resolving an address through the
+// loader (GetModuleHandleEx) takes the loader lock, which the crashing
+// thread may hold - so the handler looks addresses up here instead. A
+// module loaded later shows as a bare address.
+struct ModuleEntry
+{
+    std::uintptr_t base = 0;
+    std::size_t size = 0;
+    char name[64] {};
+};
+
+ModuleEntry modules[256];
+int numModules = 0;
 #else
+char reportPath[2048] {};
 using ReportHandle = int;
+
+// Where the handler runs when the crash is a stack overflow (main thread
+// only: an alternate stack is per thread, and this is the one that recurses
+// through the model).
+alignas (16) char alternateStack[128 * 1024];
 #endif
 
 void writeRaw (ReportHandle out, const char* text, size_t length)
@@ -76,14 +105,14 @@ void writeText (ReportHandle out, const char* text)
     writeRaw (out, text, std::strlen (text));
 }
 
-void writeHex (ReportHandle out, std::uint64_t value)
+void writeHex (ReportHandle out, std::uint64_t value, int numDigits = 16)
 {
     char digits[2 + 16];
     digits[0] = '0';
     digits[1] = 'x';
-    for (int i = 0; i < 16; ++i)
-        digits[2 + i] = "0123456789abcdef"[(value >> (60 - 4 * i)) & 0xf];
-    writeRaw (out, digits, sizeof (digits));
+    for (int i = 0; i < numDigits; ++i)
+        digits[2 + i] = "0123456789abcdef"[(value >> (4 * (numDigits - 1 - i))) & 0xf];
+    writeRaw (out, digits, (size_t) (2 + numDigits));
 }
 
 #if JUCE_WINDOWS
@@ -91,51 +120,55 @@ void writeHex (ReportHandle out, std::uint64_t value)
 // Writes "module.dll+0x1234" for a code address, or the bare address.
 void writeModuleOffset (HANDLE out, const void* address)
 {
-    HMODULE module = nullptr;
-    if (GetModuleHandleExW (GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS
-                                | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
-                            (LPCWSTR) address, &module))
-    {
-        wchar_t path[MAX_PATH] {};
-        char name[MAX_PATH] {};
-        GetModuleFileNameW (module, path, MAX_PATH);
-        const wchar_t* base = path;
-        for (const wchar_t* p = path; *p != 0; ++p)
-            if (*p == L'\\' || *p == L'/')
-                base = p + 1;
-        WideCharToMultiByte (CP_UTF8, 0, base, -1, name, MAX_PATH - 1, nullptr, nullptr);
+    const auto value = (std::uintptr_t) address;
 
-        writeText (out, name);
-        writeText (out, "+");
-        writeHex (out, (std::uint64_t) ((const char*) address - (const char*) module));
-        return;
+    for (int i = 0; i < numModules; ++i)
+    {
+        const auto& module = modules[i];
+        if (value >= module.base && value < module.base + module.size)
+        {
+            writeText (out, module.name);
+            writeText (out, "+");
+            writeHex (out, (std::uint64_t) (value - module.base));
+            return;
+        }
     }
 
-    writeHex (out, (std::uint64_t) (std::uintptr_t) address);
+    writeHex (out, (std::uint64_t) value);
 }
 
-LONG WINAPI handleCrash (EXCEPTION_POINTERS* info)
+void writeBacktrace (HANDLE out)
 {
-    const auto out = CreateFileW (reportPathWide, GENERIC_WRITE, 0, nullptr,
-                                  CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+    writeText (out, "\n\nBacktrace:\n");
+
+    void* frames[128];
+    const auto count = CaptureStackBackTrace (0, 128, frames, nullptr);
+    for (USHORT i = 0; i < count; ++i)
+    {
+        writeModuleOffset (out, frames[i]);
+        writeText (out, "\n");
+    }
+}
+
+HANDLE openReport()
+{
+    return CreateFileW (reportPathWide, GENERIC_WRITE, 0, nullptr,
+                        CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+}
+
+// Hardware faults and other SEH exceptions.
+LONG WINAPI handleException (EXCEPTION_POINTERS* info)
+{
+    const auto out = openReport();
 
     if (out != INVALID_HANDLE_VALUE)
     {
         writeText (out, reportHeader);
         writeText (out, "Crash: exception ");
-        writeHex (out, info->ExceptionRecord->ExceptionCode);
+        writeHex (out, info->ExceptionRecord->ExceptionCode, 8);
         writeText (out, " at ");
         writeModuleOffset (out, info->ExceptionRecord->ExceptionAddress);
-        writeText (out, "\n\nBacktrace:\n");
-
-        void* frames[128];
-        const auto count = CaptureStackBackTrace (0, 128, frames, nullptr);
-        for (USHORT i = 0; i < count; ++i)
-        {
-            writeModuleOffset (out, frames[i]);
-            writeText (out, "\n");
-        }
-
+        writeBacktrace (out);
         CloseHandle (out);
     }
 
@@ -143,9 +176,66 @@ LONG WINAPI handleCrash (EXCEPTION_POINTERS* info)
     return EXCEPTION_CONTINUE_SEARCH;
 }
 
+// abort(), which an uncaught C++ exception (std::terminate) and a failed
+// assertion end in. The UCRT raises SIGABRT first and then dies through
+// __fastfail, which never reaches the unhandled-exception filter above -
+// so without this, that whole class of crash left no report on Windows.
+void handleAbort (int)
+{
+    const auto out = openReport();
+
+    if (out != INVALID_HANDLE_VALUE)
+    {
+        writeText (out, reportHeader);
+        writeText (out, "Crash: abort (uncaught exception or failed assertion)");
+        writeBacktrace (out);
+        CloseHandle (out);
+    }
+
+    // returning lets abort() carry on into Windows Error Reporting
+}
+
+void snapshotModules()
+{
+    HMODULE handles[256];
+    DWORD bytesNeeded = 0;
+
+    if (! EnumProcessModules (GetCurrentProcess(), handles, sizeof (handles), &bytesNeeded))
+        return;
+
+    const auto count = juce::jmin ((int) (bytesNeeded / sizeof (HMODULE)), (int) (sizeof (handles) / sizeof (handles[0])));
+
+    for (int i = 0; i < count; ++i)
+    {
+        MODULEINFO info {};
+        if (! GetModuleInformation (GetCurrentProcess(), handles[i], &info, sizeof (info)))
+            continue;
+
+        auto& entry = modules[numModules];
+        entry.base = (std::uintptr_t) info.lpBaseOfDll;
+        entry.size = (std::size_t) info.SizeOfImage;
+
+        wchar_t path[MAX_PATH] {};
+        GetModuleFileNameW (handles[i], path, MAX_PATH);
+        const wchar_t* base = path;
+        for (const wchar_t* p = path; *p != 0; ++p)
+            if (*p == L'\\' || *p == L'/')
+                base = p + 1;
+        WideCharToMultiByte (CP_UTF8, 0, base, -1, entry.name, (int) sizeof (entry.name) - 1, nullptr, nullptr);
+
+        ++numModules;
+    }
+}
+
 #else
 
 const int fatalSignals[] = { SIGSEGV, SIGBUS, SIGILL, SIGFPE, SIGABRT, SIGSYS };
+
+// How long the handler may take. backtrace() can block on the dynamic
+// loader's lock if the crashing thread holds it (a fault inside dlopen or
+// lazy binding); the alarm's default action then ends the process instead
+// of leaving it hung without any report.
+constexpr unsigned handlerTimeoutSeconds = 5;
 
 const char* signalName (int signum)
 {
@@ -163,6 +253,8 @@ const char* signalName (int signum)
 
 void handleCrash (int signum, siginfo_t* info, void*)
 {
+    ::alarm (handlerTimeoutSeconds);
+
     const auto out = ::open (reportPath, O_WRONLY | O_CREAT | O_TRUNC, 0644);
 
     if (out >= 0)
@@ -179,6 +271,8 @@ void handleCrash (int signum, siginfo_t* info, void*)
         ::backtrace_symbols_fd (frames, count, out); // writes straight to the fd, no malloc
         ::close (out);
     }
+
+    ::alarm (0);
 
     // SA_RESETHAND has restored the default action; raising again (blocked
     // while in here, delivered as soon as the handler returns) makes the
@@ -244,14 +338,64 @@ juce::String issueBody (const juce::String& report, const juce::String& comment,
     return head + text + tail;
 }
 
+/// The browser fallback: a new-issue page with the report in the body, cut
+/// until the encoded URL is short enough for browsers and GitHub.
+juce::URL prefilledIssueUrl (const juce::String& title, const juce::String& report, const juce::String& comment)
+{
+    for (auto limit = urlBodyLimit;; limit -= urlBodyStep)
+    {
+        const auto url = juce::URL (newIssueUrl)
+                             .withParameter ("title", title)
+                             .withParameter ("labels", "bug")
+                             .withParameter ("body", issueBody (report, comment, limit));
+
+        if (url.toString (true).length() <= urlLengthLimit || limit <= urlBodyStep)
+            return url;
+    }
+}
+
 } // namespace
+
+//==============================================================================
+/// Posts one report on its own thread. The reporter owns it and stops it
+/// before going away, so no result lands on a dead reporter and a quit
+/// does not wait on the server beyond the connection timeout.
+class CrashReporter::Sender final : public juce::Thread
+{
+public:
+    Sender (CrashReporter& owner_, juce::String title_, juce::String report_, juce::String comment_) :
+        juce::Thread ("Crash report sender"),
+        owner (owner_),
+        title (std::move (title_)),
+        report (std::move (report_)),
+        comment (std::move (comment_))
+    {
+    }
+
+    void run() override
+    {
+        const auto result = postToRelay (title, issueBody (report, comment, relayBodyLimit),
+                                         [this] { return ! threadShouldExit(); });
+
+        if (threadShouldExit())
+            return;
+
+        juce::MessageManager::callAsync ([safeOwner = juce::WeakReference<CrashReporter> (&owner),
+                                          result, title = title, report = report, comment = comment] {
+            if (safeOwner != nullptr)
+                safeOwner->presentSendResult (result, title, report, comment);
+        });
+    }
+
+private:
+    CrashReporter& owner;
+    const juce::String title, report, comment;
+};
 
 //==============================================================================
 juce::File CrashReporter::reportFile()
 {
-    return juce::File::getSpecialLocation (juce::File::userApplicationDataDirectory)
-               .getChildFile ("Audionaut")
-               .getChildFile ("LastCrash.txt");
+    return Preferences::applicationDataDirectory().getChildFile ("LastCrash.txt");
 }
 
 void CrashReporter::install()
@@ -270,20 +414,31 @@ void CrashReporter::install()
 #endif
 
     header.copyToUTF8 (reportHeader, sizeof (reportHeader));
-    file.getFullPathName().copyToUTF8 (reportPath, sizeof (reportPath));
 
 #if JUCE_WINDOWS
     file.getFullPathName().copyToUTF16 ((juce::CharPointer_UTF16::CharType*) reportPathWide, sizeof (reportPathWide));
-    SetUnhandledExceptionFilter (handleCrash);
+    snapshotModules();
+    SetUnhandledExceptionFilter (handleException);
+    std::signal (SIGABRT, handleAbort);
 #else
+    file.getFullPathName().copyToUTF8 (reportPath, sizeof (reportPath));
+
     // backtrace() may load the unwinder lazily on first use; do that now,
     // not inside the signal handler
     void* frames[4];
     ::backtrace (frames, 4);
 
+    // a stack overflow leaves no room for the handler's frame on the stack
+    // that overflowed; give this (the main) thread another one for it
+    stack_t stack {};
+    stack.ss_sp = alternateStack;
+    stack.ss_size = sizeof (alternateStack);
+    stack.ss_flags = 0;
+    ::sigaltstack (&stack, nullptr);
+
     struct sigaction action {};
     action.sa_sigaction = handleCrash;
-    action.sa_flags = SA_SIGINFO | SA_RESETHAND;
+    action.sa_flags = SA_SIGINFO | SA_RESETHAND | SA_ONSTACK;
     sigemptyset (&action.sa_mask);
 
     for (auto signum : fatalSignals)
@@ -297,7 +452,11 @@ CrashReporter::CrashReporter (UsageEventLogger logUsageEvent_) :
 {
 }
 
-CrashReporter::~CrashReporter() = default;
+CrashReporter::~CrashReporter()
+{
+    if (sender != nullptr)
+        sender->stopThread (12000); // the request's own timeout is 10 s
+}
 
 void CrashReporter::offerPendingReport()
 {
@@ -315,9 +474,14 @@ void CrashReporter::offerPendingReport()
 
     report = report.trimEnd() + "\n\nCrash time: " + crashTime.toISO8601 (true) + "\n";
 
+    // "SIGSEGV (segmentation fault) at 0x..." / "exception 0xc0000005 at
+    // module+0x..." / "abort (...)": the kind is what precedes the address
+    // and the explanation
     const auto crash = reportValue (report, "Crash");
+    const auto crashKind = crash.upToFirstOccurrenceOf (" at ", false, false)
+                                .upToFirstOccurrenceOf (" (", false, false);
     juce::StringPairArray params;
-    params.set ("crash", crash.upToFirstOccurrenceOf (" ", false, false));
+    params.set ("crash", crashKind);
     params.set ("crash_version", reportValue (report, "Version"));
     logUsageEvent ("app_crash", params);
 
@@ -361,17 +525,15 @@ void CrashReporter::offerPendingReport()
 
 void CrashReporter::send (const juce::String& title, const juce::String& report, const juce::String& comment)
 {
-    juce::Thread::launch ([safeThis = juce::WeakReference<CrashReporter> (this), title, report, comment] {
-        const auto result = postToRelay (title, issueBody (report, comment, relayBodyLimit));
+    if (sender != nullptr)
+        sender->stopThread (12000);
 
-        juce::MessageManager::callAsync ([safeThis, result, title, report, comment] {
-            if (safeThis != nullptr)
-                safeThis->presentSendResult (result, title, report, comment);
-        });
-    });
+    sender = std::make_unique<Sender> (*this, title, report, comment);
+    sender->startThread();
 }
 
-CrashReporter::SendResult CrashReporter::postToRelay (const juce::String& title, const juce::String& body)
+CrashReporter::SendResult CrashReporter::postToRelay (const juce::String& title, const juce::String& body,
+                                                      std::function<bool()> keepGoing)
 {
     SendResult result;
 
@@ -387,6 +549,7 @@ CrashReporter::SendResult CrashReporter::postToRelay (const juce::String& title,
                              .withConnectionTimeoutMs (10000)
                              .withExtraHeaders ("Content-Type: application/json\r\nUser-Agent: Audionaut/"
                                                 + juce::String (ProjectInfo::versionString))
+                             .withProgressCallback ([keepGoing] (int, int) { return keepGoing(); })
                              .withStatusCode (&statusCode);
 
     const auto stream = juce::URL (relayUrl)
@@ -434,10 +597,7 @@ void CrashReporter::presentSendResult (const SendResult& result, const juce::Str
     }
 
     // the browser fallback needs a GitHub account but no relay
-    const auto prefilled = juce::URL (newIssueUrl)
-                               .withParameter ("title", title)
-                               .withParameter ("labels", "bug")
-                               .withParameter ("body", issueBody (report, comment, urlBodyLimit));
+    const auto prefilled = prefilledIssueUrl (title, report, comment);
 
     auto options = juce::MessageBoxOptions::makeOptionsOkCancel (
         juce::MessageBoxIconType::WarningIcon,
