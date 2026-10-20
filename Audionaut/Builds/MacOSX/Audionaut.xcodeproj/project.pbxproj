@@ -28,6 +28,7 @@
 		18AA4B984CE1768A0CC7FF54 /* Mp3AudioFormat.cpp */ = {isa = PBXBuildFile; fileRef = F7E929BBF8CDF62B46C42BF3; };
 		18CEFF3C2CDABDA21B876C50 /* AgentHost.cpp */ = {isa = PBXBuildFile; fileRef = 8ADA9C9B46F94435B177335A; };
 		1E4356BB3F52839344880951 /* AgentClient.cpp */ = {isa = PBXBuildFile; fileRef = 254AE35A97051B1EF5C010F9; };
+		1F476B005EC98E518396AED8 /* CrashReporter.cpp */ = {isa = PBXBuildFile; fileRef = 3065A0EF51E5048D0437D3F4; };
 		20531CE9B45123B33913B293 /* ClipTransportSource.cpp */ = {isa = PBXBuildFile; fileRef = 8FC68A13891E2E3079553B60; };
 		2479A3C8F72EE68FB46F152D /* AutoEditOverlayControl.cpp */ = {isa = PBXBuildFile; fileRef = A5BE83E812E74DAFE42DAA76; };
 		25CA3F65B774F34F76468809 /* PlayListItemComponent.cpp */ = {isa = PBXBuildFile; fileRef = 4B7F78AB457B000D361921A6; };
@@ -290,6 +291,7 @@
 		2DBC2B906A322A93C6867BBE /* AudioTrack.h */ /* AudioTrack.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = AudioTrack.h; path = ../../Source/Engine/Group/AudioTrack.h; sourceTree = SOURCE_ROOT; };
 		2E146D46199124CB4DC74349 /* AudiumMenuModel.h */ /* AudiumMenuModel.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = AudiumMenuModel.h; path = ../../Source/Application/AudiumMenuModel.h; sourceTree = SOURCE_ROOT; };
 		2FE373B95CF4904654564FC3 /* Recording.cpp */ /* Recording.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = Recording.cpp; path = ../../Source/Engine/Recording/Recording.cpp; sourceTree = SOURCE_ROOT; };
+		3065A0EF51E5048D0437D3F4 /* CrashReporter.cpp */ /* CrashReporter.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = CrashReporter.cpp; path = ../../Source/Application/CrashReporter.cpp; sourceTree = SOURCE_ROOT; };
 		30722D1A7A30DD9F1336E1B2 /* LoadMeter.cpp */ /* LoadMeter.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = LoadMeter.cpp; path = ../../Source/Interface/Controls/LoadMeter.cpp; sourceTree = SOURCE_ROOT; };
 		3112F89ABC344D7CA74013C6 /* AudiumMainWindow.h */ /* AudiumMainWindow.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = AudiumMainWindow.h; path = ../../Source/Application/AudiumMainWindow.h; sourceTree = SOURCE_ROOT; };
 		326D33688206104FED891964 /* include_juce_audio_basics.mm */ /* include_juce_audio_basics.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; name = include_juce_audio_basics.mm; path = ../../JuceLibraryCode/include_juce_audio_basics.mm; sourceTree = SOURCE_ROOT; };
@@ -538,6 +540,7 @@
 		BD317E4F3A130A3FD8EDC934 /* RegionLabel.h */ /* RegionLabel.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = RegionLabel.h; path = ../../Source/Interface/Controls/RegionLabel.h; sourceTree = SOURCE_ROOT; };
 		BDC989EF8839976F75651BC9 /* PositionableBase.h */ /* PositionableBase.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = PositionableBase.h; path = ../../Source/Engine/PlayList/PositionableBase.h; sourceTree = SOURCE_ROOT; };
 		BE87328F6D75995A9B23C9EF /* PlayListComponent.cpp */ /* PlayListComponent.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = PlayListComponent.cpp; path = ../../Source/Interface/Components/RightPanel/PlayListComponent.cpp; sourceTree = SOURCE_ROOT; };
+		BF00F2C08C4ED0A8B7E61F2E /* CrashReporter.h */ /* CrashReporter.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = CrashReporter.h; path = ../../Source/Application/CrashReporter.h; sourceTree = SOURCE_ROOT; };
 		BF71B1500DC25ED78E2658A1 /* LICENSE.md */ /* LICENSE.md */ = {isa = PBXFileReference; lastKnownFileType = file.md; name = LICENSE.md; path = ../../../LICENSE.md; sourceTree = SOURCE_ROOT; };
 		BF81D9B3912654FFE80A4E81 /* ExportAudioDialog.h */ /* ExportAudioDialog.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = ExportAudioDialog.h; path = ../../Source/Interface/Dialogs/ExportAudioDialog.h; sourceTree = SOURCE_ROOT; };
 		BFC5D98F33C8AA4531A7D7D6 /* LoopDraggerControl.cpp */ /* LoopDraggerControl.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = LoopDraggerControl.cpp; path = ../../Source/Interface/Controls/LoopDraggerControl.cpp; sourceTree = SOURCE_ROOT; };
@@ -1125,6 +1128,8 @@
 				3112F89ABC344D7CA74013C6,
 				6635C70632EE050E628A48F0,
 				5673A98DDDF091ED0E05D495,
+				3065A0EF51E5048D0437D3F4,
+				BF00F2C08C4ED0A8B7E61F2E,
 				E05D7227B006AF08828CBB34,
 				D2AC1556449B8EE867AA4ED7,
 				CE1CABA19DC7A4D862DBEC39,
@@ -1739,6 +1744,7 @@
 				DD7FA514741BD80EB9EA9F19,
 				4ABF177467832242153DF416,
 				E3F0BD25C994EF087531145C,
+				1F476B005EC98E518396AED8,
 				EF6CA8F2E270D924F52DEA74,
 				FFF57811D4411189D06C649F,
 				BA1688EDCDA20790A0CFB49E,

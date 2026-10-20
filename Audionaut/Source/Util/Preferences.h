@@ -36,6 +36,16 @@ public:
 
     void removeKey(const std::string& key);
 
+    /**
+     * @brief The app's own folder in the user's application-data location:
+     *        what the app keeps between runs besides these settings (model
+     *        files, the last crash report). One place for the convention.
+     */
+    static juce::File applicationDataDirectory()
+    {
+        return juce::File::getSpecialLocation (juce::File::userApplicationDataDirectory).getChildFile ("Audionaut");
+    }
+
 private:
     
     class Impl;

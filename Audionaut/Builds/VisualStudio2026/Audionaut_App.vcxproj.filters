@@ -1168,6 +1168,9 @@
     <ClCompile Include="..\..\Source\Application\UsageAnalytics.cpp">
       <Filter>Audionaut\Source\Application</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\Source\Application\CrashReporter.cpp">
+      <Filter>Audionaut\Source\Application</Filter>
+    </ClCompile>
     <ClCompile Include="..\..\Source\Application\UpdateChecker.cpp">
       <Filter>Audionaut\Source\Application</Filter>
     </ClCompile>
@@ -4819,6 +4822,9 @@
       <Filter>Audionaut\Source\Application</Filter>
     </ClInclude>
     <ClInclude Include="..\..\Source\Application\AudiumMainWindow.h">
+      <Filter>Audionaut\Source\Application</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Source\Application\CrashReporter.h">
       <Filter>Audionaut\Source\Application</Filter>
     </ClInclude>
     <ClInclude Include="..\..\Source\Application\UpdateChecker.h">
