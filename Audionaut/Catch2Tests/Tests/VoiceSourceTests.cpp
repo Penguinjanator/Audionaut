@@ -18,17 +18,14 @@ using namespace juce;
 
 SCENARIO("tranport source scenario", "[engine][dsp][transport]")
 {
-    auto fileUnderTest = File(String(CURRENT_SOURCE_DIR) + String("/TestFiles/Sessions/120-funk-export-v2.audium"));
-    REQUIRE(fileUnderTest.exists());
-    
-
     GIVEN("Load session file (audio file starts: at second 1 with 1 second duration)")
     {
+        FixtureSessionCopy session("120-funk-export-v2.audium");
         TestEngine engine;
-    auto store = engine->getProjectFileStore();
-        
-        
-        auto ok = store->open(fileUnderTest, nullptr);
+        auto store = engine->getProjectFileStore();
+        REQUIRE(session.ok());
+
+        auto ok = store->open(session.file(), nullptr);
         REQUIRE(ok);
         
         WHEN("bouncing session")

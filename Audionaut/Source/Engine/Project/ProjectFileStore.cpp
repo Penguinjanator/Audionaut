@@ -28,8 +28,6 @@ const char* ProjectFileStore::projectFileName = "Project.json";
 const char* ProjectFileStore::autosaveFileName = "Autosave.json";
 const char* ProjectFileStore::autosavePidFileName = "Autosave.pid";
 
-juce::File ProjectFileStore::projectDirectory = juce::File();
-juce::File ProjectFileStore::tempDirectory = juce::File();
 
 static int getCurrentProcessId()
 {
@@ -57,14 +55,12 @@ bool ProjectFileStore::isProcessAlive (int pid)
 #endif
 }
 
-juce::File ProjectFileStore::getSerializationBaseDirectory()
+juce::File ProjectFileStore::getSerializationBaseDirectory() const
 {
-    if (projectDirectory != juce::File() && projectDirectory.isDirectory())
-        return projectDirectory;
-    return tempDirectory;
+    return projectDirectories->getSerializationBaseDirectory();
 }
 
-juce::File ProjectFileStore::getAutosaveDirectory()
+juce::File ProjectFileStore::getAutosaveDirectory() const
 {
     return getSerializationBaseDirectory();
 }
@@ -133,12 +129,15 @@ bool ProjectFileStore::writeJsonAtomically (const juce::File& target, const json
 ProjectFileStore::ProjectFileStore(std::shared_ptr<AudioTrackContainer> audioTrackContainer_,
                                    std::shared_ptr<AudioResourceContainer> audioResourceContainer_,
                                    std::shared_ptr<PlayListScheduler> playListScheduler_,
-                                   std::shared_ptr<juce::UndoManager> undoManager_) :
+                                   std::shared_ptr<juce::UndoManager> undoManager_,
+                                   std::shared_ptr<ProjectDirectories> projectDirectories_) :
     audioTrackContainer(audioTrackContainer_),
     audioResourceContainer(audioResourceContainer_),
     playListScheduler(playListScheduler_),
-    undoManager(undoManager_)
+    undoManager(undoManager_),
+    projectDirectories(projectDirectories_)
 {
+    jassert(projectDirectories != nullptr);
 }
 
 void ProjectFileStore::setSerializer (std::shared_ptr<ProjectSerializer> serializer_)
@@ -189,14 +188,14 @@ bool ProjectFileStore::open (juce::File inFile, std::function<void (std::string)
 
             if (inFile.existsAsFile()) {
                 std::cout << "loading: " << inFile.getFullPathName() << std::endl;
-                AudioResourceContainer::createTemporaryProjectDirectory(true);
+                audioResourceContainer->createTemporaryProjectDirectory(true);
 
-                projectDirectory = inFile.getParentDirectory();
+                projectDirectories->setProjectDirectory(inFile.getParentDirectory());
 
                 // Load persisted analysis data before reading the project: the
                 // subsequent rebuild clears tracks but not the analysis cache,
                 // so segments are available as soon as the UI queries them.
-                audioTrackContainer->getAnalysisProvider()->getCache()->loadFromFolder(projectDirectory);
+                audioTrackContainer->getAnalysisProvider()->getCache()->loadFromFolder(getProjectDirectory());
 
                 auto projectJson = readProjectJson(inFile);
 
@@ -208,7 +207,7 @@ bool ProjectFileStore::open (juce::File inFile, std::function<void (std::string)
                     refreshDiskStamps();
                     changedExternally = false;
 
-                    auto audioDir = AudioResourceContainer::getAudioFileDirectory(projectDirectory);
+                    auto audioDir = AudioResourceContainer::getAudioFileDirectory(getProjectDirectory());
                     audioResourceContainer->deleteObsoleteAudioFiles(audioDir);
                     return true;
                 }
@@ -255,7 +254,7 @@ bool ProjectFileStore::save (const juce::File& file_, std::function<void (std::s
 
         // remember where this project was saved before - a Save As must also
         // clear that package's crash-recovery snapshot
-        const auto previousProjectDirectory = projectDirectory;
+        const auto previousProjectDirectory = getProjectDirectory();
 
         // The package is only complete once Project.json is in place, so
         // everything done before that point must be reversible: the audio is
@@ -269,9 +268,9 @@ bool ProjectFileStore::save (const juce::File& file_, std::function<void (std::s
         if (!packageDirectory.isDirectory())
             packageDirectory.createDirectory(); // Project.json itself arrives by the atomic write's rename
 
-        auto sourceDirectory = AudioResourceContainer::getAudioFileDirectory(projectDirectory);
+        auto sourceDirectory = AudioResourceContainer::getAudioFileDirectory(getProjectDirectory());
         if (!sourceDirectory.exists()) {
-            sourceDirectory = AudioResourceContainer::getAudioFileDirectory(tempDirectory);
+            sourceDirectory = AudioResourceContainer::getAudioFileDirectory(getTemporaryDirectory());
             jassert(sourceDirectory.exists());
         }
         const auto destinationDirectory = AudioResourceContainer::getAudioFileDirectory(packageDirectory);
@@ -287,7 +286,7 @@ bool ProjectFileStore::save (const juce::File& file_, std::function<void (std::s
                 audioResourceContainer->changeAudioFilePaths(sourceDirectory);
                 audioTrackContainer->getAnalysisProvider()->getCache()->rebaseAudioFolder(sourceDirectory);
             }
-            projectDirectory = previousProjectDirectory;
+            projectDirectories->setProjectDirectory(previousProjectDirectory);
 
             for (auto& copied : copiedFiles)
                 copied.deleteFile();
@@ -317,7 +316,7 @@ bool ProjectFileStore::save (const juce::File& file_, std::function<void (std::s
             relocated = true;
         }
         // assign new project directory
-        projectDirectory = packageDirectory;
+        projectDirectories->setProjectDirectory(packageDirectory);
 
         std::string writeError;
         if (writeJsonToFile(file, writeError)) {
@@ -328,19 +327,19 @@ bool ProjectFileStore::save (const juce::File& file_, std::function<void (std::s
             currentAgentBatch.reset();
 
             // Persist analysis results alongside the project file.
-            audioTrackContainer->getAnalysisProvider()->getCache()->saveToFolder(projectDirectory);
+            audioTrackContainer->getAnalysisProvider()->getCache()->saveToFolder(getProjectDirectory());
 
             // A successful save supersedes any crash-recovery snapshot,
             // including a temp-directory one from before the first save and
             // the one in the package this project was saved-as from.
             deleteAutosave();
-            if (previousProjectDirectory != projectDirectory)
+            if (previousProjectDirectory != getProjectDirectory())
                 deleteAutosaveIn(previousProjectDirectory);
 
             // A first save used to move the audio out of the session's temp
             // directory; the copies are the project's audio now, so the
             // originals there are obsolete.
-            if (sourceDirectory == AudioResourceContainer::getAudioFileDirectory(tempDirectory))
+            if (sourceDirectory == AudioResourceContainer::getAudioFileDirectory(getTemporaryDirectory()))
                 for (auto& copied : copiedFiles)
                     sourceDirectory.getChildFile(copied.getFileName()).deleteFile();
 
@@ -378,13 +377,13 @@ bool ProjectFileStore::writeAutosave()
 
 void ProjectFileStore::deleteAutosave()
 {
-    deleteAutosaveIn(projectDirectory);
-    deleteAutosaveIn(tempDirectory);
+    deleteAutosaveIn(getProjectDirectory());
+    deleteAutosaveIn(getTemporaryDirectory());
 }
 
 bool ProjectFileStore::restoreAutosave (std::function<void (std::string)> callback)
 {
-    return applyFileAsUndoableReload(projectDirectory.getChildFile(autosaveFileName), false, false,
+    return applyFileAsUndoableReload(getProjectDirectory().getChildFile(autosaveFileName), false, false,
                                      "Restore autosave", callback);
 }
 
@@ -406,13 +405,13 @@ bool ProjectFileStore::reloadFromDisk (std::function<void (std::string)> callbac
     // Capture the mtimes BEFORE reading: a write landing during the (possibly
     // long) apply must be re-detected on the next poll, not stamped as seen.
     const auto projectMtimeAtRead = currentProjectFile.getLastModificationTime();
-    const auto analysisMtimeAtRead = projectDirectory.getChildFile(AnalysisCache::fileName)
+    const auto analysisMtimeAtRead = getProjectDirectory().getChildFile(AnalysisCache::fileName)
                                                      .getLastModificationTime();
 
     // The analysis cache is content-keyed derived data and stays outside the
     // undo snapshot.
     if (analysisChangedOnDisk())
-        audioTrackContainer->getAnalysisProvider()->getCache()->loadFromFolder(projectDirectory);
+        audioTrackContainer->getAnalysisProvider()->getCache()->loadFromFolder(getProjectDirectory());
 
     const auto applied = applyFileAsUndoableReload(currentProjectFile, true, true,
                                                    "Reload changes from disk", callback);
@@ -425,17 +424,17 @@ bool ProjectFileStore::reloadFromDisk (std::function<void (std::string)> callbac
 
 void ProjectFileStore::reloadAnalysisFromDisk()
 {
-    audioTrackContainer->getAnalysisProvider()->getCache()->loadFromFolder(projectDirectory);
+    audioTrackContainer->getAnalysisProvider()->getCache()->loadFromFolder(getProjectDirectory());
 
     // only the analysis stamp: a project write racing in stays detectable
-    setAnalysisStamp(projectDirectory.getChildFile(AnalysisCache::fileName)
+    setAnalysisStamp(getProjectDirectory().getChildFile(AnalysisCache::fileName)
                                      .getLastModificationTime());
 }
 
 void ProjectFileStore::refreshDiskStamps()
 {
     refreshStamps(currentProjectFile,
-                  projectDirectory.getChildFile(AnalysisCache::fileName));
+                  getProjectDirectory().getChildFile(AnalysisCache::fileName));
 }
 
 bool ProjectFileStore::projectChangedOnDisk() const
@@ -449,7 +448,7 @@ bool ProjectFileStore::analysisChangedOnDisk() const
 {
     if (currentProjectFile == juce::File())
         return false;
-    return analysisChangedOnDisk(projectDirectory.getChildFile(AnalysisCache::fileName));
+    return analysisChangedOnDisk(getProjectDirectory().getChildFile(AnalysisCache::fileName));
 }
 
 std::vector<juce::File> ProjectFileStore::findObsoleteAudioFiles() const
@@ -817,9 +816,9 @@ void ProjectFileStore::deleteAutosaveIn (const juce::File& packageDirectory)
     }
 }
 
-juce::File ProjectFileStore::findOrphanedTempAutosave()
+juce::File ProjectFileStore::findOrphanedTempAutosave() const
 {
-    return findOrphanedTempAutosave(tempDirectory);
+    return findOrphanedTempAutosave(getTemporaryDirectory());
 }
 
 juce::File ProjectFileStore::findOrphanedTempAutosave (const juce::File& currentTempDirectory)

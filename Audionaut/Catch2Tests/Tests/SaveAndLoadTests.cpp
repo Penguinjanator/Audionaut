@@ -33,7 +33,7 @@ SCENARIO("create new session, load audio file and save", "[engine][load][save]")
             THEN("examine project") {
                 REQUIRE(outProjectFile.exists());
                 
-                auto audioFileDir = AudioResourceContainer::getAudioFileDirectory();
+                auto audioFileDir = engine->getAudioResourceContainer()->getAudioFileDirectory();
                 REQUIRE(audioFileDir.exists());
                 
                 auto audioFile = File(audioFileDir.getFullPathName() + File::getSeparatorString() + inFile.getFileName());
@@ -67,7 +67,7 @@ SCENARIO("load legacy project and save", "[engine][load][save][leagacy]")
             THEN("examine project") {
                 REQUIRE(outProject.exists());
                 
-                auto audioFileDir = AudioResourceContainer::getAudioFileDirectory();
+                auto audioFileDir = engine->getAudioResourceContainer()->getAudioFileDirectory();
                 REQUIRE(audioFileDir.exists());
             }
         }
@@ -117,11 +117,12 @@ SCENARIO("view state is persisted with the project", "[engine][load][save][ui_st
 
 SCENARIO("load project and save", "[engine][load][save][new]")
 {
+    FixtureSessionCopy session("simple-sine.audium");
     TestEngine engine;
     auto store = engine->getProjectFileStore();
-    
-    
-    auto inProject = File(testFilesDirectory + "/Sessions/simple-sine.audium/Project.json");
+    REQUIRE(session.ok());
+
+    auto inProject = session.file().getChildFile(ProjectFileStore::projectFileName);
     auto outProject = File(testFilesDirectory + "/Sessions/out-test.audium/" + ProjectFileStore::projectFileName);
     
     GIVEN("open project") {
@@ -134,7 +135,7 @@ SCENARIO("load project and save", "[engine][load][save][new]")
             THEN("examine project") {
                 REQUIRE(outProject.exists());
 
-                auto audioFileDir = AudioResourceContainer::getAudioFileDirectory();
+                auto audioFileDir = engine->getAudioResourceContainer()->getAudioFileDirectory();
                 REQUIRE(audioFileDir.exists());
             }
         }
@@ -145,22 +146,15 @@ SCENARIO("load project and save", "[engine][load][save][new]")
 
 SCENARIO("clip gain migrates from legacy region gain and persists", "[engine][load][save][clip][volume]")
 {
+    FixtureSessionCopy session("move-channels.audium");
     TestEngine engine;
     auto store = engine->getProjectFileStore();
-
-    auto sourceSession = File(testFilesDirectory + "Sessions/move-channels.audium");
-    REQUIRE(sourceSession.exists());
-
-    // open a disposable copy, never the checked-in session (see MoveChannelsTests)
-    auto fileUnderTest = File::getSpecialLocation(File::tempDirectory)
-                             .getChildFile("clip-gain-migration.audium")
-                             .getNonexistentSibling();
-    REQUIRE(sourceSession.copyDirectoryTo(fileUnderTest));
+    REQUIRE(session.ok());
 
     auto outProject = File(testFilesDirectory + "Sessions/clip-gain-test.audium/" + ProjectFileStore::projectFileName);
 
     GIVEN("a legacy project with gains stored on the regions") {
-        REQUIRE(store->open(fileUnderTest, nullptr));
+        REQUIRE(store->open(session.file(), nullptr));
 
         auto playList = engine->getAudioTrackContainer()->getAudioTrack(0)->getPlayListContainer();
 
@@ -188,6 +182,5 @@ SCENARIO("clip gain migrates from legacy region gain and persists", "[engine][lo
     }
     // cleanup ... comment out in case you need to isolate an issue
     outProject.getParentDirectory().deleteRecursively();
-    fileUnderTest.deleteRecursively();
 }
 

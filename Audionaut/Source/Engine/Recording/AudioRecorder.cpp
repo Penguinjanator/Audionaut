@@ -1,7 +1,6 @@
 
 
 #include "AudioRecorder.h"
-#include "Engine/Resource/AudioResourceContainer.h"
 
 namespace audium {
 
@@ -45,19 +44,14 @@ void AudioRecorder::createRecordingThumbnail(juce::AudioFormatManager &formatMan
     thumbnailFifo.setTotalSize (capacity);
 }
 
-const juce::File AudioRecorder::prepareRecording(const int take,
-                                                 const int channelNumber,
+const juce::File AudioRecorder::prepareRecording(const juce::File& recordedFile,
                                                  const double sampleRate_)
 {
     stop();
     sampleRate = sampleRate_;
     
-    if (sampleRate > 0) {
-        auto recordedFile = AudioResourceContainer::getAudioRecordingFile(take, channelNumber);
-        if (createThreadedWriter(sampleRate, recordedFile)) {
-            return recordedFile;
-        }
-    }
+    if (sampleRate > 0 && createThreadedWriter(sampleRate, recordedFile))
+        return recordedFile;
     return juce::File();
 }
 

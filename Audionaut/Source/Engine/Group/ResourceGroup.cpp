@@ -100,7 +100,7 @@ void ResourceGroup::mergeFromJson(json& input, int destinationChannel)
     auto resources = getAudioResources();
     
     for (auto& jsonResource : jsonResources) {
-        auto url = AudioResource::urlFromJson(jsonResource);
+        auto url = AudioResource::urlFromJson(jsonResource, getAudioTrack().getAudioResourceContainer().getSerializationBaseDirectory());
         AudioResource::testUrl(url);
         
         if (auto resource = addAudioResourceFromUrl(url)) {
@@ -146,7 +146,7 @@ bool ResourceGroup::readFromJson (json& input, bool rebuild)
     
     auto r = 0;
     for (auto& jsonElement : jsonResources) {
-        auto url = AudioResource::urlFromJson(jsonElement);
+        auto url = AudioResource::urlFromJson(jsonElement, getAudioTrack().getAudioResourceContainer().getSerializationBaseDirectory());
         AudioResource::testUrl(url);
         
         std::shared_ptr<AudioResource> resource = nullptr;

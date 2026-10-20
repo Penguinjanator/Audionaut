@@ -468,6 +468,8 @@
                 file="Source/Engine/Undo/UndoablePlayListItemAction.h"/>
         </GROUP>
         <GROUP id="{8F2A41C7-55E1-4B29-9D63-0A7B84D21E96}" name="Project">
+          <FILE id="PrjDir" name="ProjectDirectories.h" compile="0" resource="0"
+                file="Source/Engine/Project/ProjectDirectories.h"/>
           <FILE id="AgEdB1" name="AgentEditBatch.h" compile="0" resource="0"
                 file="Source/Engine/Project/AgentEditBatch.h"/>
           <FILE id="PrjFS1" name="ProjectFileStore.cpp" compile="1" resource="0"

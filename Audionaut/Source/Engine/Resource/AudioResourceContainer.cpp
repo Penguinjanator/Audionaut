@@ -25,10 +25,8 @@ AudioResourceContainer::~AudioResourceContainer()
 {
     audioResources.clear();
 
-    // The temp directory is a process-wide static: a scratch container running
-    // beside a live session shares it and must leave it alone.
-    if (ownsTemporaryDirectory)
-        deleteTemporaryProjectDirectory();
+    // a no-op for a scratch container that borrows a live session's directories
+    deleteTemporaryProjectDirectory();
 }
 
 const juce::File AudioResourceContainer::getAudioFileDirectory(const juce::File projectRoot)
@@ -40,25 +38,22 @@ const juce::File AudioResourceContainer::getAudioFileDirectory(const juce::File 
     return juce::File();
 }
 
-const juce::File AudioResourceContainer::getAudioFileDirectory()
+const juce::File AudioResourceContainer::getAudioFileDirectory() const
 {
-    return getAudioFileDirectory(ProjectFileStore::projectDirectory);
+    return getAudioFileDirectory(projectDirectories->getProjectDirectory());
 }
 
-const juce::File AudioResourceContainer::getAudioRecordingFile(const int take,
+const juce::File AudioResourceContainer::getAudioRecordingFile(const juce::File& audioDir,
+                                                               const int take,
                                                                const int channel)
 {
-    auto audioDir = getAudioFileDirectory(ProjectFileStore::projectDirectory);
-    if (!audioDir.exists()) {
-        audioDir = getAudioFileDirectory(ProjectFileStore::tempDirectory);
-    }
     jassert(audioDir.exists());
     
     // Format as [Year-Month-Day Hour-Minute-Second]
     auto now = juce::Time::getCurrentTime();
     auto formattedStr = now.formatted ("[%Y-%m-%d_%H-%M-%S]");
     
-    auto takeString = juce::String(AudioRegionContainer::formatNumber(take + 1));
+    auto takeString = juce::String(AudioRegionContainer::formatNumber(take));
     auto channelString = juce::String(AudioRegionContainer::formatNumber(channel + 1));
     
     auto fileName = "take" + takeString + "-chan" + channelString + "-" + formattedStr +".wav";
@@ -70,28 +65,38 @@ const juce::File AudioResourceContainer::getAudioRecordingFile(const int take,
 
 void AudioResourceContainer::deleteTemporaryProjectDirectory()
 {
-    if (ProjectFileStore::tempDirectory.exists())
-        ProjectFileStore::tempDirectory.deleteRecursively();
-    ProjectFileStore::tempDirectory = File();
+    // borrowed from a live session: not ours to delete
+    if (! projectDirectories->ownsTemporaryDirectory())
+        return;
+
+    const auto tempDirectory = projectDirectories->getTemporaryDirectory();
+    if (tempDirectory.exists())
+        tempDirectory.deleteRecursively();
+    projectDirectories->setTemporaryDirectory(File());
 }
 
 bool AudioResourceContainer::createTemporaryProjectDirectory(bool reset)
 {
     if (reset)
         deleteTemporaryProjectDirectory();
-    
-    if (!ProjectFileStore::tempDirectory.exists()) {
+
+    // A directory that is set but gone (the OS purged its cache, a borrowed
+    // live session's dir) is made again at its path: the resources whose
+    // relative paths point there, and the live session, stay valid. Only a
+    // never-set one gets a name.
+    if (projectDirectories->getTemporaryDirectory() == File()) {
         // use a unique directory within the temp location
         // example: ~/Library/Containers/com.voltmer-systems.audionaut/Data/Library/Caches/Audionaut/temp-50a181e5/Media/Audio
         auto uniqueName = "temp-" + String::toHexString (Random::getSystemRandom().nextInt()) + ProjectFileStore::projectFileExtension;
-        ProjectFileStore::tempDirectory = File(File::getSpecialLocation(File::tempDirectory).getFullPathName() +
-                                                    File::getSeparatorString() +
-                                                    uniqueName);
+        const auto tempDirectory = File(File::getSpecialLocation(File::tempDirectory).getFullPathName() +
+                                        File::getSeparatorString() +
+                                        uniqueName);
         // make sure the directory is unique!
-        jassert(!ProjectFileStore::tempDirectory.exists());
+        jassert(!tempDirectory.exists());
+        projectDirectories->setTemporaryDirectory(tempDirectory);
     }
     
-    auto audioDirectory = getAudioFileDirectory(ProjectFileStore::tempDirectory);
+    auto audioDirectory = getAudioFileDirectory(projectDirectories->getTemporaryDirectory());
     
     if (!audioDirectory.exists()) {
         auto success = audioDirectory.createDirectory();
@@ -173,13 +178,13 @@ void AudioResourceContainer::changeAudioFilePaths(const juce::File newPath)
 juce::File AudioResourceContainer::getCurrentAudioFileDirectory()
 {
     // try to use project directory
-    auto audioDir = getAudioFileDirectory(ProjectFileStore::projectDirectory);
+    auto audioDir = getAudioFileDirectory(projectDirectories->getProjectDirectory());
     if ( !audioDir.exists()) {
         
         // use temp dir
         createTemporaryProjectDirectory(false);
         
-        audioDir = getAudioFileDirectory(ProjectFileStore::tempDirectory);
+        audioDir = getAudioFileDirectory(projectDirectories->getTemporaryDirectory());
         jassert(audioDir.exists());
     }
     
@@ -390,10 +395,11 @@ std::vector<juce::File> AudioResourceContainer::findObsoleteAudioFiles(const jso
             }
         }
 
-        auto audioDir = getAudioFileDirectory(ProjectFileStore::projectDirectory);
+        const auto projectDirectory = projectDirectories->getProjectDirectory();
+        auto audioDir = getAudioFileDirectory(projectDirectory);
         for (auto& found : audioDir.findChildFiles (File::findFiles, false, "*")) {
             
-            auto relPath = found.getRelativePathFrom(ProjectFileStore::projectDirectory);
+            auto relPath = found.getRelativePathFrom(projectDirectory);
             if (std::find(jsonPaths.begin(), jsonPaths.end(), relPath) == jsonPaths.end()) {
                 redundantFiles.push_back(found);
             }

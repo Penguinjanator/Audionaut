@@ -297,7 +297,7 @@ bool MainComponent::shouldDropFilesWhenDraggedExternally (const juce::DragAndDro
         
         
         /// make sure the temp project directory exists
-        AudioResourceContainer::createTemporaryProjectDirectory(false);
+        audiumEngine->getAudioResourceContainer()->createTemporaryProjectDirectory(false);
         
         auto selectionManager = audiumEngine->getAudioTrackContainer()->getSelectionManager();
         
