@@ -165,7 +165,7 @@ private:
 
     void applyAnalysisPreferences();
     void handleAsyncUpdate() override;
-    
+
     void showAboutWindow();
     void showFileBrowserWindow();
     void showSettingsDialog();

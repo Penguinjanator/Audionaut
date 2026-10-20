@@ -661,6 +661,12 @@ void AudiumApplication::logUsageEvent(const juce::String& name, const juce::Stri
 void AudiumApplication::applicationCommandInvoked(const ApplicationCommandTarget::InvocationInfo& info)
 {
     auto name = commandManager->getNameOfCommand(info.commandID);
+    // undo/redo are named after the step they would take back ("Undo Agent:
+    // remove pauses"); the step's text is the user's, not a dimension
+    if (info.commandID == StandardApplicationCommandIDs::undo)
+        name = "undo";
+    else if (info.commandID == StandardApplicationCommandIDs::redo)
+        name = "redo";
     if (name.isEmpty())
         name = "0x" + String::toHexString((int) info.commandID);
 

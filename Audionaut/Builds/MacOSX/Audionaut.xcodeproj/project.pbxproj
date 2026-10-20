@@ -549,6 +549,7 @@
 		C45C01C32B486979620070CE /* PROVENANCE.md */ /* PROVENANCE.md */ = {isa = PBXFileReference; lastKnownFileType = file.md; name = PROVENANCE.md; path = ../../../ThirdParty/lame/PROVENANCE.md; sourceTree = SOURCE_ROOT; };
 		C45FE6DBE93443F26B7AC698 /* AnalysisWorker.h */ /* AnalysisWorker.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = AnalysisWorker.h; path = ../../Source/Engine/Analysis/AnalysisWorker.h; sourceTree = SOURCE_ROOT; };
 		C535EC3B1DAC64329A524774 /* HeaderComponent.h */ /* HeaderComponent.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = HeaderComponent.h; path = ../../Source/Interface/Components/HeaderPanel/HeaderComponent.h; sourceTree = SOURCE_ROOT; };
+		C61601C082813C75DAA9D8DE /* AgentEditBatch.h */ /* AgentEditBatch.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = AgentEditBatch.h; path = ../../Source/Engine/Project/AgentEditBatch.h; sourceTree = SOURCE_ROOT; };
 		C61C4E99316F545EEDDAC052 /* DragAndDropContainer.h */ /* DragAndDropContainer.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = DragAndDropContainer.h; path = ../../Source/Interface/DragAndDrop/DragAndDropContainer.h; sourceTree = SOURCE_ROOT; };
 		C7A2C992729CBEC1D5A5E03F /* ChannelGroupHeaderComponent.cpp */ /* ChannelGroupHeaderComponent.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = ChannelGroupHeaderComponent.cpp; path = ../../Source/Interface/Components/MiddlePanel/ChannelView/ChannelGroupHeaderComponent.cpp; sourceTree = SOURCE_ROOT; };
 		C850B3C5C5A02130F40F4025 /* AudiumLookAndFeel.cpp */ /* AudiumLookAndFeel.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = AudiumLookAndFeel.cpp; path = ../../Source/Interface/LookAndFeel/AudiumLookAndFeel.cpp; sourceTree = SOURCE_ROOT; };
@@ -1428,6 +1429,7 @@
 		C8C9D8CD950E2C470A04EBEC /* Project */ = {
 			isa = PBXGroup;
 			children = (
+				C61601C082813C75DAA9D8DE,
 				9B6B8AC2CA2C128CC084CC04,
 				446C0275190F96C35C442561,
 				ED84B062207DEE4EFA81ABBA,

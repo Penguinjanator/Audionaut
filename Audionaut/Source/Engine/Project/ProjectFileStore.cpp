@@ -11,6 +11,9 @@
 #include "Engine/Analysis/AnalysisProvider.h"
 #include "Engine/Analysis/AnalysisCache.h"
 #include "Engine/Undo/UndoableReloadAction.h"
+#include "Engine/Project/AgentEditBatch.h"
+
+#include <set>
 
 #if !JUCE_WINDOWS
  #include <unistd.h>
@@ -200,6 +203,7 @@ bool ProjectFileStore::open (juce::File inFile, std::function<void (std::string)
                 if (serializer->readFromJson(projectJson, true)) {
                     currentProjectFile = inFile;
                     undoManager->clearUndoHistory();
+                    currentAgentBatch.reset();
                     playListScheduler->commitPlayListData();
                     refreshDiskStamps();
                     changedExternally = false;
@@ -321,6 +325,7 @@ bool ProjectFileStore::save (const juce::File& file_, std::function<void (std::s
 
             currentProjectFile = file;
             undoManager->clearUndoHistory();
+            currentAgentBatch.reset();
 
             // Persist analysis results alongside the project file.
             audioTrackContainer->getAnalysisProvider()->getCache()->saveToFolder(projectDirectory);
@@ -478,6 +483,7 @@ void ProjectFileStore::closeProject()
 {
     currentProjectFile = juce::File();
     changedExternally = false;
+    currentAgentBatch.reset();
 }
 
 bool ProjectFileStore::writeJsonToFile (const juce::File& target, std::string& error)
@@ -555,6 +561,207 @@ bool ProjectFileStore::applyStateAsUndoableReload (json afterState,
         }
 
         undoManager->beginNewTransaction();
+        return true;
+    }
+    catch (std::exception &ex)
+    {
+        std::cout << ex.what() << std::endl;
+        NullCheckedInvocation::invoke (callback, ex.what());
+    }
+    return false;
+}
+
+static void eraseSelection (json& node)
+{
+    if (node.is_object()) {
+        node.erase ("selected");
+        for (auto& [key, value] : node.items()) eraseSelection (value);
+    }
+    else if (node.is_array()) {
+        for (auto& value : node) eraseSelection (value);
+    }
+}
+
+json ProjectFileStore::documentOf (json state)
+{
+    if (auto audium = state.find ("audium"); audium != state.end() && audium->is_object()) {
+        audium->erase ("scheduler");
+        audium->erase ("ui_state");
+        eraseSelection (*audium); // clip selection: a click, not an edit
+    }
+    return state;
+}
+
+/** Calls `f (clip)` for every play list item of every track in `state`. */
+template <typename Function>
+static void forEachClip (json& state, Function&& f)
+{
+    auto audium = state.find ("audium");
+    if (audium == state.end() || ! audium->is_object())
+        return;
+
+    auto tracks = audium->find ("audio_tracks");
+    if (tracks == audium->end() || ! tracks->is_array())
+        return;
+
+    for (auto& track : *tracks) {
+        if (! track.is_object())
+            continue;
+
+        auto clips = track.find ("play_list_vector");
+        if (clips == track.end() || ! clips->is_array())
+            continue;
+
+        for (auto& clip : *clips)
+            if (clip.is_object())
+                f (clip);
+    }
+}
+
+/** What tells a clip apart across two states of one document. */
+static std::string clipKey (const json& clip)
+{
+    return clip.value ("track_id", json()).dump() + "/"
+         + clip.value ("region_id", json()).dump() + "/"
+         + clip.value ("position_clocks", json()).dump();
+}
+
+/** Puts `live`'s clip selection on `state`: a click while a verb ran is the
+    user's, and the verb's engine never saw it. A clip the verb created is
+    unselected. */
+static void carrySelection (json live, json& state)
+{
+    std::set<std::string> selected;
+    forEachClip (live, [&] (json& clip) {
+        if (clip.value ("selected", false))
+            selected.insert (clipKey (clip));
+    });
+
+    forEachClip (state, [&] (json& clip) {
+        clip["selected"] = selected.count (clipKey (clip)) > 0;
+    });
+}
+
+bool ProjectFileStore::canExtendAgentBatch (const AgentEditBatch& batch,
+                                            const AgentEditGroup& group,
+                                            const json& liveDocument,
+                                            juce::Time now) const
+{
+    // a bare CLI call carries no session: every verb is a step of its own
+    if (group.session.isEmpty() || batch.key != group.key())
+        return false;
+
+    // ours has to be the last step still, and on the document: an undo of it,
+    // or any other edit's step since, ends the batch (a redo of ours brings
+    // it back). The flag tells our step from another one named like it.
+    if (! batch.applied || undoManager->getUndoDescription() != batch.transactionName)
+        return false;
+
+    // extending adds nothing to the history, so it would leave a redo the
+    // user still has - one that then overwrites the verb. A step of its own
+    // drops that redo, as any edit does.
+    if (undoManager->canRedo())
+        return false;
+
+    // a user edit between two verbs leaves a document that is not the one
+    // the batch left - the same check the host makes before applying at all
+    if (liveDocument != batch.afterDocument)
+        return false;
+
+    return now - batch.lastEdit <= juce::RelativeTime::minutes (agentBatchIdleMinutes);
+}
+
+bool ProjectFileStore::applyAgentState (json afterState,
+                                        const AgentEditGroup& group,
+                                        std::function<void (std::string)> callback)
+{
+    jassert(serializer != nullptr);
+
+    json liveState;
+    try {
+        serializer->writeToJson (liveState);
+    }
+    catch (std::exception& ex) {
+        std::cout << ex.what() << std::endl;
+        NullCheckedInvocation::invoke (callback, ex.what());
+        return false;
+    }
+
+    return applyAgentState (std::move (afterState), std::move (liveState), group, std::move (callback));
+}
+
+bool ProjectFileStore::applyAgentState (json afterState,
+                                        json liveState,
+                                        const AgentEditGroup& group,
+                                        std::function<void (std::string)> callback)
+{
+    jassert(serializer != nullptr);
+
+    if (playListScheduler->isOfflineRendering()) {
+        NullCheckedInvocation::invoke (callback, "a render is in progress");
+        return false;
+    }
+
+    try
+    {
+        // the user's current view and selection win over whatever the
+        // verb's engine stored
+        if (liveState.contains ("audium") && liveState["audium"].contains ("ui_state"))
+            afterState["audium"]["ui_state"] = liveState["audium"]["ui_state"];
+        carrySelection (liveState, afterState);
+
+        const auto now = clock();
+        const auto liveDocument = documentOf (liveState);
+
+        if (auto batch = currentAgentBatch.lock(); batch != nullptr && canExtendAgentBatch (*batch, group, liveDocument, now)) {
+            auto applied = false;
+            try {
+                applied = serializer->applyProjectJson (afterState, true);
+            }
+            catch (std::exception& ex) {
+                std::cout << ex.what() << std::endl;
+            }
+
+            if (! applied) {
+                // best effort: back to where the batch left the document
+                try { serializer->applyProjectJson (batch->after, true); } catch (...) {}
+                NullCheckedInvocation::invoke (callback, "failed to apply the project state");
+                return false;
+            }
+
+            batch->setAfter (std::move (afterState));
+            ++batch->numEdits;
+            batch->lastEdit = now;
+            setChangedExternally (true);
+
+            // nothing was performed, but the document changed as if it had:
+            // the listeners (title, menus, autosave) hear about it the same way
+            undoManager->sendChangeMessage();
+            return true;
+        }
+
+        auto batch = std::make_shared<AgentEditBatch>();
+        batch->key = group.key();
+        batch->transactionName = group.task.isNotEmpty() ? "Agent: " + group.task : juce::String ("Agent edits");
+        batch->before = std::move (liveState);
+        batch->setAfter (std::move (afterState));
+        batch->numEdits = 1;
+        batch->lastEdit = now;
+
+        // the action owns the batch from here; we keep watching it
+        const auto performed = undoManager->perform (new UndoableAgentBatchAction (*serializer, *this, batch),
+                                                     batch->transactionName);
+        if (! performed) {
+            NullCheckedInvocation::invoke (callback, "failed to apply the project state");
+            return false;
+        }
+
+        undoManager->beginNewTransaction();
+        // nothing to extend without a session; the next verb starts its own step
+        if (group.session.isNotEmpty())
+            currentAgentBatch = batch;
+        else
+            currentAgentBatch.reset();
         return true;
     }
     catch (std::exception &ex)

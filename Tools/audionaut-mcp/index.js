@@ -9,7 +9,9 @@
 // relays the {ok, result|error} envelope; no engine logic lives here. See
 // README.md for registration instructions.
 
+import { AsyncLocalStorage } from "node:async_hooks";
 import { execFile, spawn } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { createRequire } from "node:module";
 import { platform, release } from "node:os";
 import { promisify } from "node:util";
@@ -75,6 +77,19 @@ const errorResult = (text) => ({ content: [{ type: "text", text }], isError: tru
 // total time: every stderr line restarts the clock, so a separation that keeps
 // reporting progress runs as long as it needs. (The smoke test shortens it.)
 const idleTimeoutMs = Number(process.env.AUDIONAUT_CLI_IDLE_TIMEOUT_MS) || 10 * 60 * 1000;
+
+// Undo grouping. The open app puts the edits of one task into one undo step,
+// keyed by the agent session (this server process) and the task name the
+// tool call carries. Both reach the CLI as environment variables; the task
+// travels through an async context so concurrent tool calls cannot mix.
+const agentSession = randomUUID();
+const taskContext = new AsyncLocalStorage();
+const withTask = (handler) => (args, extra) => taskContext.run(args?.task, () => handler(args, extra));
+const cliEnvironment = () => ({
+  ...process.env,
+  AUDIONAUT_AGENT_SESSION: agentSession,
+  ...(taskContext.getStore() ? { AUDIONAUT_AGENT_TASK: taskContext.getStore() } : {}),
+});
 const maxStdoutBytes = 32 * 1024 * 1024; // --raw project dumps can be large
 
 // Runs the CLI once. stdout is collected for the envelope; stderr is read line
@@ -90,7 +105,7 @@ function runProcess(argv, { onProgress, signal }) {
     let settled = false;
     let timer;
 
-    const child = spawn(cli.path, argv, { windowsHide: true, stdio: ["ignore", "pipe", "pipe"] });
+    const child = spawn(cli.path, argv, { windowsHide: true, stdio: ["ignore", "pipe", "pipe"], env: cliEnvironment() });
 
     const finish = (code = null, exitSignal = null) => {
       if (settled) return;
@@ -225,6 +240,17 @@ const projectParam = z
   .string()
   .describe("Path to the .audium project package (absolute paths recommended)");
 
+const taskParam = z
+  .string()
+  .trim()
+  .max(80)
+  .optional()
+  .describe(
+    'Name of the task this edit is part of, e.g. "remove speech pauses". In the open app, all edits ' +
+      "with the same task name become one undo step: keep the name for every call of the task and " +
+      "change it when the next task starts"
+  );
+
 const server = new McpServer(
   { name: "audionaut", version },
   {
@@ -232,8 +258,10 @@ const server = new McpServer(
       "Tools for inspecting and editing Audionaut (.audium) multitrack projects. " +
       "If the project is open in Audionaut, the tools act on the document as the user currently sees " +
       "it, unsaved changes included, and the edit becomes one undo step in their session - the project " +
-      "file is not written, and saving stays theirs to do. Otherwise the tools read and write the " +
-      "project file directly. Either way you never need to ask the user to save first. " +
+      "file is not written, and saving stays theirs to do. Name the task an edit belongs to in the " +
+      "editing tools' task parameter: edits with the same task name share one undo step, so keep the " +
+      "name for the whole task and change it when the next one starts. Otherwise the tools read and " +
+      "write the project file directly. Either way you never need to ask the user to save first. " +
       "If a task needs something these tools cannot do - a missing verb, option " +
       "or limit - tell the user and use request_feature to send the gap to the maintainer. If a tool " +
       "misbehaves - a crash, a wrong result, a project left in a bad state - tell the user and use " +
@@ -286,15 +314,16 @@ server.registerTool(
       project: projectParam,
       files: z.array(z.string()).min(1).describe("Audio file paths to import"),
       position_seconds: z.number().min(0).optional().describe("Timeline position for the files (default 0)"),
+      task: taskParam,
     },
   },
-  async ({ project, files, position_seconds }) =>
+  withTask(async ({ project, files, position_seconds }) =>
     runCli([
       "import",
       project,
       ...files,
       ...(position_seconds !== undefined ? ["--position", String(position_seconds)] : []),
-    ], files.map((_, i) => 2 + i))
+    ], files.map((_, i) => 2 + i)))
 );
 
 server.registerTool(
@@ -378,9 +407,10 @@ server.registerTool(
       segments: z.number().int().positive().optional().describe("Number of segments"),
       duration_seconds: z.number().positive().optional().describe("Target duration"),
       crossfades: z.boolean().optional().describe("Apply crossfades at joints (default true)"),
+      task: taskParam,
     },
   },
-  async ({ project, track, clip, measures, segments, duration_seconds, crossfades }) =>
+  withTask(async ({ project, track, clip, measures, segments, duration_seconds, crossfades }) =>
     runCli([
       "auto-edit",
       project,
@@ -390,7 +420,7 @@ server.registerTool(
       ...(segments !== undefined ? ["--segments", String(segments)] : []),
       ...(duration_seconds !== undefined ? ["--duration", String(duration_seconds)] : []),
       ...(crossfades === false ? ["--no-crossfades"] : []),
-    ])
+    ]))
 );
 
 server.registerTool(
@@ -407,9 +437,10 @@ server.registerTool(
       mode: z.enum(["random", "sequential"]).optional().describe("Selection mode (default sequential)"),
       seed: z.number().int().optional().describe("Random seed for reproducible random mode"),
       crossfades: z.boolean().optional().describe("Apply crossfades at joints (default true)"),
+      task: taskParam,
     },
   },
-  async ({ project, track, duration_seconds, mode, seed, crossfades }) =>
+  withTask(async ({ project, track, duration_seconds, mode, seed, crossfades }) =>
     runCli([
       "assemble",
       project,
@@ -418,7 +449,7 @@ server.registerTool(
       ...(mode ? ["--mode", mode] : []),
       ...(seed !== undefined ? ["--seed", String(seed)] : []),
       ...(crossfades === false ? ["--no-crossfades"] : []),
-    ])
+    ]))
 );
 
 // Timeline positions are musical by default: bars/beats are 1-based (bar 1 =
@@ -439,10 +470,11 @@ server.registerTool(
       project: projectParam,
       at: z.number().describe("Timeline position to split at, e.g. 23 for bar 23"),
       unit: unitParam,
+      task: taskParam,
     },
   },
-  async ({ project, at, unit }) =>
-    runCli(["split", project, "--at", String(at), ...(unit ? ["--unit", unit] : [])])
+  withTask(async ({ project, at, unit }) =>
+    runCli(["split", project, "--at", String(at), ...(unit ? ["--unit", unit] : [])]))
 );
 
 server.registerTool(
@@ -459,9 +491,10 @@ server.registerTool(
       start: z.number().describe("Range start, e.g. 23 for bar 23"),
       end: z.number().describe("Range end (must be after start)"),
       unit: unitParam,
+      task: taskParam,
     },
   },
-  async ({ project, name, start, end, unit }) =>
+  withTask(async ({ project, name, start, end, unit }) =>
     runCli([
       "create-region",
       project,
@@ -472,7 +505,7 @@ server.registerTool(
       "--end",
       String(end),
       ...(unit ? ["--unit", unit] : []),
-    ])
+    ]))
 );
 
 server.registerTool(
@@ -491,9 +524,10 @@ server.registerTool(
       length: z.number().positive().optional().describe("New length, keeping the start"),
       unit: unitParam,
       track: z.number().int().min(0).optional().describe("Track id, to disambiguate same-named regions"),
+      task: taskParam,
     },
   },
-  async ({ project, region, rename, start, end, length, unit, track }) =>
+  withTask(async ({ project, region, rename, start, end, length, unit, track }) =>
     runCli([
       "set-region",
       project,
@@ -505,7 +539,7 @@ server.registerTool(
       ...(length !== undefined ? ["--length", String(length)] : []),
       ...(unit ? ["--unit", unit] : []),
       ...(track !== undefined ? ["--track", String(track)] : []),
-    ])
+    ]))
 );
 
 server.registerTool(
@@ -522,9 +556,10 @@ server.registerTool(
       unit: unitParam,
       track: z.number().int().min(0).optional().describe("Track id"),
       delete_region: z.boolean().optional().describe("Also delete the region from the pool"),
+      task: taskParam,
     },
   },
-  async ({ project, at, region, unit, track, delete_region }) =>
+  withTask(async ({ project, at, region, unit, track, delete_region }) =>
     runCli([
       "remove-clip",
       project,
@@ -533,7 +568,7 @@ server.registerTool(
       ...(unit ? ["--unit", unit] : []),
       ...(track !== undefined ? ["--track", String(track)] : []),
       ...(delete_region ? ["--delete-region"] : []),
-    ])
+    ]))
 );
 
 server.registerTool(
@@ -555,9 +590,10 @@ server.registerTool(
       region: z.string().min(1).optional().describe("Region name of the clip"),
       unit: unitParam,
       track: z.number().int().min(0).optional().describe("Track id"),
+      task: taskParam,
     },
   },
-  async ({ project, to, to_track, at, region, unit, track }) =>
+  withTask(async ({ project, to, to_track, at, region, unit, track }) =>
     runCli([
       "move-clip",
       project,
@@ -567,7 +603,7 @@ server.registerTool(
       ...(region !== undefined ? ["--region", region] : []),
       ...(unit ? ["--unit", unit] : []),
       ...(track !== undefined ? ["--track", String(track)] : []),
-    ])
+    ]))
 );
 
 server.registerTool(
@@ -583,9 +619,10 @@ server.registerTool(
       at: z.number().describe("Timeline position for the new clip"),
       unit: unitParam,
       track: z.number().int().min(0).optional().describe("Track id, to disambiguate same-named regions"),
+      task: taskParam,
     },
   },
-  async ({ project, region, at, unit, track }) =>
+  withTask(async ({ project, region, at, unit, track }) =>
     runCli([
       "place-clip",
       project,
@@ -595,7 +632,7 @@ server.registerTool(
       String(at),
       ...(unit ? ["--unit", unit] : []),
       ...(track !== undefined ? ["--track", String(track)] : []),
-    ])
+    ]))
 );
 
 server.registerTool(
@@ -605,9 +642,9 @@ server.registerTool(
     description:
       "Deletes every region that has no clip on the timeline (the GUI's Delete Unused Regions). " +
       "The audio files stay in the package.",
-    inputSchema: { project: projectParam },
+    inputSchema: { project: projectParam, task: taskParam },
   },
-  async ({ project }) => runCli(["cleanup-regions", project])
+  withTask(async ({ project }) => runCli(["cleanup-regions", project]))
 );
 
 server.registerTool(
@@ -626,9 +663,10 @@ server.registerTool(
       region: z.string().min(1).optional().describe("Region name of the clip"),
       unit: unitParam,
       track: z.number().int().min(0).optional().describe("Track id"),
+      task: taskParam,
     },
   },
-  async ({ project, gain, db, channel, at, region, unit, track }) =>
+  withTask(async ({ project, gain, db, channel, at, region, unit, track }) =>
     runCli([
       "clip-gain",
       project,
@@ -640,7 +678,7 @@ server.registerTool(
       ...(region !== undefined ? ["--region", region] : []),
       ...(unit ? ["--unit", unit] : []),
       ...(track !== undefined ? ["--track", String(track)] : []),
-    ])
+    ]))
 );
 
 server.registerTool(
@@ -668,9 +706,10 @@ server.registerTool(
       tempo: z.number().positive().optional()
         .describe("The clip's own tempo in BPM; sets it and locks the clip"),
       unit: unitParam,
+      task: taskParam,
     },
   },
-  async ({ project, at, region, track, ratio, semitones, length, mode, lockTempo, tempo, unit }) =>
+  withTask(async ({ project, at, region, track, ratio, semitones, length, mode, lockTempo, tempo, unit }) =>
     runCli([
       "clip-speed",
       project,
@@ -684,7 +723,7 @@ server.registerTool(
       ...(tempo !== undefined ? ["--tempo", String(tempo)] : []),
       ...(length !== undefined ? ["--length", length] : []),
       ...(unit !== undefined ? ["--unit", unit] : []),
-    ])
+    ]))
 );
 
 server.registerTool(
@@ -703,9 +742,10 @@ server.registerTool(
       clip: z.number().int().optional().describe("Playlist item id (default: the track's first clip)"),
       threads: z.number().int().positive().optional().describe("Parallel segments (default: physical cores)"),
       mute_source: z.boolean().optional().describe("Mute the source track's channels (default true)"),
+      task: taskParam,
     },
   },
-  async ({ project, track, clip, threads, mute_source }, extra) =>
+  withTask(async ({ project, track, clip, threads, mute_source }, extra) =>
     runCli(
       [
         "separate",
@@ -717,7 +757,7 @@ server.registerTool(
       ],
       [],
       extra
-    )
+    ))
 );
 
 server.registerTool(
@@ -745,9 +785,10 @@ server.registerTool(
       region: z.string().min(1).optional().describe("Region name of the clip"),
       unit: unitParam,
       track: z.number().int().min(0).optional().describe("Track id"),
+      task: taskParam,
     },
   },
-  async ({ project, fade_in, fade_out, fade_in_start, fade_out_end, fade_in_curve, fade_out_curve,
+  withTask(async ({ project, fade_in, fade_out, fade_in_start, fade_out_end, fade_in_curve, fade_out_curve,
            at, region, unit, track }) =>
     runCli([
       "clip-fades",
@@ -762,7 +803,7 @@ server.registerTool(
       ...(region !== undefined ? ["--region", region] : []),
       ...(unit ? ["--unit", unit] : []),
       ...(track !== undefined ? ["--track", String(track)] : []),
-    ])
+    ]))
 );
 
 server.registerTool(
@@ -776,10 +817,11 @@ server.registerTool(
     inputSchema: {
       project: projectParam,
       track: z.number().int().min(0).describe("Track id"),
+      task: taskParam,
     },
   },
-  async ({ project, track }) =>
-    runCli(["remove-track", project, "--track", String(track)])
+  withTask(async ({ project, track }) =>
+    runCli(["remove-track", project, "--track", String(track)]))
 );
 
 server.registerTool(
@@ -793,10 +835,11 @@ server.registerTool(
       project: projectParam,
       track: z.number().int().min(0).describe("Track id"),
       channel: z.number().int().min(0).describe("Channel index within the track (0-based)"),
+      task: taskParam,
     },
   },
-  async ({ project, track, channel }) =>
-    runCli(["remove-channel", project, "--track", String(track), "--channel", String(channel)])
+  withTask(async ({ project, track, channel }) =>
+    runCli(["remove-channel", project, "--track", String(track), "--channel", String(channel)]))
 );
 
 // ---------------------------------------------------------------------------
