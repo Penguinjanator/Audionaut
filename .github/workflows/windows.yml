@@ -157,3 +157,16 @@ jobs:
       # all, which is how a missing enable_testing() once made this step "pass"
       # in a second without running an assertion. Fail loudly instead.
       run: ctest -C ${{ env.BUILD_TYPE }} --output-on-failure --no-tests=error
+
+    - name: Check that the suite left the fixtures alone
+      # A test that opens a checked-in session in place would leave what it
+      # imports or records in the repository (see FixtureSessionCopy in
+      # Catch2Tests/Tests/TestEngine.h); the per-engine ProjectDirectories
+      # keep one test's project directory from leaking into the next.
+      shell: bash
+      run: |
+        if [ -n "$(git status --porcelain -- Audionaut/Catch2Tests/TestFiles)" ]; then
+          echo "the test run left files under Audionaut/Catch2Tests/TestFiles:"
+          git status --short -- Audionaut/Catch2Tests/TestFiles
+          exit 1
+        fi

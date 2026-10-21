@@ -16,7 +16,7 @@
 #include "Engine/Group/AudioTrack.h"
 #include "Engine/AudiumEngine.h"
 #include "Engine/Factory/AudioResourceFactory.h"
-#include "Interface/Widgets/audium_AudioThumbnail.h"
+#include "Engine/Resource/audium_AudioThumbnail.h"
 #include "Engine/Resource/ChannelMapping.h"
 
 //==============================================================================
@@ -62,13 +62,6 @@ public:
 
     void changeListenerCallback (juce::ChangeBroadcaster*) override;
 
-    /** Builds a cache-backed thumbnail for a file-based resource; returns
-        nullptr for resources without a reader (live recordings). The heavy
-        low-res data is shared through the engine's AudioThumbnailCache. */
-    static std::shared_ptr<audium::AudioThumbnail> createThumbnailForResource(
-        const std::shared_ptr<audium::AudiumEngine>& audiumEngine,
-        const std::shared_ptr<audium::AudioResource>& audioResource);
-    
     virtual double getRegionStart(audium::TimeContextType context) const = 0;
     
     virtual double getClipGain() const { return 1.0; }
@@ -97,7 +90,10 @@ protected:
     std::shared_ptr<RegionSelector> regionSelector;
     
     std::shared_ptr<audium::AudioThumbnail> audioThumbnail;
-    
+
+    // the thumbnail is shared per file; this view's columns live here
+    audium::AudioThumbnail::DrawCache drawCache;
+
     static constexpr float verticalZoomFactor = 1.f;
     
     int channelNumber = 0;

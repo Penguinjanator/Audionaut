@@ -43,10 +43,24 @@ namespace audium {
 class StretchAudioSource : public juce::AudioSource
 {
 public:
+    /// When the Rubber Band instances come into being. A stretcher costs
+    /// about 5 MB per channel, and most clips never leave RePitch mode,
+    /// so a clip's node waits for allocateStretchers() (the clip model
+    /// calls it when the clip enters Stretch mode).
+    enum class Stretchers { allocateNow, onDemand };
+
     /// Wraps @p inputSource (not owned). @p numChannels is the channel
     /// count of the upstream chain (the file reader's).
-    StretchAudioSource (juce::AudioSource* inputSource, int numChannels);
+    StretchAudioSource (juce::AudioSource* inputSource, int numChannels,
+                        Stretchers stretchers = Stretchers::allocateNow);
     ~StretchAudioSource() override;
+
+    /// Off the audio thread. Creates the live stretcher and, with a standby
+    /// lane, the standby one, and prepares them when the node already is.
+    /// Until this ran, an enabled node passes its input through unchanged
+    /// (varispeed instead of silence). Idempotent; never frees.
+    void allocateStretchers();
+    bool hasStretchers() const noexcept              { return stretchersReady.load (std::memory_order_acquire); }
 
     /// Bypassed (the default) means pass-through: RePitch mode.
     void setEnabled (bool shouldStretch) noexcept    { enabled.store (shouldStretch); }
@@ -116,8 +130,8 @@ public:
     /// Diagnostics: blocks the stretcher could not fill, and rendered
     /// samples it had to drop. Both stay zero when the buffers are sized
     /// right.
-    int getUnderruns() const noexcept    { return backend->getUnderruns(); }
-    int getOverflows() const noexcept    { return backend->getOverflows(); }
+    int getUnderruns() const noexcept    { return backend != nullptr ? backend->getUnderruns() : 0; }
+    int getOverflows() const noexcept    { return backend != nullptr ? backend->getOverflows() : 0; }
 
     void prepareToPlay (int samplesPerBlockExpected, double sampleRate) override;
     void releaseResources() override;
@@ -172,6 +186,7 @@ private:
 
     std::atomic<double> speedRatio { 1.0 };
     std::atomic<bool> enabled { false };
+    std::atomic<bool> stretchersReady { false };   // set once allocateStretchers() ran
     std::atomic<bool> needsPriming { true };
 
     juce::AudioBuffer<float> inputScratch;

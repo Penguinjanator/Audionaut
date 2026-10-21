@@ -57,8 +57,12 @@ export default {
     const token = String(env.GITHUB_TOKEN ?? "").trim(); // a pasted secret may carry a newline
     if (!token) return json({ success: false, message: "relay has no GITHUB_TOKEN" }, 500);
     const kind = payload.kind === "bug" ? "bug" : "feature";
-    const labels = String(kind === "bug" ? env.LABELS_BUG : env.LABELS_FEATURE)
-      .split(",")
+    // Everything the relay files lands under the token's account, so the
+    // author column cannot tell the maintainer's own reports from everyone
+    // else's. LABELS_RELAYED marks the latter: the maintainer's machines skip
+    // the relay (empty AUDIONAUT_FEATURE_REQUEST_URL) and file through gh.
+    const labels = [kind === "bug" ? env.LABELS_BUG : env.LABELS_FEATURE, env.LABELS_RELAYED]
+      .flatMap((list) => String(list ?? "").split(","))
       .map((label) => label.trim())
       .filter(Boolean);
 

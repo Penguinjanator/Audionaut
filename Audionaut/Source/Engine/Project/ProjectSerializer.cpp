@@ -168,12 +168,12 @@ void ProjectSerializer::cleanup()
 void ProjectSerializer::createNewProject(const int numChannels)
 {
     // reset current project dir
-    ProjectFileStore::projectDirectory = juce::File();
+    audioResourceContainer->getProjectDirectories()->setProjectDirectory(juce::File());
 
     // A fresh project starts with no analysis data.
     audioTrackContainer->getAnalysisProvider()->getCache()->clear();
 
-    AudioResourceContainer::createTemporaryProjectDirectory(true);
+    audioResourceContainer->createTemporaryProjectDirectory(true);
 
     audium::WaveFormColours::resetWaveFormColour();
     for (auto i = 0; i < 1; i++) {

@@ -98,7 +98,10 @@ public:
     std::shared_ptr<audium::AudioThumbnail> getRecordingThumbnail(int channelNumber) const;
     
     void record(bool start, const int channelNumber = -1, const double positionClocks = -1.0);
-    
+
+    /** The number of the take being (or last) recorded; see Recording::getCurrentTake. */
+    int getCurrentTake() const;
+
     const juce::File getRecordedAudioFile(int channelNumber);
     
     const double getRecordedLength(int channelNumber) const;

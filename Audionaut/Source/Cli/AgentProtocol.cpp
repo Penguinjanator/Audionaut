@@ -126,7 +126,7 @@ json makeHello (const juce::File& project, int hostPid)
 }
 
 json makeCommand (const juce::File& project, const juce::File& workingDirectory,
-                  const juce::StringArray& argv, bool stream)
+                  const juce::StringArray& argv, bool stream, const json& group)
 {
     auto arguments = json::array();
     for (auto& argument : argv)
@@ -137,7 +137,8 @@ json makeCommand (const juce::File& project, const juce::File& workingDirectory,
              { "project",  canonicalKey (project).toStdString() },
              { "cwd",      workingDirectory.getFullPathName().toStdString() },
              { "argv",     arguments },
-             { "stream",   stream } };
+             { "stream",   stream },
+             { "group",    group } };
 }
 
 json makeResult (int exitCode, const json& envelope, const juce::StringArray& log)

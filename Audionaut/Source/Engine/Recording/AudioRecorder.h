@@ -7,7 +7,7 @@
 
 #include <JuceHeader.h>
 
-#include "Interface/Widgets/audium_AudioThumbnail.h"
+#include "Engine/Resource/audium_AudioThumbnail.h"
 
 namespace audium {
 
@@ -34,8 +34,8 @@ public:
     void createRecordingThumbnail(juce::AudioFormatManager &formatManager,
                                   juce::AudioThumbnailCache &thumbnailCache);
     
-    const juce::File prepareRecording(const int take,
-                                      const int channelNumber,
+    /** Opens the writer for `recordedFile`; returns it, or an invalid file when that failed. */
+    const juce::File prepareRecording(const juce::File& recordedFile,
                                       const double sampleRate);
     
     void start();

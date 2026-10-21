@@ -133,6 +133,13 @@ public:
         clipTransportSource->setStretchMode(newMode);
     }
 
+    /// Message thread: the clip entered Stretch mode - see
+    /// ClipTransportSource::allocateStretcher.
+    void allocateStretcher()
+    {
+        clipTransportSource->allocateStretcher();
+    }
+
     /** One slice of the standby prime for a known upcoming jump (the loop
         wrap) of a Stretch-mode clip; call once per block over the blocks
         before it. See ClipTransportSource::primeStandby. Real-time safe. */

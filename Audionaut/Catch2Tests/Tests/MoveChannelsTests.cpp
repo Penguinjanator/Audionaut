@@ -14,21 +14,12 @@ SCENARIO("move channels scenario", "[engine][channels]")
 {
     GIVEN("Load session file")
     {
+        FixtureSessionCopy session("move-channels.audium");
         TestEngine engine;
-    auto store = engine->getProjectFileStore();
-        auto sourceSession = File(String(CURRENT_SOURCE_DIR) + String("/TestFiles/Sessions/move-channels.audium"));
-        REQUIRE(sourceSession.exists());
+        auto store = engine->getProjectFileStore();
+        REQUIRE(session.ok());
 
-        // Open a disposable copy, never the checked-in session: openFile()
-        // points the engine's process-wide ProjectFileStore::projectDirectory at
-        // the opened package, and every audio file any later test adds would
-        // be copied into the repository's session otherwise.
-        auto fileUnderTest = File::getSpecialLocation(File::tempDirectory)
-                                 .getChildFile("move-channels.audium")
-                                 .getNonexistentSibling();
-        REQUIRE(sourceSession.copyDirectoryTo(fileUnderTest));
-
-        auto ok = store->open(fileUnderTest, nullptr);
+        auto ok = store->open(session.file(), nullptr);
         REQUIRE(ok);
         
         const int numChannels = 2;
@@ -91,7 +82,6 @@ SCENARIO("move channels scenario", "[engine][channels]")
             }
         }
     
-        fileUnderTest.deleteRecursively();
     }
 }
 

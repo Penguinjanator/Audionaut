@@ -4,6 +4,7 @@
 //    Audionaut uses a GPL/commercial licence - see LICENCE.md for details.
 
 #include "Engine/Separation/DemucsModelStore.h"
+#include "Util/Preferences.h"
 
 namespace audium {
 
@@ -36,9 +37,7 @@ const DemucsModelInfo& DemucsModelStore::defaultModel()
 
 juce::File DemucsModelStore::defaultDirectory()
 {
-    return juce::File::getSpecialLocation (juce::File::userApplicationDataDirectory)
-               .getChildFile ("Audionaut")
-               .getChildFile ("Models");
+    return Preferences::applicationDataDirectory().getChildFile ("Models");
 }
 
 DemucsModelStore DemucsModelStore::createDefault()

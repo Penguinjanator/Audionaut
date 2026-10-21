@@ -45,11 +45,30 @@ void PlayListItem::init()
 
 void PlayListItem::createTransportSources()
 {
+    auto& resourceContainer = owner.getAudioTrack().getAudioResourceContainer();
+
+    // an engine that never renders (CLI / agent scratch session) leaves the
+    // clip without a playback chain - see setTransportSourcesEnabled
+    if (! resourceContainer.transportSourcesEnabled())
+        return;
+
     for (const auto &resource : getRegion()->getAudioResources()) {
-        auto voiceSource = owner.getAudioTrack().getAudioResourceContainer().createTransportSourceForAudioResource(resource);
+        auto voiceSource = resourceContainer.createTransportSourceForAudioResource(resource);
         if (voiceSource != nullptr)
             voiceSources.emplace_back(voiceSource);
     }
+
+    updateStretcherAllocation();
+}
+
+void PlayListItem::updateStretcherAllocation()
+{
+    if (stretchMode != StretchMode::Stretch)
+        return;
+
+    for (auto& voiceSource : voiceSources)
+        if (voiceSource != nullptr)
+            voiceSource->allocateStretcher();
 }
 
 void PlayListItem::deinit()
@@ -134,6 +153,7 @@ void PlayListItem::setStretchMode(StretchMode newMode)
         return;
 
     stretchMode = newMode;
+    updateStretcherAllocation();
 }
 
 void PlayListItem::copySpeedFrom(const PlayListItem& other)
@@ -259,6 +279,7 @@ bool PlayListItem::readFromJson (json& input, bool rebuild)
         if (input.contains("stretch_mode"))
             stretchMode = input.at("stretch_mode").get<int>() == 1
                               ? StretchMode::Stretch : StretchMode::RePitch;
+        updateStretcherAllocation();
 
         tempoLocked = false;
         if (input.contains("tempo_locked"))

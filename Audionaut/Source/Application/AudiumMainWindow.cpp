@@ -289,17 +289,26 @@ void AudiumMainWindow::getCommandInfo (const CommandID commandID, ApplicationCom
             result.setTicked (SnapToGridHandler::isEnabled());
             break;
         
+        // The step's name follows the verb, as the undo history names it:
+        // "Undo Move Clip", "Undo Agent: remove pauses". The menu is built
+        // when it opens, so the label is current.
         case StandardApplicationCommandIDs::undo:
-            result.setInfo (TRANS ("Undo"), TRANS ("Undo"), "Editing", 0);
+        {
+            const auto step = getEngine()->getUndoManager()->getUndoDescription();
+            result.setInfo (step.isEmpty() ? TRANS ("Undo") : TRANS ("Undo") + " " + step, TRANS ("Undo"), "Editing", 0);
             result.setActive (getEngine()->getUndoManager()->canUndo());
             result.defaultKeypresses.add (KeyPress ('z', cmd, 0));
             break;
+        }
 
         case StandardApplicationCommandIDs::redo:
-            result.setInfo (TRANS ("Redo"), TRANS ("Redo"), "Editing", 0);
+        {
+            const auto step = getEngine()->getUndoManager()->getRedoDescription();
+            result.setInfo (step.isEmpty() ? TRANS ("Redo") : TRANS ("Redo") + " " + step, TRANS ("Redo"), "Editing", 0);
             result.setActive (getEngine()->getUndoManager()->canRedo());
             result.defaultKeypresses.add (KeyPress ('z', cmd | shift, 0));
             break;
+        }
 
         case StandardApplicationCommandIDs::cut:
             result.setInfo (TRANS ("Cut"), String(), "Editing", 0);

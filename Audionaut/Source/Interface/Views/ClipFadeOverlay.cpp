@@ -21,7 +21,7 @@
 #include "Interface/Controls/DraggerControl.h"
 #include "Interface/Components/MiddlePanel/ArrangementView/AudioTrackComponent.h"
 #include "Interface/Views/WaveFormViewBase.h"
-#include "Interface/Widgets/audium_AudioThumbnail.h"
+#include "Engine/Resource/audium_AudioThumbnail.h"
 
 using namespace juce;
 
@@ -59,7 +59,7 @@ std::shared_ptr<audium::AudioThumbnail> ClipFadeOverlay::getOrCreateThumbnail(
     if (it != thumbnails.end())
         return it->second;
 
-    auto thumbnail = WaveFormViewBase::createThumbnailForResource(audiumEngine, resource);
+    auto thumbnail = audiumEngine->getAudioResourceContainer()->getThumbnailForResource(resource);
     if (thumbnail != nullptr) {
         thumbnail->addChangeListener(this);
         // don't cache the nullptr case: a recording resource may gain a
@@ -84,6 +84,8 @@ void ClipFadeOverlay::paint (juce::Graphics& g)
     // a fresh clocksToX rounds differently than the integer component bounds
     // and jitters against the clips while zooming
     auto* lane = dynamic_cast<AudioTrackComponent*>(getParentComponent());
+
+    ++paintPass;
 
     const auto& items = container->getPlayListItems();
     for (size_t itemIndex = 0; itemIndex < items.size(); ++itemIndex) {
@@ -114,13 +116,24 @@ void ClipFadeOverlay::paint (juce::Graphics& g)
         if (! visibleRange.isEmpty() && ! extended.intersects(visibleRange))
             continue;
 
-        paintItemExtensions(g, *item, clipRange);
+        auto& caches = ghostCaches[item.get()];
+        caches.paintPass = paintPass;
+        paintItemExtensions(g, *item, clipRange, caches);
+    }
+
+    // drop the caches of clips this pass did not draw
+    for (auto it = ghostCaches.begin(); it != ghostCaches.end();) {
+        if (it->second.paintPass != paintPass)
+            it = ghostCaches.erase(it);
+        else
+            ++it;
     }
 }
 
 void ClipFadeOverlay::paintItemExtensions (juce::Graphics& g,
                                            const audium::PlayListItem& item,
-                                           juce::Range<double> clipRange)
+                                           juce::Range<double> clipRange,
+                                           GhostCaches& caches)
 {
     auto& dynamics = item.getDynamics();
 
@@ -238,7 +251,8 @@ void ClipFadeOverlay::paintItemExtensions (juce::Graphics& g,
                                                            endSeconds,
                                                            sourceChannel,
                                                            gain,
-                                                           &envelope);
+                                                           &envelope,
+                                                           caches.fadeIn);
                             }
 
                             // fade-out extension: material after the region
@@ -262,7 +276,8 @@ void ClipFadeOverlay::paintItemExtensions (juce::Graphics& g,
                                                            endSeconds,
                                                            sourceChannel,
                                                            gain,
-                                                           &envelope);
+                                                           &envelope,
+                                                           caches.fadeOut);
                             }
 
                             g.restoreState();

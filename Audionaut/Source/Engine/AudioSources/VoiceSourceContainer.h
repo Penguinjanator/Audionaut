@@ -31,14 +31,14 @@ class Playback;
  * destroyed: their memory is released on the message thread only once the
  * audio thread has pulled a snapshot without them and no Voice renders them.
  */
-class VoiceSourceContainer
+class VoiceSourceContainer : private juce::Timer
 {
 public:
     explicit VoiceSourceContainer(std::shared_ptr<Playback> playback_) :
         playback(std::move(playback_))
     {}
 
-    ~VoiceSourceContainer() = default;
+    ~VoiceSourceContainer() override { stopTimer(); }
 
     // ---- message thread -------------------------------------------------
 
@@ -83,6 +83,12 @@ public:
 
 private:
     void releaseRetired();
+
+    /// Message thread, while retired sources wait: releases them as soon as
+    /// the audio thread has pulled the snapshot without them, instead of at
+    /// the next commit - an edit retires every chain of the clips it
+    /// rebuilt, and those weigh as much as the clips themselves.
+    void timerCallback() override;
 
     std::shared_ptr<Playback> playback; ///< Shared pointer to the Playback instance.
 

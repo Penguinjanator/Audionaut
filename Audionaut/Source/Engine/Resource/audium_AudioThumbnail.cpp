@@ -457,14 +457,17 @@ public:
         cacheNeedsRefilling = true;
     }
 
+    int64 getNumRefills() const noexcept { return numRefills; }
+
     void drawChannel (Graphics& g, const Rectangle<int>& area,
                       const double startTime, const double endTime,
                       const int channelNum, const float verticalZoomFactor,
+                      const AudioThumbnail* owner, const uint32 generation,
                       const double rate, const int numChans, const int sampsPerThumbSample,
                       LevelDataSource* levelData, const OwnedArray<ThumbData>& chans,
                       const WaveformEnvelope* envelope)
     {
-        if (refillCache (area.getWidth(), startTime, endTime, rate,
+        if (refillCache (area.getWidth(), startTime, endTime, owner, generation, rate,
                          numChans, sampsPerThumbSample, levelData, chans)
              && isPositiveAndBelow (channelNum, numChannelsCached))
         {
@@ -556,7 +559,13 @@ private:
     int numChannelsCached = 0, numSamplesCached = 0;
     bool cacheNeedsRefilling = true;
 
+    // which thumbnail's level data, in which generation, the columns hold
+    const AudioThumbnail* cachedOwner = nullptr;
+    uint32 cachedGeneration = 0;
+    int64 numRefills = 0;
+
     bool refillCache (int numSamples, double startTime, double endTime,
+                      const AudioThumbnail* owner, uint32 generation,
                       double rate, int numChans, int sampsPerThumbSample,
                       LevelDataSource* levelData, const OwnedArray<ThumbData>& chans)
     {
@@ -572,16 +581,21 @@ private:
              && numChannelsCached == numChans
              && approximatelyEqual (startTime, cachedStart)
              && approximatelyEqual (timePerPixel, cachedTimePerPixel)
+             && cachedOwner == owner
+             && cachedGeneration == generation
              && ! cacheNeedsRefilling)
         {
-            return ! cacheNeedsRefilling;
+            return true;
         }
-        
+
         numSamplesCached = numSamples;
         numChannelsCached = numChans;
         cachedStart = startTime;
         cachedTimePerPixel = timePerPixel;
+        cachedOwner = owner;
+        cachedGeneration = generation;
         cacheNeedsRefilling = false;
+        ++numRefills;
 
         ensureSize (numSamples);
         // std::cout << "refillCache: timePerPixel * rate = " << (timePerPixel * rate) << std::endl;
@@ -673,7 +687,6 @@ AudioThumbnail::AudioThumbnail (const int originalSamplesPerThumbnailSample,
                                 AudioThumbnailCache& cacheToUse)
     : formatManagerToUse (formatManager),
       cache (cacheToUse),
-      window (new CachedWindow()),
       samplesPerThumbSample (originalSamplesPerThumbnailSample)
 {
 }
@@ -690,9 +703,21 @@ void AudioThumbnail::clear()
     clearChannelData();
 }
 
+//==============================================================================
+AudioThumbnail::DrawCache::DrawCache() = default;
+AudioThumbnail::DrawCache::~DrawCache() = default;
+AudioThumbnail::DrawCache::DrawCache (DrawCache&&) noexcept = default;
+AudioThumbnail::DrawCache& AudioThumbnail::DrawCache::operator= (DrawCache&&) noexcept = default;
+
+int64 AudioThumbnail::DrawCache::getNumRefills() const noexcept
+{
+    return window != nullptr ? window->getNumRefills() : 0;
+}
+
+//==============================================================================
 void AudioThumbnail::clearChannelData()
 {
-    window->invalidate();
+    ++levelsGeneration;
     channels.clear();
     totalSamples = numSamplesFinished = 0;
     numChannels = 0;
@@ -895,7 +920,7 @@ void AudioThumbnail::setLevels (const MinMaxValue* const* values, int thumbIndex
         numSamplesFinished = end;
 
     totalSamples = jmax (numSamplesFinished, totalSamples);
-    window->invalidate();
+    ++levelsGeneration;
     sendChangeMessage();
 }
 
@@ -972,9 +997,33 @@ void AudioThumbnail::drawChannel (Graphics& g, const Rectangle<int>& area, doubl
 {
     const ScopedLock sl (lock);
 
-    window->drawChannel (g, area, startTime, endTime, channelNum, verticalZoomFactor,
-                         sampleRate, numChannels, samplesPerThumbSample, source.get(), channels,
-                         envelope);
+    if (fallbackWindow == nullptr)
+        fallbackWindow = std::make_unique<CachedWindow>();
+
+    drawChannel (g, area, startTime, endTime, channelNum, verticalZoomFactor, envelope, *fallbackWindow);
+}
+
+void AudioThumbnail::drawChannel (Graphics& g, const Rectangle<int>& area, double startTime,
+                                  double endTime, int channelNum, float verticalZoomFactor,
+                                  const WaveformEnvelope* envelope, DrawCache& cache)
+{
+    const ScopedLock sl (lock);
+
+    if (cache.window == nullptr)
+        cache.window = std::make_unique<CachedWindow>();
+
+    drawChannel (g, area, startTime, endTime, channelNum, verticalZoomFactor, envelope, *cache.window);
+}
+
+// the lock is held
+void AudioThumbnail::drawChannel (Graphics& g, const Rectangle<int>& area, double startTime,
+                                  double endTime, int channelNum, float verticalZoomFactor,
+                                  const WaveformEnvelope* envelope, CachedWindow& window)
+{
+    window.drawChannel (g, area, startTime, endTime, channelNum, verticalZoomFactor,
+                        this, levelsGeneration,
+                        sampleRate, numChannels, samplesPerThumbSample, source.get(), channels,
+                        envelope);
 }
 
 void AudioThumbnail::drawChannels (Graphics& g, const Rectangle<int>& area, double startTimeSeconds,

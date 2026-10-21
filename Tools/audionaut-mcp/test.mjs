@@ -96,7 +96,8 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
     process.stderr.write(JSON.stringify({ message, progress }) + "\\n");
     await sleep(300);
   }
-  process.stdout.write(JSON.stringify({ ok: true, result: { args } }));
+  process.stdout.write(JSON.stringify({ ok: true, result: { args, session: process.env.AUDIONAUT_AGENT_SESSION,
+                                                             task: process.env.AUDIONAUT_AGENT_TASK ?? null } }));
 })();
 `;
   for (const verb of ["separate", "export", "analyze"]) writeFileSync(join(scratch, verb), standIn);
@@ -114,10 +115,14 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
   try {
     const seen = [];
     const separated = await client.callTool(
-      { name: "separate_stems", arguments: { project: join(scratch, "song.audium") } },
+      { name: "separate_stems", arguments: { project: join(scratch, "song.audium"), task: "stems" } },
       undefined,
       { onprogress: (progress) => seen.push(progress) }
     );
+    const separatedResult = JSON.parse(separated.content?.[0]?.text ?? "{}");
+    check("the CLI learns the agent session and the call's task",
+          /^[0-9a-f-]{36}$/.test(separatedResult.session) && separatedResult.task === "stems",
+          separated.content?.[0]?.text);
     check("separate_stems outlives the idle timeout while it reports progress", !separated.isError,
           separated.content?.[0]?.text);
     check("the CLI is asked for --progress-json",
@@ -134,6 +139,9 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
                                          { onprogress: (progress) => ticks.push(progress.progress) });
       check(`${name} relays progress`, !done.isError && JSON.stringify(ticks) === "[0,25,50,75,100]",
             `${JSON.stringify(ticks)} ${done.content?.[0]?.text}`);
+      const result = JSON.parse(done.content?.[0]?.text ?? "{}");
+      check(`${name} shares the session and carries no task`,
+            result.session === separatedResult.session && result.task === null, done.content?.[0]?.text);
     }
 
     const hung = await client.callTool({ name: "separate_stems", arguments: { project: join(scratch, "hang.audium") } });

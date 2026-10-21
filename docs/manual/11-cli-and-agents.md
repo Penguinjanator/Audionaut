@@ -23,10 +23,13 @@ a project to an agent.
 While Audionaut has a project open it serves commands for it, and a verb
 addressed at that project is handed over instead of going to the file. The
 command then acts on the document **as you currently see it**, unsaved changes
-included. Its result arrives as a single entry in your undo history — labelled
-after the verb, with the window title marked *Edited By Agent* — so ⌘Z takes it
-back like any other edit. Nothing is written to `Project.json`; saving stays
-yours to do.
+included. Its result lands in your undo history, with the window title marked
+*Edited By Agent*, so ⌘Z takes it back like any other edit. An agent that
+names the task it is working on gets one entry per task — *Undo Agent: remove
+speech pauses* — however many commands the task took; one that names no task
+gets a single *Undo Agent edits* entry for its whole session. An edit of your
+own, an undo, or ten idle minutes close that entry. Nothing is written to
+`Project.json`; saving stays yours to do.
 
 Your own edits take precedence. If you change the project while a command is
 running, its result is dropped and the agent is told to run it again rather
@@ -141,8 +144,8 @@ On Windows, if Claude Desktop cannot start `npx`, use `"command": "cmd"` with
 
 Then just ask, for example *"split the clip in ~/Music/Audionaut/Demo
 Project.audium every 16 bars and put every second part on a new track"*. Keep
-the project open in Audionaut to watch the edits arrive; each one is a single
-undo step, as described above.
+the project open in Audionaut to watch the edits arrive; the whole task is a
+single undo step, as described above.
 
 On macOS, keep the project and its audio in your Music folder (see the sandbox
 note above). To see which Audionaut the server found and whether it answers:

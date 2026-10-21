@@ -43,7 +43,9 @@ SCENARIO("essentia multi-feature", "[engine][essentia][BeatTrackerMultiFeature]"
     auto inFile = File(testFilesDirectory + "_export_TRK-18.wav");
     REQUIRE(inFile.existsAsFile());
     string audioFilename = inFile.getFullPathName().toStdString();
-    auto outFile = File(testFilesDirectory + "beattracker-result.json");
+    // in the temp directory, not next to the fixtures: CI checks that the
+    // suite leaves TestFiles alone
+    auto outFile = File::getSpecialLocation(File::tempDirectory).getChildFile("AudionautTests").getChildFile("beattracker-result.json");
 
     // register the algorithms in the factory(ies)
     essentia::init();
@@ -94,10 +96,12 @@ SCENARIO("essentia multi-feature", "[engine][essentia][BeatTrackerMultiFeature]"
     cout << "-------- writing results to file " << outFile.getFullPathName() << " ---------" << endl;
     if (outFile.existsAsFile()) outFile.deleteFile();
 
-    auto outStream = std::unique_ptr<juce::FileOutputStream>(outFile.createOutputStream());
+    // written and closed in one go: a stream still open at the cleanup
+    // below keeps Windows from deleting the file
     json j;
     j["rhythm.ticks"] = ticks;
-    outStream->writeString(j.dump(4));
+    outFile.getParentDirectory().createDirectory();
+    outFile.replaceWithText(j.dump(4));
 
 //    cout << j.dump(4) << endl;
 

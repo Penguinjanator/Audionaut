@@ -215,6 +215,16 @@ public:
         // an earlier Stop left requested in the LinkEngine is taken by these
         // callbacks, as in the app, not by the first block after Play
         idle (2);
+
+        // Link folds a committed state into its io thread's copy a little
+        // after the commit, and a second commit landing while it does so is
+        // dropped until the next pass (Link 4.1, Controller::handleRtClientState
+        // clears the pending flag after its buffer reads): the following
+        // capture then serves the pre-commit state, and the transport is
+        // seen stopped for one callback. These callbacks run microseconds
+        // apart, not milliseconds like the device's, so a Play right after
+        // the stop above would race that pass. Let it finish first.
+        juce::Thread::sleep (5);
     }
 
     ~LiveBlockDriver()

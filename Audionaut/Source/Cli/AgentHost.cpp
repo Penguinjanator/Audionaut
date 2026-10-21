@@ -74,10 +74,10 @@ public:
         if (! decode (block, request))
             return;
 
-        if (request.value ("kind", std::string()) != "command")
+        if (stringField (request, "kind") != "command")
             return;
 
-        if (request.value ("protocol", 0) > protocolVersion) {
+        if (integerField (request, "protocol") > protocolVersion) {
             reply (exitFailure, errorEnvelope ("protocol_mismatch",
                                                "this Audionaut is older than the client; update the app"), {});
             return;
@@ -102,7 +102,7 @@ public:
             return;
         }
 
-        const juce::File workingDirectory (juce::String (request.value ("cwd", std::string())));
+        const juce::File workingDirectory (juce::String (stringField (request, "cwd")));
 
         // One command at a time: a separation runs for minutes, and two verbs
         // interleaving on one document would each undo the other's work.
@@ -112,11 +112,47 @@ public:
             return;
         }
 
-        run (argv, workingDirectory, request.value ("stream", false));
+        // no group field, or one that is not an object (an older client, a
+        // hand-written request): the verb belongs to no task and gets its own step
+        const auto groupField = request.value ("group", json::object());
+        const ProjectFileStore::AgentEditGroup group {
+            juce::String (stringField (groupField, "session")),
+            juce::String (stringField (groupField, "task")) };
+
+        run (argv, workingDirectory, booleanField (request, "stream"), group);
         host.busy = false;
     }
 
 private:
+    // A request is whatever a client sent: a field of the wrong type reads
+    // as absent rather than throwing out of the message thread.
+    static std::string stringField (const json& object, const char* key)
+    {
+        if (! object.is_object())
+            return {};
+        if (auto field = object.find (key); field != object.end() && field->is_string())
+            return field->get<std::string>();
+        return {};
+    }
+
+    static int integerField (const json& object, const char* key)
+    {
+        if (! object.is_object())
+            return 0;
+        if (auto field = object.find (key); field != object.end() && field->is_number_integer())
+            return field->get<int>();
+        return 0;
+    }
+
+    static bool booleanField (const json& object, const char* key)
+    {
+        if (! object.is_object())
+            return false;
+        if (auto field = object.find (key); field != object.end() && field->is_boolean())
+            return field->get<bool>();
+        return false;
+    }
+
     static json errorEnvelope (const std::string& code, const std::string& message)
     {
         return { { "ok", false }, { "error", { { "code", code }, { "message", message } } } };
@@ -127,7 +163,8 @@ private:
         sendMessage (toBlock (makeResult (exitCode, envelope, log)));
     }
 
-    void run (const juce::StringArray& argv, const juce::File& workingDirectory, bool stream)
+    void run (const juce::StringArray& argv, const juce::File& workingDirectory, bool stream,
+              const ProjectFileStore::AgentEditGroup& group)
     {
         json envelope;
         juce::StringArray log;
@@ -186,7 +223,7 @@ private:
             exitCode = performCliCommand (arguments, context);
 
             if (exitCode == exitOk && HostedSessionScope::hasStagedState())
-                applyStaged (argv[0], liveState, HostedSessionScope::takeStagedState(),
+                applyStaged (liveState, HostedSessionScope::takeStagedState(), group,
                              exitCode, envelope);
         });
 
@@ -201,15 +238,17 @@ private:
         reply (exitCode, envelope, log);
     }
 
-    /** Message thread. Puts the verb's result on the live document as one
-        undoable step - unless the user changed it while we worked. */
-    void applyStaged (const juce::String& verb, const json& liveStateAtStart,
-                      json staged, int& exitCode, json& envelope)
+    /** Message thread. Puts the verb's result on the live document, in the
+        undo step of the task it belongs to - unless the user changed the
+        document while we worked. */
+    void applyStaged (const json& liveStateAtStart, json staged,
+                      const ProjectFileStore::AgentEditGroup& group,
+                      int& exitCode, json& envelope)
     {
         json liveStateNow;
         host.engine->getProjectSerializer()->writeToJson (liveStateNow);
 
-        if (documentOf (liveStateNow) != documentOf (liveStateAtStart)) {
+        if (ProjectFileStore::documentOf (liveStateNow) != ProjectFileStore::documentOf (liveStateAtStart)) {
             // Applying now would take the user's edit with it.
             exitCode = exitFailure;
             envelope = errorEnvelope ("project_changed",
@@ -220,9 +259,8 @@ private:
 
         std::string error;
         const auto applied = host.engine->getProjectFileStore()
-            ->applyStateAsUndoableReload (std::move (staged), true, true,
-                                          "Agent: " + verb,
-                                          [&error] (std::string message) { error = message; });
+            ->applyAgentState (std::move (staged), std::move (liveStateNow), group,
+                               [&error] (std::string message) { error = message; });
 
         if (! applied) {
             exitCode = exitFailure;
@@ -233,18 +271,6 @@ private:
 
         if (host.onProjectMutated != nullptr)
             host.onProjectMutated();
-    }
-
-    /** The state minus what moves without the user editing anything - the
-        playhead while playing, scroll and zoom - and which applying keeps
-        live anyway. */
-    static json documentOf (json state)
-    {
-        if (auto audium = state.find ("audium"); audium != state.end() && audium->is_object()) {
-            audium->erase ("scheduler");
-            audium->erase ("ui_state");
-        }
-        return state;
     }
 
     AgentHost& host;

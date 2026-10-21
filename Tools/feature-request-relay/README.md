@@ -9,7 +9,12 @@ Contract: `POST` JSON `{title, body, kind?, reporter?, client?}` →
 `{success: true, url, number}` or `{success: false, message}`. Title and body
 are required and capped (120 / 8000 characters); `kind` is `"feature"`
 (default) or `"bug"` and picks the labels from `LABELS_FEATURE` /
-`LABELS_BUG` in `wrangler.toml`.
+`LABELS_BUG` in `wrangler.toml`. `LABELS_RELAYED` (`community`) is added
+on top of either: every relayed issue is filed under the token's account, so
+this label is what tells other people's reports from the maintainer's own.
+Keep your own machines off the relay (`AUDIONAUT_FEATURE_REQUEST_URL=""` in
+the MCP config, which makes `audionaut-mcp` file through `gh` instead) and
+the label stays accurate.
 
 ## Deploy
 

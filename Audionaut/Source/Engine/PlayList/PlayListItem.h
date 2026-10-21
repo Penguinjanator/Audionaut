@@ -51,6 +51,11 @@ public:
     void init();
     void deinit();
     void createTransportSources();
+
+    /// Gives the voice sources their stretchers once the clip is in Stretch
+    /// mode (they cost ~5 MB per channel and lane; RePitch clips never need
+    /// them). Called wherever the mode or the sources change.
+    void updateStretcherAllocation();
     
     void cleanup() override {}
     

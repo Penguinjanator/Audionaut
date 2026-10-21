@@ -12,6 +12,9 @@
 #include "Engine/Group/AudioTrack.h"
 #include "Engine/Group/ResourceGroup.h"
 #include "Engine/Provider/TempoProvider.h"
+#include "Engine/Project/ProjectDirectories.h"
+#include "Engine/Resource/audium_AudioThumbnail.h"
+#include <map>
 
 namespace audium {
 
@@ -40,6 +43,7 @@ public:
      * @param voiceSourceContainer_ A shared pointer to the `VoiceSourceContainer`.
      * @param analysisWorker_ A shared pointer to the background `AnalysisWorker`.
      * @param userPrompter_ The host's channel to the user (see UserPrompter).
+     * @param projectDirectories_ The engine's project and temp directories (see ProjectDirectories).
      */
     AudioResourceContainer(std::shared_ptr<juce::AudioDeviceManager> audioDeviceManager_,
                            std::shared_ptr<juce::AudioFormatManager> formatManager_,
@@ -47,16 +51,19 @@ public:
                            std::shared_ptr<TempoProvider> tempoProvider_,
                            std::shared_ptr<VoiceSourceContainer> voiceSourceContainer_,
                            std::shared_ptr<AnalysisWorker> analysisWorker_,
-                           std::shared_ptr<UserPrompter> userPrompter_) :
+                           std::shared_ptr<UserPrompter> userPrompter_,
+                           std::shared_ptr<ProjectDirectories> projectDirectories_) :
         audioDeviceManager(audioDeviceManager_),
         formatManager(formatManager_),
         audioThumbnailCache(audioThumbnailCache_),
         tempoProvider(tempoProvider_),
         voiceSourceContainer(voiceSourceContainer_),
         analysisWorker(analysisWorker_),
-        userPrompter(userPrompter_)
+        userPrompter(userPrompter_),
+        projectDirectories(projectDirectories_)
     {
         jassert(userPrompter != nullptr);
+        jassert(projectDirectories != nullptr);
         formatManager->registerBasicFormats();
         thread->startThread();
     }
@@ -68,26 +75,35 @@ public:
     ~AudioResourceContainer();
 
     /**
-     * @brief Deletes the temporary project directory.
+     * @brief Deletes the session's temporary project directory. A no-op on a
+     *        container whose directories are borrowed from a live session.
      */
-    static void deleteTemporaryProjectDirectory();
+    void deleteTemporaryProjectDirectory();
+
+    /** The engine's project and temp directories (shared with the file store). */
+    std::shared_ptr<ProjectDirectories> getProjectDirectories() const { return projectDirectories; }
+
+    /** See ProjectDirectories::getSerializationBaseDirectory. */
+    juce::File getSerializationBaseDirectory() const { return projectDirectories->getSerializationBaseDirectory(); }
 
     /**
-     * @brief Whether this container owns the session's temporary directory.
+     * @brief Whether clips build their playback chain (voice sources).
      *
-     * The temp directory is a process-wide static, so a second (scratch)
-     * container sharing a live session's directory must not delete it on
-     * teardown - that would take the running session's audio with it. Owning
-     * is the default; a scratch engine clears it right after construction.
+     * A session that only edits the model - the CLI's and the agent host's
+     * non-rendering verbs - never plays a clip, yet every clip it loads
+     * would build and prefill a read-ahead chain, which on a long MP3 is
+     * most of a verb's time. Off, PlayListItem::init() leaves clips without
+     * voice sources; nothing may render on such an engine. On by default.
      */
-    void setOwnsTemporaryDirectory(bool shouldOwn) noexcept { ownsTemporaryDirectory = shouldOwn; }
+    void setTransportSourcesEnabled(bool shouldCreate) noexcept { transportSourcesEnabledFlag = shouldCreate; }
+    bool transportSourcesEnabled() const noexcept { return transportSourcesEnabledFlag; }
     
     /**
-     * @brief Creates a temporary project directory.
-     * @param reset Whether to reset the directory if it already exists.
+     * @brief Creates the session's temporary project directory.
+     * @param reset Whether to delete an existing one first (only when owned).
      * @return True if the directory was successfully created, false otherwise.
      */
-    static bool createTemporaryProjectDirectory(bool reset);
+    bool createTemporaryProjectDirectory(bool reset);
 
     /**
      * @brief Retrieves the directory for audio files within the project.
@@ -97,13 +113,19 @@ public:
     static const juce::File getAudioFileDirectory(const juce::File projectRoot);
 
     /**
-     * @brief Retrieves the default audio file directory.
+     * @brief Retrieves the open project's audio file directory.
      * @return The audio file directory as a `juce::File`.
      */
-    static const juce::File getAudioFileDirectory();
-    
-    
-    static const juce::File getAudioRecordingFile(const int take,
+    const juce::File getAudioFileDirectory() const;
+
+    /**
+     * @brief Names the file a recording take goes to.
+     * @param audioDirectory The audio directory it goes to.
+     * @param take The take's number, counted from 1 (Recording::getCurrentTake).
+     * @param channel The channel's index, counted from 0.
+     */
+    static const juce::File getAudioRecordingFile(const juce::File& audioDirectory,
+                                                  const int take,
                                                   const int channel);
 
     
@@ -261,6 +283,17 @@ public:
      * @return A shared pointer to the `AudioThumbnailCache`.
      */
     std::shared_ptr<juce::AudioThumbnailCache> getAudioThumbnailCache() const { return audioThumbnailCache; }
+
+    /**
+     * @brief Returns the thumbnail of a file-based resource, one per file.
+     *
+     * The level data is the whole file at 64 samples per point (~2 MB for a
+     * 7-minute stereo file). The two channel resources of a stereo file and
+     * every clip cut from it share one thumbnail; the views own it, this
+     * container only finds it again while a view still holds it.
+     * @return nullptr for resources without a reader (live recordings).
+     */
+    std::shared_ptr<AudioThumbnail> getThumbnailForResource(const std::shared_ptr<AudioResource>& resource);
     
     /**
      * @brief Retrieves the `TempoProvider`.
@@ -302,8 +335,8 @@ public:
     void onRecordingFinished();
     
 private:
-    /// False for a scratch container sharing another session's temp directory.
-    bool ownsTemporaryDirectory = true;
+    /// False on a session that edits the model without ever rendering.
+    bool transportSourcesEnabledFlag = true;
 
     /// Cancels pending background analysis of the file unless another loaded
     /// resource still references it.
@@ -321,6 +354,9 @@ private:
     /// Shared pointer to the `AudioThumbnailCache`.
     std::shared_ptr<juce::AudioThumbnailCache> audioThumbnailCache;
 
+    /// One thumbnail per file URL, held weakly: the views own them.
+    std::map<juce::String, std::weak_ptr<AudioThumbnail>> sharedThumbnails;
+
     /// Shared pointer to the `TempoProvider`.
     std::shared_ptr<TempoProvider> tempoProvider;
 
@@ -332,6 +368,9 @@ private:
 
     /// The host's channel to the user: asks before files go to the trash.
     std::shared_ptr<UserPrompter> userPrompter;
+
+    /// The engine's project and temp directories.
+    std::shared_ptr<ProjectDirectories> projectDirectories;
 
     /// Thread for read-ahead operations, co-owned by the voice sources reading through it.
     std::shared_ptr<juce::TimeSliceThread> thread = std::make_shared<juce::TimeSliceThread> ("read ahead thread");

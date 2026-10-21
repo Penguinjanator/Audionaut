@@ -60,7 +60,7 @@ void ProjectMonitor::timerCallback()
 
             if (store->projectChangedOnDisk() || store->analysisChangedOnDisk()) {
                 const auto projectMtime = projectFile.getLastModificationTime();
-                const auto analysisMtime = ProjectFileStore::projectDirectory
+                const auto analysisMtime = store->getProjectDirectory()
                                                .getChildFile(AnalysisCache::fileName)
                                                .getLastModificationTime();
 

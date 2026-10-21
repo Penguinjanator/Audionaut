@@ -2,7 +2,7 @@
 
 <JUCERPROJECT id="gxtGxr" name="Audionaut" projectType="guiapp" useAppConfig="0"
               addUsingNamespaceToJuceHeader="0" jucerFormatVersion="1" headerPath="../../../Submodules/json/include/&#10;../../../Submodules/link/include/&#10;../../../Submodules/link/modules/asio-standalone/asio/include&#10;../../../Submodules/farbot/include/&#10;../../../Submodules/rubberband/&#10;../../../ThirdParty/lame/include"
-              bundleIdentifier="com.voltmer-systems.audionaut" version="1.6.6"
+              bundleIdentifier="com.voltmer-systems.audionaut" version="1.6.7"
               companyName="voltmer-systems" companyWebsite="audionaut.app"
               cppLanguageStandard="20" compilerFlagSchemes="demucs,rubberband,lame" defines="JUCE_MODAL_LOOPS_PERMITTED=1&#10;AUTO_EDIT_ENABLED=0&#10;DEMUCS_ENABLED=1&#10;GA4_MEASUREMENT_ID=&quot;G-Q6904SZWWY&quot;">
   <MAINGROUP id="HQG80L" name="Audionaut">
@@ -146,6 +146,10 @@
         <FILE id="aJEqT2" name="Main.cpp" compile="1" resource="0" file="Source/Application/Main.cpp"/>
         <FILE id="UsgAn1" name="UsageAnalytics.cpp" compile="1" resource="0"
               file="Source/Application/UsageAnalytics.cpp"/>
+        <FILE id="CrRep1" name="CrashReporter.cpp" compile="1" resource="0"
+              file="Source/Application/CrashReporter.cpp"/>
+        <FILE id="CrRep2" name="CrashReporter.h" compile="0" resource="0"
+              file="Source/Application/CrashReporter.h"/>
         <FILE id="UpdCh1" name="UpdateChecker.cpp" compile="1" resource="0"
               file="Source/Application/UpdateChecker.cpp"/>
         <FILE id="UpdCh2" name="UpdateChecker.h" compile="0" resource="0"
@@ -416,6 +420,10 @@
                 file="Source/Engine/Resource/AudioResourceContainer.cpp"/>
           <FILE id="W21ktc" name="AudioResourceContainer.h" compile="0" resource="0"
                 file="Source/Engine/Resource/AudioResourceContainer.h"/>
+          <FILE id="WylrD8" name="audium_AudioThumbnail.cpp" compile="1" resource="0"
+                file="Source/Engine/Resource/audium_AudioThumbnail.cpp"/>
+          <FILE id="iIxYr4" name="audium_AudioThumbnail.h" compile="0" resource="0"
+                file="Source/Engine/Resource/audium_AudioThumbnail.h"/>
           <FILE id="MR7guu" name="AudioResourceData.h" compile="0" resource="0"
                 file="Source/Engine/Resource/AudioResourceData.h"/>
           <FILE id="h0LKN6" name="ChannelMapping.cpp" compile="1" resource="0"
@@ -464,6 +472,10 @@
                 file="Source/Engine/Undo/UndoablePlayListItemAction.h"/>
         </GROUP>
         <GROUP id="{8F2A41C7-55E1-4B29-9D63-0A7B84D21E96}" name="Project">
+          <FILE id="PrjDir" name="ProjectDirectories.h" compile="0" resource="0"
+                file="Source/Engine/Project/ProjectDirectories.h"/>
+          <FILE id="AgEdB1" name="AgentEditBatch.h" compile="0" resource="0"
+                file="Source/Engine/Project/AgentEditBatch.h"/>
           <FILE id="PrjFS1" name="ProjectFileStore.cpp" compile="1" resource="0"
                 file="Source/Engine/Project/ProjectFileStore.cpp"/>
           <FILE id="PrjFS2" name="ProjectFileStore.h" compile="0" resource="0"
@@ -533,10 +545,6 @@
         </GROUP>
         <FILE id="WxdqR9" name="ColourIds.h" compile="0" resource="0" file="Source/Interface/ColourIds.h"/>
         <GROUP id="{5B27ED8A-CA94-0C20-47D2-019C8929A810}" name="Widgets">
-          <FILE id="WylrD8" name="audium_AudioThumbnail.cpp" compile="1" resource="0"
-                file="Source/Interface/Widgets/audium_AudioThumbnail.cpp"/>
-          <FILE id="iIxYr4" name="audium_AudioThumbnail.h" compile="0" resource="0"
-                file="Source/Interface/Widgets/audium_AudioThumbnail.h"/>
           <FILE id="SSghHx" name="audium_ListBox.cpp" compile="1" resource="0"
                 file="Source/Interface/Widgets/audium_ListBox.cpp"/>
           <FILE id="zmkbt8" name="audium_ListBox.h" compile="0" resource="0"
@@ -763,7 +771,7 @@
                appSandboxOptions="com.apple.security.assets.music.read-write,com.apple.security.device.microphone,com.apple.security.files.user-selected.read-write,com.apple.security.network.client,com.apple.security.network.server"
                customPList="&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;&#10;&lt;plist&gt;&#10;  &lt;dict&gt;&#10;&lt;key&gt;ITSAppUsesNonExemptEncryption&lt;/key&gt;&#10;&#9;&lt;false/&gt;&#10;&lt;key&gt;LSMinimumSystemVersion&lt;/key&gt;&#10;&#9;&lt;string&gt;13.0&lt;/string&gt;&#10;  &lt;/dict&gt;&#10;&lt;/plist&gt;"
                xcodeValidArchs="arm64,arm64e" documentExtensions="audium" documentTypeIsPackage="1"
-               iosDevelopmentTeamID="Q89CZBX79G" buildNumber="28" microphonePermissionNeeded="1"
+               iosDevelopmentTeamID="Q89CZBX79G" buildNumber="29" microphonePermissionNeeded="1"
                localNetworkPermissionNeeded="1" extraLinkerFlags="$(SRCROOT)/../../../Submodules/essentia/build/src/libessentia.a $(SRCROOT)/../../../Submodules/essentia/packaging/debian_3rdparty/lib/libavcodec.a $(SRCROOT)/../../../Submodules/essentia/packaging/debian_3rdparty/lib/libchromaprint.a $(SRCROOT)/../../../Submodules/essentia/packaging/debian_3rdparty/lib/libavformat.a $(SRCROOT)/../../../Submodules/essentia/packaging/debian_3rdparty/lib/libfftw3f.a $(SRCROOT)/../../../Submodules/essentia/packaging/debian_3rdparty/lib/libswresample.a $(SRCROOT)/../../../Submodules/essentia/packaging/debian_3rdparty/lib/libz.a $(SRCROOT)/../../../Submodules/essentia/packaging/debian_3rdparty/lib/libavutil.a $(SRCROOT)/../../../Submodules/essentia/packaging/debian_3rdparty/lib/libsamplerate.a $(SRCROOT)/../../../Submodules/essentia/packaging/debian_3rdparty/lib/libyaml.a -liconv">
       <CONFIGURATIONS>
         <CONFIGURATION isDebug="1" name="Debug" targetName="Audionaut" headerPath="$(SRCROOT)/../../Source&#10;$(SRCROOT)/../../../Submodules/essentia/src"

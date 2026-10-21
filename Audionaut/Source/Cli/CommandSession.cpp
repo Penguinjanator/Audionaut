@@ -48,6 +48,15 @@ struct ProjectSession::Impl
         access (access_)
     {
         engineSession.emplace();
+        configureRendering (*engineSession->get(), access);
+    }
+
+    /** Only an isolated verb (export) renders; every other session edits or
+        reads the model, so its clips need no playback chain - building and
+        prefilling one per clip was most of a verb's time on a long MP3. */
+    static void configureRendering (AudiumEngine& engine, CommandAccess access)
+    {
+        engine.getAudioResourceContainer()->setTransportSourcesEnabled (access == CommandAccess::isolated);
     }
 
     /** Hosted read: borrows the live engine; there is nothing to open or save. */
@@ -60,31 +69,36 @@ struct ProjectSession::Impl
     }
 
     /** Hosted, on an engine of its own, seeded from the live state. */
-    Impl (const json& seedState, juce::File projectFile_, bool& seededOk, CommandAccess access_) :
+    Impl (const json& seedState, juce::File projectFile_, const ProjectDirectories& liveDirectories,
+          bool& seededOk, CommandAccess access_) :
         projectFile (std::move (projectFile_)),
         access (access_),
         hosted (true),
         scratch (true)
     {
         // The scratch engine lives inside a process that already runs a
-        // MessageManager and owns the session's temp directory - it must
-        // borrow both rather than create and then destroy them.
+        // MessageManager - it must borrow it rather than create and then
+        // destroy it.
         HeadlessEngineSession::setUseExternalMessageManager (true);
         engineSession.emplace();
         HeadlessEngineSession::setUseExternalMessageManager (false);
 
         auto engineRef = engineSession->get();
-        engineRef->getAudioResourceContainer()->setOwnsTemporaryDirectory (false);
+        configureRendering (*engineRef, access);
+
+        // Resource paths resolve against the live session's package (or its
+        // temp dir for a never-saved project), and an import lands there too.
+        // Borrowed: this engine's teardown must not take the live session's
+        // temp dir with it.
+        engineRef->getProjectFileStore()->getProjectDirectories()->borrowFrom (liveDirectories);
 
         // No device drains this engine's command fifo, so it pumps its own -
         // the live engine's device is draining as usual and must not.
         engineRef->getAudioBusInterface()->setPumpsCommandsSynchronously (true);
 
-        // Resource paths resolve against the package, which the live session
-        // already points the statics at; the analysis cache has to be loaded
-        // for the verbs that read it.
+        // the analysis cache has to be loaded for the verbs that read it
         engineRef->getAudioTrackContainer()->getAnalysisProvider()->getCache()
-                 ->loadFromFolder (ProjectFileStore::projectDirectory);
+                 ->loadFromFolder (liveDirectories.getProjectDirectory());
 
         json seed = seedState;
         try {
@@ -233,9 +247,9 @@ ProjectSession openProjectSession (const juce::File& projectFile,
                                                                            hostedContext().projectFile));
 
         auto seeded = false;
-        auto scratchImpl = std::make_unique<ProjectSession::Impl> (hostedContext().liveState,
-                                                                   hostedContext().projectFile, seeded,
-                                                                   access);
+        auto scratchImpl = std::make_unique<ProjectSession::Impl> (
+            hostedContext().liveState, hostedContext().projectFile,
+            *hostedContext().engine->getProjectFileStore()->getProjectDirectories(), seeded, access);
         if (! seeded) {
             failureExitCode = context.fail (exitFailure, "host_failed",
                                             "could not copy the open document to work on");

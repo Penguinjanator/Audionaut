@@ -82,7 +82,7 @@ SCENARIO("a failed Save As leaves neither a partial package nor a damaged source
             }
 
             THEN("the session still belongs to the original package") {
-                REQUIRE(ProjectFileStore::projectDirectory == original);
+                REQUIRE(store->getProjectDirectory() == original);
                 REQUIRE(store->getCurrentProjectFile() == original.getChildFile(ProjectFileStore::projectFileName));
                 REQUIRE(allAudioLivesIn(*engine, original));
 
@@ -114,7 +114,7 @@ SCENARIO("a failed Save As leaves neither a partial package nor a damaged source
                 REQUIRE(target.existsAsFile());
                 REQUIRE(target.loadFileAsString() == "not a package");
 
-                REQUIRE(ProjectFileStore::projectDirectory == original);
+                REQUIRE(store->getProjectDirectory() == original);
                 REQUIRE(allAudioLivesIn(*engine, original));
                 REQUIRE(originalAudio.existsAsFile());
                 REQUIRE(store->open(original, nullptr));
@@ -143,7 +143,7 @@ SCENARIO("a failed Save As leaves neither a partial package nor a damaged source
                 REQUIRE_FALSE(error.empty());
                 REQUIRE_FALSE(target.exists());
 
-                REQUIRE(ProjectFileStore::projectDirectory == original);
+                REQUIRE(store->getProjectDirectory() == original);
                 REQUIRE(allAudioLivesIn(*engine, original));
                 REQUIRE(originalAudio.getSize() == originalAudioSize);
                 REQUIRE(store->open(original, nullptr));

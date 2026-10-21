@@ -1168,6 +1168,9 @@
     <ClCompile Include="..\..\Source\Application\UsageAnalytics.cpp">
       <Filter>Audionaut\Source\Application</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\Source\Application\CrashReporter.cpp">
+      <Filter>Audionaut\Source\Application</Filter>
+    </ClCompile>
     <ClCompile Include="..\..\Source\Application\UpdateChecker.cpp">
       <Filter>Audionaut\Source\Application</Filter>
     </ClCompile>
@@ -1339,6 +1342,9 @@
     <ClCompile Include="..\..\Source\Engine\Resource\AudioResourceContainer.cpp">
       <Filter>Audionaut\Source\Engine\Resource</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\Source\Engine\Resource\audium_AudioThumbnail.cpp">
+      <Filter>Audionaut\Source\Engine\Resource</Filter>
+    </ClCompile>
     <ClCompile Include="..\..\Source\Engine\Resource\ChannelMapping.cpp">
       <Filter>Audionaut\Source\Engine\Resource</Filter>
     </ClCompile>
@@ -1368,9 +1374,6 @@
     </ClCompile>
     <ClCompile Include="..\..\Source\Interface\LookAndFeel\TrackColourLookAndFeel.cpp">
       <Filter>Audionaut\Source\Interface\LookAndFeel</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\Source\Interface\Widgets\audium_AudioThumbnail.cpp">
-      <Filter>Audionaut\Source\Interface\Widgets</Filter>
     </ClCompile>
     <ClCompile Include="..\..\Source\Interface\Widgets\audium_ListBox.cpp">
       <Filter>Audionaut\Source\Interface\Widgets</Filter>
@@ -4821,6 +4824,9 @@
     <ClInclude Include="..\..\Source\Application\AudiumMainWindow.h">
       <Filter>Audionaut\Source\Application</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\Source\Application\CrashReporter.h">
+      <Filter>Audionaut\Source\Application</Filter>
+    </ClInclude>
     <ClInclude Include="..\..\Source\Application\UpdateChecker.h">
       <Filter>Audionaut\Source\Application</Filter>
     </ClInclude>
@@ -5088,6 +5094,9 @@
     <ClInclude Include="..\..\Source\Engine\Resource\AudioResourceContainer.h">
       <Filter>Audionaut\Source\Engine\Resource</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\Source\Engine\Resource\audium_AudioThumbnail.h">
+      <Filter>Audionaut\Source\Engine\Resource</Filter>
+    </ClInclude>
     <ClInclude Include="..\..\Source\Engine\Resource\AudioResourceData.h">
       <Filter>Audionaut\Source\Engine\Resource</Filter>
     </ClInclude>
@@ -5132,6 +5141,12 @@
     </ClInclude>
     <ClInclude Include="..\..\Source\Engine\Undo\UndoablePlayListItemAction.h">
       <Filter>Audionaut\Source\Engine\Undo</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Source\Engine\Project\ProjectDirectories.h">
+      <Filter>Audionaut\Source\Engine\Project</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Source\Engine\Project\AgentEditBatch.h">
+      <Filter>Audionaut\Source\Engine\Project</Filter>
     </ClInclude>
     <ClInclude Include="..\..\Source\Engine\Project\ProjectFileStore.h">
       <Filter>Audionaut\Source\Engine\Project</Filter>
@@ -5210,9 +5225,6 @@
     </ClInclude>
     <ClInclude Include="..\..\Source\Interface\ColourIds.h">
       <Filter>Audionaut\Source\Interface</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\Source\Interface\Widgets\audium_AudioThumbnail.h">
-      <Filter>Audionaut\Source\Interface\Widgets</Filter>
     </ClInclude>
     <ClInclude Include="..\..\Source\Interface\Widgets\audium_ListBox.h">
       <Filter>Audionaut\Source\Interface\Widgets</Filter>

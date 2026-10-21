@@ -43,7 +43,9 @@ SCENARIO("essentia segmentation test", "[engine][essentia][segmentation]")
     auto inFile = File(testFilesDirectory + "_export_TRK-18.wav");
     REQUIRE(inFile.existsAsFile());
     string audioFilename = inFile.getFullPathName().toStdString();
-    auto outFile = File(testFilesDirectory + "segmentation-result.json");
+    // in the temp directory, not next to the fixtures: CI checks that the
+    // suite leaves TestFiles alone
+    auto outFile = File::getSpecialLocation(File::tempDirectory).getChildFile("AudionautTests").getChildFile("segmentation-result.json");
 
 
     // register the algorithms in the factory(ies)
@@ -186,10 +188,12 @@ SCENARIO("essentia segmentation test", "[engine][essentia][segmentation]")
     cout << "-------- writing results to file " << outFile.getFullPathName() << " ---------" << endl;
     if (outFile.existsAsFile()) outFile.deleteFile();
 
-    auto outStream = std::unique_ptr<juce::FileOutputStream>(outFile.createOutputStream());
+    // written and closed in one go: a stream still open at the cleanup
+    // below keeps Windows from deleting the file
     json j;
     j["segmentation.timestamps"] = segments;
-    outStream->writeString(j.dump(4));
+    outFile.getParentDirectory().createDirectory();
+    outFile.replaceWithText(j.dump(4));
 
     cout << j.dump(4) << endl;
 
@@ -206,7 +210,7 @@ SCENARIO("essentia onsets test", "[engine][essentia][onsets]")
     auto inFile = File(testFilesDirectory + "_export_TRK-18.wav");
     REQUIRE(inFile.existsAsFile());
     string audioFilename = inFile.getFullPathName().toStdString();
-    auto outFile = File(testFilesDirectory + "onset-result.json");
+    auto outFile = File::getSpecialLocation(File::tempDirectory).getChildFile("AudionautTests").getChildFile("onset-result.json");
 
 
     // register the algorithms in the factory(ies)
@@ -240,10 +244,10 @@ SCENARIO("essentia onsets test", "[engine][essentia][onsets]")
     cout << "-------- writing results to file " << outFile.getFullPathName() << " ---------" << endl;
     if (outFile.existsAsFile()) outFile.deleteFile();
 
-    auto outStream = std::unique_ptr<juce::FileOutputStream>(outFile.createOutputStream());
     json j;
     j["onset.timestamps"] = onsets;
-    outStream->writeString(j.dump(4));
+    outFile.getParentDirectory().createDirectory();
+    outFile.replaceWithText(j.dump(4));
 
 //    cout << j.dump(4) << endl;
 

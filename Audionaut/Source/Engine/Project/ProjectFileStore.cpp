@@ -11,6 +11,9 @@
 #include "Engine/Analysis/AnalysisProvider.h"
 #include "Engine/Analysis/AnalysisCache.h"
 #include "Engine/Undo/UndoableReloadAction.h"
+#include "Engine/Project/AgentEditBatch.h"
+
+#include <set>
 
 #if !JUCE_WINDOWS
  #include <unistd.h>
@@ -25,8 +28,6 @@ const char* ProjectFileStore::projectFileName = "Project.json";
 const char* ProjectFileStore::autosaveFileName = "Autosave.json";
 const char* ProjectFileStore::autosavePidFileName = "Autosave.pid";
 
-juce::File ProjectFileStore::projectDirectory = juce::File();
-juce::File ProjectFileStore::tempDirectory = juce::File();
 
 static int getCurrentProcessId()
 {
@@ -54,14 +55,12 @@ bool ProjectFileStore::isProcessAlive (int pid)
 #endif
 }
 
-juce::File ProjectFileStore::getSerializationBaseDirectory()
+juce::File ProjectFileStore::getSerializationBaseDirectory() const
 {
-    if (projectDirectory != juce::File() && projectDirectory.isDirectory())
-        return projectDirectory;
-    return tempDirectory;
+    return projectDirectories->getSerializationBaseDirectory();
 }
 
-juce::File ProjectFileStore::getAutosaveDirectory()
+juce::File ProjectFileStore::getAutosaveDirectory() const
 {
     return getSerializationBaseDirectory();
 }
@@ -130,12 +129,15 @@ bool ProjectFileStore::writeJsonAtomically (const juce::File& target, const json
 ProjectFileStore::ProjectFileStore(std::shared_ptr<AudioTrackContainer> audioTrackContainer_,
                                    std::shared_ptr<AudioResourceContainer> audioResourceContainer_,
                                    std::shared_ptr<PlayListScheduler> playListScheduler_,
-                                   std::shared_ptr<juce::UndoManager> undoManager_) :
+                                   std::shared_ptr<juce::UndoManager> undoManager_,
+                                   std::shared_ptr<ProjectDirectories> projectDirectories_) :
     audioTrackContainer(audioTrackContainer_),
     audioResourceContainer(audioResourceContainer_),
     playListScheduler(playListScheduler_),
-    undoManager(undoManager_)
+    undoManager(undoManager_),
+    projectDirectories(projectDirectories_)
 {
+    jassert(projectDirectories != nullptr);
 }
 
 void ProjectFileStore::setSerializer (std::shared_ptr<ProjectSerializer> serializer_)
@@ -186,25 +188,26 @@ bool ProjectFileStore::open (juce::File inFile, std::function<void (std::string)
 
             if (inFile.existsAsFile()) {
                 std::cout << "loading: " << inFile.getFullPathName() << std::endl;
-                AudioResourceContainer::createTemporaryProjectDirectory(true);
+                audioResourceContainer->createTemporaryProjectDirectory(true);
 
-                projectDirectory = inFile.getParentDirectory();
+                projectDirectories->setProjectDirectory(inFile.getParentDirectory());
 
                 // Load persisted analysis data before reading the project: the
                 // subsequent rebuild clears tracks but not the analysis cache,
                 // so segments are available as soon as the UI queries them.
-                audioTrackContainer->getAnalysisProvider()->getCache()->loadFromFolder(projectDirectory);
+                audioTrackContainer->getAnalysisProvider()->getCache()->loadFromFolder(getProjectDirectory());
 
                 auto projectJson = readProjectJson(inFile);
 
                 if (serializer->readFromJson(projectJson, true)) {
                     currentProjectFile = inFile;
                     undoManager->clearUndoHistory();
+                    currentAgentBatch.reset();
                     playListScheduler->commitPlayListData();
                     refreshDiskStamps();
                     changedExternally = false;
 
-                    auto audioDir = AudioResourceContainer::getAudioFileDirectory(projectDirectory);
+                    auto audioDir = AudioResourceContainer::getAudioFileDirectory(getProjectDirectory());
                     audioResourceContainer->deleteObsoleteAudioFiles(audioDir);
                     return true;
                 }
@@ -251,7 +254,7 @@ bool ProjectFileStore::save (const juce::File& file_, std::function<void (std::s
 
         // remember where this project was saved before - a Save As must also
         // clear that package's crash-recovery snapshot
-        const auto previousProjectDirectory = projectDirectory;
+        const auto previousProjectDirectory = getProjectDirectory();
 
         // The package is only complete once Project.json is in place, so
         // everything done before that point must be reversible: the audio is
@@ -265,9 +268,9 @@ bool ProjectFileStore::save (const juce::File& file_, std::function<void (std::s
         if (!packageDirectory.isDirectory())
             packageDirectory.createDirectory(); // Project.json itself arrives by the atomic write's rename
 
-        auto sourceDirectory = AudioResourceContainer::getAudioFileDirectory(projectDirectory);
+        auto sourceDirectory = AudioResourceContainer::getAudioFileDirectory(getProjectDirectory());
         if (!sourceDirectory.exists()) {
-            sourceDirectory = AudioResourceContainer::getAudioFileDirectory(tempDirectory);
+            sourceDirectory = AudioResourceContainer::getAudioFileDirectory(getTemporaryDirectory());
             jassert(sourceDirectory.exists());
         }
         const auto destinationDirectory = AudioResourceContainer::getAudioFileDirectory(packageDirectory);
@@ -283,7 +286,7 @@ bool ProjectFileStore::save (const juce::File& file_, std::function<void (std::s
                 audioResourceContainer->changeAudioFilePaths(sourceDirectory);
                 audioTrackContainer->getAnalysisProvider()->getCache()->rebaseAudioFolder(sourceDirectory);
             }
-            projectDirectory = previousProjectDirectory;
+            projectDirectories->setProjectDirectory(previousProjectDirectory);
 
             for (auto& copied : copiedFiles)
                 copied.deleteFile();
@@ -313,7 +316,7 @@ bool ProjectFileStore::save (const juce::File& file_, std::function<void (std::s
             relocated = true;
         }
         // assign new project directory
-        projectDirectory = packageDirectory;
+        projectDirectories->setProjectDirectory(packageDirectory);
 
         std::string writeError;
         if (writeJsonToFile(file, writeError)) {
@@ -321,21 +324,22 @@ bool ProjectFileStore::save (const juce::File& file_, std::function<void (std::s
 
             currentProjectFile = file;
             undoManager->clearUndoHistory();
+            currentAgentBatch.reset();
 
             // Persist analysis results alongside the project file.
-            audioTrackContainer->getAnalysisProvider()->getCache()->saveToFolder(projectDirectory);
+            audioTrackContainer->getAnalysisProvider()->getCache()->saveToFolder(getProjectDirectory());
 
             // A successful save supersedes any crash-recovery snapshot,
             // including a temp-directory one from before the first save and
             // the one in the package this project was saved-as from.
             deleteAutosave();
-            if (previousProjectDirectory != projectDirectory)
+            if (previousProjectDirectory != getProjectDirectory())
                 deleteAutosaveIn(previousProjectDirectory);
 
             // A first save used to move the audio out of the session's temp
             // directory; the copies are the project's audio now, so the
             // originals there are obsolete.
-            if (sourceDirectory == AudioResourceContainer::getAudioFileDirectory(tempDirectory))
+            if (sourceDirectory == AudioResourceContainer::getAudioFileDirectory(getTemporaryDirectory()))
                 for (auto& copied : copiedFiles)
                     sourceDirectory.getChildFile(copied.getFileName()).deleteFile();
 
@@ -373,13 +377,13 @@ bool ProjectFileStore::writeAutosave()
 
 void ProjectFileStore::deleteAutosave()
 {
-    deleteAutosaveIn(projectDirectory);
-    deleteAutosaveIn(tempDirectory);
+    deleteAutosaveIn(getProjectDirectory());
+    deleteAutosaveIn(getTemporaryDirectory());
 }
 
 bool ProjectFileStore::restoreAutosave (std::function<void (std::string)> callback)
 {
-    return applyFileAsUndoableReload(projectDirectory.getChildFile(autosaveFileName), false, false,
+    return applyFileAsUndoableReload(getProjectDirectory().getChildFile(autosaveFileName), false, false,
                                      "Restore autosave", callback);
 }
 
@@ -401,13 +405,13 @@ bool ProjectFileStore::reloadFromDisk (std::function<void (std::string)> callbac
     // Capture the mtimes BEFORE reading: a write landing during the (possibly
     // long) apply must be re-detected on the next poll, not stamped as seen.
     const auto projectMtimeAtRead = currentProjectFile.getLastModificationTime();
-    const auto analysisMtimeAtRead = projectDirectory.getChildFile(AnalysisCache::fileName)
+    const auto analysisMtimeAtRead = getProjectDirectory().getChildFile(AnalysisCache::fileName)
                                                      .getLastModificationTime();
 
     // The analysis cache is content-keyed derived data and stays outside the
     // undo snapshot.
     if (analysisChangedOnDisk())
-        audioTrackContainer->getAnalysisProvider()->getCache()->loadFromFolder(projectDirectory);
+        audioTrackContainer->getAnalysisProvider()->getCache()->loadFromFolder(getProjectDirectory());
 
     const auto applied = applyFileAsUndoableReload(currentProjectFile, true, true,
                                                    "Reload changes from disk", callback);
@@ -420,17 +424,17 @@ bool ProjectFileStore::reloadFromDisk (std::function<void (std::string)> callbac
 
 void ProjectFileStore::reloadAnalysisFromDisk()
 {
-    audioTrackContainer->getAnalysisProvider()->getCache()->loadFromFolder(projectDirectory);
+    audioTrackContainer->getAnalysisProvider()->getCache()->loadFromFolder(getProjectDirectory());
 
     // only the analysis stamp: a project write racing in stays detectable
-    setAnalysisStamp(projectDirectory.getChildFile(AnalysisCache::fileName)
+    setAnalysisStamp(getProjectDirectory().getChildFile(AnalysisCache::fileName)
                                      .getLastModificationTime());
 }
 
 void ProjectFileStore::refreshDiskStamps()
 {
     refreshStamps(currentProjectFile,
-                  projectDirectory.getChildFile(AnalysisCache::fileName));
+                  getProjectDirectory().getChildFile(AnalysisCache::fileName));
 }
 
 bool ProjectFileStore::projectChangedOnDisk() const
@@ -444,7 +448,7 @@ bool ProjectFileStore::analysisChangedOnDisk() const
 {
     if (currentProjectFile == juce::File())
         return false;
-    return analysisChangedOnDisk(projectDirectory.getChildFile(AnalysisCache::fileName));
+    return analysisChangedOnDisk(getProjectDirectory().getChildFile(AnalysisCache::fileName));
 }
 
 std::vector<juce::File> ProjectFileStore::findObsoleteAudioFiles() const
@@ -478,6 +482,7 @@ void ProjectFileStore::closeProject()
 {
     currentProjectFile = juce::File();
     changedExternally = false;
+    currentAgentBatch.reset();
 }
 
 bool ProjectFileStore::writeJsonToFile (const juce::File& target, std::string& error)
@@ -565,6 +570,208 @@ bool ProjectFileStore::applyStateAsUndoableReload (json afterState,
     return false;
 }
 
+static void eraseSelection (json& node)
+{
+    if (node.is_object()) {
+        node.erase ("selected");
+        for (auto& [key, value] : node.items()) eraseSelection (value);
+    }
+    else if (node.is_array()) {
+        for (auto& value : node) eraseSelection (value);
+    }
+}
+
+json ProjectFileStore::documentOf (json state)
+{
+    if (auto audium = state.find ("audium"); audium != state.end() && audium->is_object()) {
+        audium->erase ("scheduler");
+        audium->erase ("ui_state");
+        eraseSelection (*audium); // clip selection: a click, not an edit
+    }
+    return state;
+}
+
+/** Calls `f (clip)` for every play list item of every track in `state`
+    (`State` is `json` or `const json`). */
+template <typename State, typename Function>
+static void forEachClip (State& state, Function&& f)
+{
+    auto audium = state.find ("audium");
+    if (audium == state.end() || ! audium->is_object())
+        return;
+
+    auto tracks = audium->find ("audio_tracks");
+    if (tracks == audium->end() || ! tracks->is_array())
+        return;
+
+    for (auto& track : *tracks) {
+        if (! track.is_object())
+            continue;
+
+        auto clips = track.find ("play_list_vector");
+        if (clips == track.end() || ! clips->is_array())
+            continue;
+
+        for (auto& clip : *clips)
+            if (clip.is_object())
+                f (clip);
+    }
+}
+
+/** What tells a clip apart across two states of one document. */
+static std::string clipKey (const json& clip)
+{
+    return clip.value ("track_id", json()).dump() + "/"
+         + clip.value ("region_id", json()).dump() + "/"
+         + clip.value ("position_clocks", json()).dump();
+}
+
+/** Puts `live`'s clip selection on `state`: a click while a verb ran is the
+    user's, and the verb's engine never saw it. A clip the verb created is
+    unselected. */
+static void carrySelection (const json& live, json& state)
+{
+    std::set<std::string> selected;
+    forEachClip (live, [&] (const json& clip) {
+        if (clip.value ("selected", false))
+            selected.insert (clipKey (clip));
+    });
+
+    forEachClip (state, [&] (json& clip) {
+        clip["selected"] = selected.count (clipKey (clip)) > 0;
+    });
+}
+
+bool ProjectFileStore::canExtendAgentBatch (const AgentEditBatch& batch,
+                                            const AgentEditGroup& group,
+                                            const json& liveDocument,
+                                            juce::Time now) const
+{
+    // a bare CLI call carries no session: every verb is a step of its own
+    if (group.session.isEmpty() || batch.key != group.key())
+        return false;
+
+    // ours has to be the last step still, and on the document: an undo of it,
+    // or any other edit's step since, ends the batch (a redo of ours brings
+    // it back). The flag tells our step from another one named like it.
+    if (! batch.applied || undoManager->getUndoDescription() != batch.transactionName)
+        return false;
+
+    // extending adds nothing to the history, so it would leave a redo the
+    // user still has - one that then overwrites the verb. A step of its own
+    // drops that redo, as any edit does.
+    if (undoManager->canRedo())
+        return false;
+
+    // a user edit between two verbs leaves a document that is not the one
+    // the batch left - the same check the host makes before applying at all
+    if (liveDocument != batch.afterDocument)
+        return false;
+
+    return now - batch.lastEdit <= juce::RelativeTime::minutes (agentBatchIdleMinutes);
+}
+
+bool ProjectFileStore::applyAgentState (json afterState,
+                                        const AgentEditGroup& group,
+                                        std::function<void (std::string)> callback)
+{
+    jassert(serializer != nullptr);
+
+    json liveState;
+    try {
+        serializer->writeToJson (liveState);
+    }
+    catch (std::exception& ex) {
+        std::cout << ex.what() << std::endl;
+        NullCheckedInvocation::invoke (callback, ex.what());
+        return false;
+    }
+
+    return applyAgentState (std::move (afterState), std::move (liveState), group, std::move (callback));
+}
+
+bool ProjectFileStore::applyAgentState (json afterState,
+                                        json liveState,
+                                        const AgentEditGroup& group,
+                                        std::function<void (std::string)> callback)
+{
+    jassert(serializer != nullptr);
+
+    if (playListScheduler->isOfflineRendering()) {
+        NullCheckedInvocation::invoke (callback, "a render is in progress");
+        return false;
+    }
+
+    try
+    {
+        // the user's current view and selection win over whatever the
+        // verb's engine stored
+        if (liveState.contains ("audium") && liveState["audium"].contains ("ui_state"))
+            afterState["audium"]["ui_state"] = liveState["audium"]["ui_state"];
+        carrySelection (liveState, afterState);
+
+        const auto now = clock();
+        const auto liveDocument = documentOf (liveState);
+
+        if (auto batch = currentAgentBatch.lock(); batch != nullptr && canExtendAgentBatch (*batch, group, liveDocument, now)) {
+            auto applied = false;
+            try {
+                applied = serializer->applyProjectJson (afterState, true);
+            }
+            catch (std::exception& ex) {
+                std::cout << ex.what() << std::endl;
+            }
+
+            if (! applied) {
+                // best effort: back to where the batch left the document
+                try { serializer->applyProjectJson (batch->after, true); } catch (...) {}
+                NullCheckedInvocation::invoke (callback, "failed to apply the project state");
+                return false;
+            }
+
+            batch->setAfter (std::move (afterState));
+            ++batch->numEdits;
+            batch->lastEdit = now;
+            setChangedExternally (true);
+
+            // nothing was performed, but the document changed as if it had:
+            // the listeners (title, menus, autosave) hear about it the same way
+            undoManager->sendChangeMessage();
+            return true;
+        }
+
+        auto batch = std::make_shared<AgentEditBatch>();
+        batch->key = group.key();
+        batch->transactionName = group.task.isNotEmpty() ? "Agent: " + group.task : juce::String ("Agent edits");
+        batch->before = std::move (liveState);
+        batch->setAfter (std::move (afterState));
+        batch->numEdits = 1;
+        batch->lastEdit = now;
+
+        // the action owns the batch from here; we keep watching it
+        const auto performed = undoManager->perform (new UndoableAgentBatchAction (*serializer, *this, batch),
+                                                     batch->transactionName);
+        if (! performed) {
+            NullCheckedInvocation::invoke (callback, "failed to apply the project state");
+            return false;
+        }
+
+        undoManager->beginNewTransaction();
+        // nothing to extend without a session; the next verb starts its own step
+        if (group.session.isNotEmpty())
+            currentAgentBatch = batch;
+        else
+            currentAgentBatch.reset();
+        return true;
+    }
+    catch (std::exception &ex)
+    {
+        std::cout << ex.what() << std::endl;
+        NullCheckedInvocation::invoke (callback, ex.what());
+    }
+    return false;
+}
+
 // ==== file primitives =======================================================
 
 void ProjectFileStore::refreshStamps (const juce::File& projectFile, const juce::File& analysisFile)
@@ -610,9 +817,9 @@ void ProjectFileStore::deleteAutosaveIn (const juce::File& packageDirectory)
     }
 }
 
-juce::File ProjectFileStore::findOrphanedTempAutosave()
+juce::File ProjectFileStore::findOrphanedTempAutosave() const
 {
-    return findOrphanedTempAutosave(tempDirectory);
+    return findOrphanedTempAutosave(getTemporaryDirectory());
 }
 
 juce::File ProjectFileStore::findOrphanedTempAutosave (const juce::File& currentTempDirectory)

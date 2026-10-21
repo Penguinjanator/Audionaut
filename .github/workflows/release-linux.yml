@@ -73,9 +73,13 @@ jobs:
       # VERSION (which linuxdeploy puts in the AppImage filename) comes from the
       # .jucer rather than the tag, so manual runs off a branch are named
       # properly too; on a tag run the check above proves the two agree.
+      # LDAI_UPDATE_INFORMATION embeds the update info (AppImageUpdate looks
+      # for the .zsync on the latest GitHub release) and makes the plugin
+      # write the .zsync next to the AppImage.
       run: |
         VERSION=$(grep -o 'version="[0-9]\+\.[0-9]\+\.[0-9]\+"' Audionaut/Audionaut.jucer | head -1 | cut -d'"' -f2)
         export VERSION
+        export LDAI_UPDATE_INFORMATION="gh-releases-zsync|kvoltmer|Audionaut|latest|Audionaut-*x86_64.AppImage.zsync"
         cp Audionaut/Resources/audionaut_logo_512x512.png audionaut.png
         curl -fsSLo linuxdeploy https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
         chmod +x linuxdeploy
@@ -85,7 +89,7 @@ jobs:
           --desktop-file Audionaut/Resources/audionaut.desktop \
           --icon-file audionaut.png \
           --output appimage
-        ls -l *.AppImage
+        ls -l *.AppImage *.AppImage.zsync
 
     - name: Package .deb
       # Packages the binary compiled above - no second build. deploy.sh reads
@@ -101,7 +105,7 @@ jobs:
       run: |
         # audionaut_* rather than audionaut* keeps the audionaut-dbgsym_*.ddeb
         # that dh_strip emits off the release.
-        ARTIFACTS=(Audionaut-*.AppImage Audionaut/Builds/Debian/audionaut_*.deb)
+        ARTIFACTS=(Audionaut-*.AppImage Audionaut-*.AppImage.zsync Audionaut/Builds/Debian/audionaut_*.deb)
         if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
           gh release upload "$GITHUB_REF_NAME" "${ARTIFACTS[@]}" --clobber
         else

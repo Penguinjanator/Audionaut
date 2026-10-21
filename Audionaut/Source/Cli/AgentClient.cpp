@@ -146,7 +146,13 @@ RouteOutcome routeCommand (const juce::ArgumentList& args,
     for (auto& argument : args.arguments)
         argv.add (argument.text);
 
-    connection.sendMessage (toBlock (makeCommand (projectFile, workingDirectory(), argv)));
+    // Set by audionaut-mcp for every CLI it spawns: the session for the
+    // server's lifetime, the task from the tool call. The host groups the
+    // edits of one task into one undo step.
+    const json group = { { "session", juce::SystemStats::getEnvironmentVariable ("AUDIONAUT_AGENT_SESSION", {}).toStdString() },
+                         { "task",    juce::SystemStats::getEnvironmentVariable ("AUDIONAUT_AGENT_TASK", {}).toStdString() } };
+
+    connection.sendMessage (toBlock (makeCommand (projectFile, workingDirectory(), argv, true, group)));
 
     if (! connection.waitForResult())
         return { true, refuse (context, "Audionaut stopped responding while running the command. "

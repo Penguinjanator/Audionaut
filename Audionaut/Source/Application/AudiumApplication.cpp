@@ -21,6 +21,7 @@
 #include "Cli/AgentHost.h"
 #include "Util/EngineAccess.h"
 #include "Util/Preferences.h"
+#include "CrashReporter.h"
 #include "UpdateChecker.h"
 #include "UsageAnalytics.h"
 #include "AudiumMainWindow.h"
@@ -158,6 +159,9 @@ void AudiumApplication::initialise (const juce::String& commandLine)
         return;
     }
 
+    // GUI runs only: a CLI verb's crash surfaces to its caller instead
+    CrashReporter::install();
+
     LookAndFeel::setDefaultLookAndFeel (&lookAndFeel);
 
     splashScreen = std::make_unique<AboutSplashScreen>();
@@ -231,7 +235,12 @@ void AudiumApplication::handleAsyncUpdate()
     if (getPreferences().getValue(PreferenceKeys::browserWindowOpen) == "true")
         showFileBrowserWindow();
 
-    offerOrphanedTempProjectRestore();
+    // takes the last run's crash report before the startup project can
+    // crash this one
+    crashReporter = std::make_unique<CrashReporter> ([this] (const juce::String& name, const juce::StringPairArray& params) {
+        logUsageEvent (name, params);
+    });
+
     loadStartupProject();
 
     updateUI();
@@ -244,10 +253,27 @@ void AudiumApplication::handleAsyncUpdate()
         splashScreen.release(); // SplashScreen deletes itself (DeletedAtShutdown) once the delay/click fires
     }
 
-    askForUsageStatisticsConsent();
-
     updateChecker = std::make_unique<audium::UpdateChecker> (getPreferences());
     updateChecker->checkOnStartupIfDue();
+
+    // last: the prompts belong over the open main window, so wait until the
+    // window is mapped and painted and the splash (0.5 s) has gone
+    Timer::callAfterDelay (750, [this] {
+        if (mainWindow != nullptr)
+            showStartupPrompts();
+    });
+}
+
+void AudiumApplication::showStartupPrompts()
+{
+    // one prompt at a time: restore first (it is about the user's work),
+    // then consent (the crash event is only logged with it decided), then
+    // the crash report
+    offerOrphanedTempProjectRestore ([this] {
+        askForUsageStatisticsConsent ([this] {
+            crashReporter->offerPendingReport();
+        });
+    });
 }
 
 void AudiumApplication::loadStartupProject()
@@ -273,13 +299,15 @@ void AudiumApplication::loadStartupProject()
         serializer->createNewProject();
 }
 
-void AudiumApplication::offerOrphanedTempProjectRestore()
+void AudiumApplication::offerOrphanedTempProjectRestore(std::function<void ()> then)
 {
     // crash recovery for never-saved projects: a leftover temp package with an
     // autosave means a previous session died with unsaved work
-    const auto orphanedTempProject = ProjectFileStore::findOrphanedTempAutosave();
-    if (orphanedTempProject == File())
+    const auto orphanedTempProject = audiumEngine->getProjectFileStore()->findOrphanedTempAutosave();
+    if (orphanedTempProject == File()) {
+        NullCheckedInvocation::invoke (then);
         return;
+    }
 
     auto options = MessageBoxOptions::makeOptionsYesNo (MessageBoxIconType::QuestionIcon,
                                                         TRANS ("Restore unsaved project?"),
@@ -288,17 +316,20 @@ void AudiumApplication::offerOrphanedTempProjectRestore()
                                                         TRANS ("Restore"),
                                                         TRANS ("Discard"));
 
-    NativeMessageBox::showAsync(options, [this, orphanedTempProject] (int result) {
+    NativeMessageBox::showAsync(options, [this, orphanedTempProject, then] (int result) {
         if (result != 0) {
             orphanedTempProject.deleteRecursively();
+            NullCheckedInvocation::invoke (then);
             return;
         }
 
         // the user may have recorded or edited while the dialog was up, and
         // opening replaces the session (and deletes its temp directory) -
-        // go through the usual dirty check first
-        askToSaveIfDirtyAndInvoke([this, orphanedTempProject] {
+        // go through the usual dirty check first. A cancel there ends the
+        // chain: what was to follow is offered again on the next launch.
+        askToSaveIfDirtyAndInvoke([this, orphanedTempProject, then] {
             restoreOrphanedTempProject(orphanedTempProject);
+            NullCheckedInvocation::invoke (then);
         });
     });
 }
@@ -459,10 +490,12 @@ void AudiumApplication::updateAgentHost()
         agentHost->setProject (fileStore->getCurrentProjectFile());
 }
 
-void AudiumApplication::askForUsageStatisticsConsent()
+void AudiumApplication::askForUsageStatisticsConsent(std::function<void ()> then)
 {
-    if (UsageAnalytics::isConsentDecided (getPreferences()))
+    if (UsageAnalytics::isConsentDecided (getPreferences())) {
+        NullCheckedInvocation::invoke (then);
         return;
+    }
 
     auto options = MessageBoxOptions::makeOptionsOkCancel (MessageBoxIconType::QuestionIcon,
                                                            TRANS ("Share anonymous usage statistics?"),
@@ -473,12 +506,26 @@ void AudiumApplication::askForUsageStatisticsConsent()
                                                            TRANS ("Share"),
                                                            TRANS ("No thanks"));
 
-    NativeMessageBox::showAsync (options, [this] (int result) {
+    // owned by the main window, not a window of its own: a sheet on macOS,
+    // an owned dialog on Windows; on Linux the box is a JUCE AlertWindow,
+    // which only a parent component puts inside the window (the associated
+    // component would only centre it on screen, and both together misplace it)
+    if (mainWindow != nullptr) {
+       #if JUCE_LINUX || JUCE_BSD
+        options = options.withParentComponent (mainWindow->getContentComponent());
+       #else
+        options = options.withAssociatedComponent (mainWindow.get());
+       #endif
+    }
+
+    NativeMessageBox::showAsync (options, [this, then] (int result) {
         const auto accepted = result == 0;
         setUsageStatisticsEnabled (accepted);
 
         if (accepted)
             logAppLaunch (*usageAnalytics);
+
+        NullCheckedInvocation::invoke (then);
     });
 }
 
@@ -638,6 +685,12 @@ void AudiumApplication::logUsageEvent(const juce::String& name, const juce::Stri
 void AudiumApplication::applicationCommandInvoked(const ApplicationCommandTarget::InvocationInfo& info)
 {
     auto name = commandManager->getNameOfCommand(info.commandID);
+    // undo/redo are named after the step they would take back ("Undo Agent:
+    // remove pauses"); the step's text is the user's, not a dimension
+    if (info.commandID == StandardApplicationCommandIDs::undo)
+        name = "undo";
+    else if (info.commandID == StandardApplicationCommandIDs::redo)
+        name = "redo";
     if (name.isEmpty())
         name = "0x" + String::toHexString((int) info.commandID);
 

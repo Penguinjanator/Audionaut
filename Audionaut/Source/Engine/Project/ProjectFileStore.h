@@ -10,6 +10,8 @@
 #include <JuceHeader.h>
 #include <nlohmann/json.hpp>
 
+#include "Engine/Project/ProjectDirectories.h"
+
 using json = nlohmann::json;
 
 namespace audium {
@@ -18,6 +20,7 @@ class AudioTrackContainer;
 class AudioResourceContainer;
 class PlayListScheduler;
 class ProjectSerializer;
+struct AgentEditBatch;
 
 /**
  * @class ProjectFileStore
@@ -29,7 +32,7 @@ class ProjectSerializer;
  * `ProjectSerializer` owns what the document JSON contains and how it is
  * applied to the graph; this class owns everything about how and what reaches
  * disk, plus the persistence session state (currentProjectFile, the
- * external-change marker, the path statics).
+ * external-change marker, the engine's ProjectDirectories).
  *
  * Wired in `AudiumFactory`: constructed with the graph collaborators, then
  * given the serializer via `setSerializer()` (the serializer holds this store
@@ -41,7 +44,8 @@ public:
     ProjectFileStore(std::shared_ptr<AudioTrackContainer> audioTrackContainer_,
                      std::shared_ptr<AudioResourceContainer> audioResourceContainer_,
                      std::shared_ptr<PlayListScheduler> playListScheduler_,
-                     std::shared_ptr<juce::UndoManager> undoManager_);
+                     std::shared_ptr<juce::UndoManager> undoManager_,
+                     std::shared_ptr<ProjectDirectories> projectDirectories_);
 
     // project file format constants
     static const char* projectFileExtension;
@@ -55,22 +59,27 @@ public:
      */
     static constexpr int fileVersion = 1;
 
-    // project file paths (session-wide)
-    static juce::File projectDirectory;
-    static juce::File tempDirectory;
+    /** The engine's project and temp directories (shared with the resource container). */
+    std::shared_ptr<ProjectDirectories> getProjectDirectories() const { return projectDirectories; }
+
+    /** The package of the open project; invalid while it was never saved. */
+    juce::File getProjectDirectory() const { return projectDirectories->getProjectDirectory(); }
+
+    /** The session's temp package: audio of a never-saved project, crash-recovery snapshots. */
+    juce::File getTemporaryDirectory() const { return projectDirectories->getTemporaryDirectory(); }
 
     /**
      * @brief The directory resource paths are serialized relative to: the
      *        project package for saved projects, the session's temp directory
      *        (where the audio actually lives) for never-saved ones.
      */
-    static juce::File getSerializationBaseDirectory();
+    juce::File getSerializationBaseDirectory() const;
 
     /**
      * @brief The directory autosave snapshots go to: the project package for
      *        saved projects, the session's temp directory otherwise.
      */
-    static juce::File getAutosaveDirectory();
+    juce::File getAutosaveDirectory() const;
 
     /**
      * @brief Whether a process with this id is still running.
@@ -188,6 +197,65 @@ public:
                                     std::function<void(std::string)> callback);
 
     /**
+     * @brief What the edits of one agent task have in common. Both parts
+     *        travel with the hosted command; either may be empty.
+     */
+    struct AgentEditGroup
+    {
+        juce::String session; ///< the agent session (one MCP server process); empty for a bare CLI call
+        juce::String task;    ///< the task the agent named its edits with, if any
+
+        /// What the edits have in common: the task within its session, or
+        /// the session itself when the agent names no task
+        juce::String key() const { return task.isEmpty() ? session : session + "/" + task; }
+    };
+
+    /**
+     * @brief Applies an agent verb's result to the running document, as part
+     *        of the current agent batch when it continues one, else as a new
+     *        undo step. Touches no file; sets the external-change marker.
+     *
+     * A verb extends the current batch when it belongs to the same group,
+     * the batch's step is still the last one in the undo history (no undo,
+     * no other edit's step since, nothing left to redo), the document is
+     * the one the batch left (no user edit since) and the batch saw an
+     * edit within `agentBatchIdleMinutes`. Extending applies the state
+     * directly and moves the batch's redo state; nothing is added to the
+     * undo history. Otherwise a batch starts: one `UndoableAgentBatchAction`,
+     * named after the task ("Agent: <task>") or "Agent edits". A session
+     * that names no task groups by session: its verbs share one step until
+     * a task is named or something else ends the batch. A group without a
+     * session (a bare CLI call, an older MCP server) never extends: each of
+     * its verbs is a step of its own.
+     *
+     * The user's view and clip selection win over the verb's: the applied
+     * state carries the live `ui_state` and `selected` flags.
+     *
+     * @param liveState The document as it is now, when the caller already
+     *                  serialised it; the other overload does so itself.
+     */
+    bool applyAgentState(json afterState,
+                         json liveState,
+                         const AgentEditGroup& group,
+                         std::function<void(std::string)> callback);
+    bool applyAgentState(json afterState,
+                         const AgentEditGroup& group,
+                         std::function<void(std::string)> callback);
+
+    /**
+     * @brief The state minus what moves without the user editing anything:
+     *        the playhead while playing, scroll and zoom, the clip
+     *        selection. Two states that agree on this are the same document.
+     */
+    static json documentOf(json state);
+
+    /** A batch with no edit for this long closes; the next verb starts a new step. */
+    static constexpr int agentBatchIdleMinutes = 10;
+
+    /** Tests: the clock `applyAgentState` reads for the idle limit. */
+    void setClock(std::function<juce::Time()> clock_) { clock = std::move(clock_); }
+
+    /**
      * @brief Reloads the current project file from disk as an undoable action
      *        (external/agent change). The pre-reload in-memory state becomes
      *        the undo step; undo/redo never touches the file on disk.
@@ -264,7 +332,7 @@ public:
      *        autosave owned by a no-longer-running process.
      * @return The newest such directory, or an invalid File if none.
      */
-    static juce::File findOrphanedTempAutosave();
+    juce::File findOrphanedTempAutosave() const;
     static juce::File findOrphanedTempAutosave(const juce::File& currentTempDirectory);
 
     // ==== file primitives (stamps by explicit file, pid/autosave files) =====
@@ -308,6 +376,7 @@ private:
     std::shared_ptr<AudioResourceContainer> audioResourceContainer;
     std::shared_ptr<PlayListScheduler> playListScheduler;
     std::shared_ptr<juce::UndoManager> undoManager;
+    std::shared_ptr<ProjectDirectories> projectDirectories;
 
     /**
      * @brief The document serializer (set by the factory after construction;
@@ -325,6 +394,19 @@ private:
      * @brief See `wasChangedExternally()`.
      */
     bool changedExternally = false;
+
+    /// Whether `group`'s verb may extend `batch` rather than start a step.
+    /// `liveDocument` is `documentOf` the document as it is now.
+    bool canExtendAgentBatch(const AgentEditBatch& batch,
+                             const AgentEditGroup& group,
+                             const json& liveDocument,
+                             juce::Time now) const;
+
+    /// The agent batch that the last applied verb belongs to, if any. The
+    /// undo step owns it: once the undo manager drops the step, this expires.
+    std::weak_ptr<AgentEditBatch> currentAgentBatch;
+
+    std::function<juce::Time()> clock = [] { return juce::Time::getCurrentTime(); };
 
     /**
      * @brief On-disk modification times recorded after the app's own writes.
