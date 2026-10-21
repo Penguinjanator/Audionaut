@@ -1216,6 +1216,30 @@
     <ClCompile Include="..\..\Source\Engine\Analysis\EventMerger.cpp">
       <Filter>Audionaut\Source\Engine\Analysis</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\Source\Engine\Analysis\AnalysisAudioLoader.cpp">
+      <Filter>Audionaut\Source\Engine\Analysis</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\Source\Engine\Analysis\Stft.cpp">
+      <Filter>Audionaut\Source\Engine\Analysis</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\Source\Engine\Analysis\MelFilterbank.cpp">
+      <Filter>Audionaut\Source\Engine\Analysis</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\Source\Engine\Analysis\Mfcc.cpp">
+      <Filter>Audionaut\Source\Engine\Analysis</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\Source\Engine\Analysis\BicSegmenter.cpp">
+      <Filter>Audionaut\Source\Engine\Analysis</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\Source\Engine\Analysis\OnsetStrength.cpp">
+      <Filter>Audionaut\Source\Engine\Analysis</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\Source\Engine\Analysis\TempoEstimator.cpp">
+      <Filter>Audionaut\Source\Engine\Analysis</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\Source\Engine\Analysis\BeatTracker.cpp">
+      <Filter>Audionaut\Source\Engine\Analysis</Filter>
+    </ClCompile>
     <ClCompile Include="..\..\Source\Engine\AudioSources\Stretch\RubberBandStretchBackend.cpp">
       <Filter>Audionaut\Source\Engine\AudioSources\Stretch</Filter>
     </ClCompile>
@@ -4867,6 +4891,30 @@
       <Filter>Audionaut\Source\Engine\Analysis</Filter>
     </ClInclude>
     <ClInclude Include="..\..\Source\Engine\Analysis\EventMerger.h">
+      <Filter>Audionaut\Source\Engine\Analysis</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Source\Engine\Analysis\AnalysisAudioLoader.h">
+      <Filter>Audionaut\Source\Engine\Analysis</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Source\Engine\Analysis\Stft.h">
+      <Filter>Audionaut\Source\Engine\Analysis</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Source\Engine\Analysis\MelFilterbank.h">
+      <Filter>Audionaut\Source\Engine\Analysis</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Source\Engine\Analysis\Mfcc.h">
+      <Filter>Audionaut\Source\Engine\Analysis</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Source\Engine\Analysis\BicSegmenter.h">
+      <Filter>Audionaut\Source\Engine\Analysis</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Source\Engine\Analysis\OnsetStrength.h">
+      <Filter>Audionaut\Source\Engine\Analysis</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Source\Engine\Analysis\TempoEstimator.h">
+      <Filter>Audionaut\Source\Engine\Analysis</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Source\Engine\Analysis\BeatTracker.h">
       <Filter>Audionaut\Source\Engine\Analysis</Filter>
     </ClInclude>
     <ClInclude Include="..\..\Source\Engine\AudioSources\Stretch\RubberBandStretchBackend.h">

@@ -27,11 +27,73 @@
  #include <essentia/streaming/algorithms/poolstorage.h>
 #endif
 
+#include "AnalysisAudioLoader.h"
+#include "Stft.h"
+#include "OnsetStrength.h"
+#include "TempoEstimator.h"
+#include "BeatTracker.h"
+
 namespace audium {
+
+BeatSegmenter::Parameters BeatSegmenter::nativeDefaults()
+{
+    Parameters params;
+    params.sampleRate = 22050.0f;
+    return params;
+}
 
 BeatSegmenter::Result BeatSegmenter::analyze(const juce::File& audioFile)
 {
+#if ESSENTIA_ENABLED
     return analyze(audioFile, Parameters());
+#else
+    return analyzeNative(audioFile, nativeDefaults());
+#endif
+}
+
+BeatSegmenter::Result BeatSegmenter::analyzeNative(const juce::File& audioFile,
+                                                   const Parameters& params,
+                                                   const std::atomic<bool>* shouldAbort)
+{
+    AnalysisAudioLoader loader;
+    AnalysisAudioLoader::Parameters loaderParams;
+    loaderParams.targetSampleRate = params.sampleRate;
+    const auto audio = loader.load(audioFile, loaderParams, shouldAbort);
+    if (! audio)
+        return {};
+
+    const Stft stft;
+    const auto framesPerSecond = audio->sampleRate / (double) stft.getParameters().hopSize;
+
+    OnsetStrength onsetStrength(OnsetStrength::Parameters(), stft.numBins(), audio->sampleRate);
+    std::vector<float> envelope;
+    envelope.reserve((size_t) stft.numFrames(audio->samples.size()));
+    const auto completed = stft.forEachPowerFrame(audio->samples,
+                                                  [&](int, const float* power)
+                                                  {
+                                                      envelope.push_back(onsetStrength.next(power));
+                                                  },
+                                                  shouldAbort);
+    if (! completed)
+        return {};
+
+    TempoEstimator::Parameters tempoParams;
+    tempoParams.minTempo = (float) params.minTempo;
+    tempoParams.maxTempo = (float) params.maxTempo;
+    const TempoEstimator tempoEstimator;
+    const auto tempo = tempoEstimator.estimate(envelope, framesPerSecond, tempoParams);
+    if (tempo <= 0.0f)
+        return {};
+
+    const BeatTracker tracker;
+    const auto tracked = tracker.track(envelope, framesPerSecond, tempo, BeatTracker::Parameters(), shouldAbort);
+
+    Result result;
+    result.beats.reserve(tracked.beatFrames.size());
+    for (auto frame : tracked.beatFrames)
+        result.beats.push_back((float) ((double) frame / framesPerSecond));
+    result.bpm = tracked.bpm > 0.0f ? tracked.bpm : tempo;
+    return result;
 }
 
 BeatSegmenter::Result BeatSegmenter::analyze(const juce::File& audioFile,
@@ -39,8 +101,7 @@ BeatSegmenter::Result BeatSegmenter::analyze(const juce::File& audioFile,
                                              const std::atomic<bool>* shouldAbort)
 {
 #if ! ESSENTIA_ENABLED
-    juce::ignoreUnused (audioFile, params, shouldAbort);
-    return {};
+    return analyzeNative(audioFile, params, shouldAbort);
 #else
     if (! audioFile.existsAsFile())
         return {};

@@ -76,6 +76,28 @@ public:
                    const Parameters& params,
                    const std::atomic<bool>* shouldAbort = nullptr);
 
+    /**
+     * @brief The parameters the native implementation is calibrated for:
+     *        22050 Hz, analysed in 2048-sample frames with a hop of 512. The
+     *        method is ignored - there is one native tracker. Becomes the
+     *        default once Essentia goes.
+     */
+    static Parameters nativeDefaults();
+
+    /**
+     * @brief The native implementation, independent of Essentia:
+     *        AnalysisAudioLoader -> Stft -> OnsetStrength -> TempoEstimator
+     *        -> BeatTracker.
+     *
+     * What analyze() runs in builds without Essentia, and what it becomes
+     * once Essentia goes; until then callable on its own so the two can be
+     * held against each other. The BPM is the tempo the tracked beats
+     * follow, which is what the grid snapping and the clip tempo consume.
+     */
+    Result analyzeNative(const juce::File& audioFile,
+                         const Parameters& params,
+                         const std::atomic<bool>* shouldAbort = nullptr);
+
 private:
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (BeatSegmenter)
 };

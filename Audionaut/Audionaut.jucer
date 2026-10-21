@@ -206,6 +206,34 @@
                 file="Source/Engine/Analysis/AnalysisWorker.h"/>
           <FILE id="evMrgC" name="EventMerger.cpp" compile="1" resource="0" file="Source/Engine/Analysis/EventMerger.cpp"/>
           <FILE id="evMrgH" name="EventMerger.h" compile="0" resource="0" file="Source/Engine/Analysis/EventMerger.h"/>
+          <FILE id="anLdrC" name="AnalysisAudioLoader.cpp" compile="1" resource="0"
+                file="Source/Engine/Analysis/AnalysisAudioLoader.cpp"/>
+          <FILE id="anLdrH" name="AnalysisAudioLoader.h" compile="0" resource="0"
+                file="Source/Engine/Analysis/AnalysisAudioLoader.h"/>
+          <FILE id="stftCp" name="Stft.cpp" compile="1" resource="0" file="Source/Engine/Analysis/Stft.cpp"/>
+          <FILE id="stftHd" name="Stft.h" compile="0" resource="0" file="Source/Engine/Analysis/Stft.h"/>
+          <FILE id="melFbC" name="MelFilterbank.cpp" compile="1" resource="0"
+                file="Source/Engine/Analysis/MelFilterbank.cpp"/>
+          <FILE id="melFbH" name="MelFilterbank.h" compile="0" resource="0"
+                file="Source/Engine/Analysis/MelFilterbank.h"/>
+          <FILE id="mfccCp" name="Mfcc.cpp" compile="1" resource="0" file="Source/Engine/Analysis/Mfcc.cpp"/>
+          <FILE id="mfccHd" name="Mfcc.h" compile="0" resource="0" file="Source/Engine/Analysis/Mfcc.h"/>
+          <FILE id="bicSgC" name="BicSegmenter.cpp" compile="1" resource="0"
+                file="Source/Engine/Analysis/BicSegmenter.cpp"/>
+          <FILE id="bicSgH" name="BicSegmenter.h" compile="0" resource="0"
+                file="Source/Engine/Analysis/BicSegmenter.h"/>
+          <FILE id="onStrC" name="OnsetStrength.cpp" compile="1" resource="0"
+                file="Source/Engine/Analysis/OnsetStrength.cpp"/>
+          <FILE id="onStrH" name="OnsetStrength.h" compile="0" resource="0"
+                file="Source/Engine/Analysis/OnsetStrength.h"/>
+          <FILE id="tmpEsC" name="TempoEstimator.cpp" compile="1" resource="0"
+                file="Source/Engine/Analysis/TempoEstimator.cpp"/>
+          <FILE id="tmpEsH" name="TempoEstimator.h" compile="0" resource="0"
+                file="Source/Engine/Analysis/TempoEstimator.h"/>
+          <FILE id="btTrkC" name="BeatTracker.cpp" compile="1" resource="0"
+                file="Source/Engine/Analysis/BeatTracker.cpp"/>
+          <FILE id="btTrkH" name="BeatTracker.h" compile="0" resource="0"
+                file="Source/Engine/Analysis/BeatTracker.h"/>
         </GROUP>
         <GROUP id="{9A6C6646-1E27-4BE7-C47B-E234FDD003D4}" name="AudioSources">
           <GROUP id="{9A6C6646-1E27-4BE7-C47B-E234FDD0057A}" name="Stretch">

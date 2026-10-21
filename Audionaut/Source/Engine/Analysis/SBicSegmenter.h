@@ -54,7 +54,24 @@ public:
 
         // Complexity penalty weight [0, inf]. Lower yields more boundaries.
         float complexityPenaltyWeight = 0.5f;
+        /// Native implementation only: see BicSegmenter::Parameters.
+        bool correctSmallSampleBias = true;
     };
+
+    /**
+     * @brief The parameters the native implementation is calibrated for.
+     *
+     * 22050 Hz with a hop of 512: the same 43.07 frames per second as the
+     * Essentia chain, so the window and length values are the ones above.
+     * The penalty is 0.65 rather than 0.5: held against what Essentia's SBic
+     * produced for the project's test recordings, that is where the native
+     * BIC finds boundaries at the same density, with the reference's
+     * boundaries almost all found and few extra. See
+     * Catch2Tests/Tests/NativeSegmentationTests.cpp for the sweep.
+     *
+     * Becomes the default once Essentia goes.
+     */
+    static Parameters nativeDefaults();
 
     SBicSegmenter() = default;
 
@@ -80,6 +97,20 @@ public:
     std::vector<float> analyze(const juce::File& audioFile,
                                const Parameters& params,
                                const std::atomic<bool>* shouldAbort = nullptr);
+
+    /**
+     * @brief The native implementation, independent of Essentia:
+     *        AnalysisAudioLoader -> Stft -> Mfcc -> BicSegmenter.
+     *
+     * This is what analyze() runs in builds without Essentia, and what it
+     * becomes once Essentia goes; until then it is callable on its own so
+     * the two can be held against each other. The frame rate is
+     * sampleRate / hopSize, so the BIC parameters, given in frames, mean the
+     * same at 22050 Hz with a hop of 512 as at 44100 Hz with a hop of 1024.
+     */
+    std::vector<float> analyzeNative(const juce::File& audioFile,
+                                     const Parameters& params,
+                                     const std::atomic<bool>* shouldAbort = nullptr);
 
 private:
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (SBicSegmenter)

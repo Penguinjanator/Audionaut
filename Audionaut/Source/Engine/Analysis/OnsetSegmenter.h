@@ -55,6 +55,25 @@ public:
                                const Parameters& params,
                                const std::atomic<bool>* shouldAbort = nullptr);
 
+    /**
+     * @brief The parameters the native implementation is calibrated for:
+     *        22050 Hz, analysed in 2048-sample frames with a hop of 512.
+     *        Becomes the default once Essentia goes.
+     */
+    static Parameters nativeDefaults();
+
+    /**
+     * @brief The native implementation, independent of Essentia:
+     *        AnalysisAudioLoader -> Stft -> OnsetStrength -> peak picking.
+     *
+     * What analyze() runs in builds without Essentia, and what it becomes
+     * once Essentia goes; until then callable on its own so the two can be
+     * held against each other.
+     */
+    std::vector<float> analyzeNative(const juce::File& audioFile,
+                                     const Parameters& params,
+                                     const std::atomic<bool>* shouldAbort = nullptr);
+
 private:
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (OnsetSegmenter)
 };
