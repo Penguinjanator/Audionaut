@@ -149,6 +149,10 @@ private:
     void loadStartupProject();
     void startProjectMonitor();
 
+    /** The startup prompts (restore, consent, crash report), chained; run last,
+        once the main window is up and the splash screen has gone. */
+    void showStartupPrompts();
+
     /** Serves agent commands against the open document, so they never reach
         the project file behind the user's back. */
     void startAgentHost();

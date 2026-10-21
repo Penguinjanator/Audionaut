@@ -8,6 +8,7 @@
 
 #include <cstdint>
 #include <cstring>
+#include <utility>
 
 #if JUCE_WINDOWS
  #ifndef PSAPI_VERSION
@@ -450,6 +451,20 @@ void CrashReporter::install()
 CrashReporter::CrashReporter (UsageEventLogger logUsageEvent_) :
     logUsageEvent (std::move (logUsageEvent_))
 {
+    // take the last run's report now: whatever crashes between here and
+    // offerPendingReport() (loading the startup project, say) writes a new
+    // file, and this one would be lost
+    const auto file = reportFile();
+
+    if (! file.existsAsFile())
+        return;
+
+    const auto report = file.loadFileAsString();
+    const auto crashTime = file.getLastModificationTime();
+    file.deleteFile(); // consumed now, so a crash while asking can't loop
+
+    if (report.trim().isNotEmpty())
+        pendingReport = report.trimEnd() + "\n\nCrash time: " + crashTime.toISO8601 (true) + "\n";
 }
 
 CrashReporter::~CrashReporter()
@@ -460,19 +475,10 @@ CrashReporter::~CrashReporter()
 
 void CrashReporter::offerPendingReport()
 {
-    const auto file = reportFile();
-
-    if (! file.existsAsFile())
+    if (pendingReport.isEmpty())
         return;
 
-    auto report = file.loadFileAsString();
-    const auto crashTime = file.getLastModificationTime();
-    file.deleteFile(); // consumed now, so a crash while asking can't loop
-
-    if (report.trim().isEmpty())
-        return;
-
-    report = report.trimEnd() + "\n\nCrash time: " + crashTime.toISO8601 (true) + "\n";
+    const auto report = std::exchange (pendingReport, {});
 
     // "SIGSEGV (segmentation fault) at 0x..." / "exception 0xc0000005 at
     // module+0x..." / "abort (...)": the kind is what precedes the address

@@ -235,6 +235,12 @@ void AudiumApplication::handleAsyncUpdate()
     if (getPreferences().getValue(PreferenceKeys::browserWindowOpen) == "true")
         showFileBrowserWindow();
 
+    // takes the last run's crash report before the startup project can
+    // crash this one
+    crashReporter = std::make_unique<CrashReporter> ([this] (const juce::String& name, const juce::StringPairArray& params) {
+        logUsageEvent (name, params);
+    });
+
     loadStartupProject();
 
     updateUI();
@@ -247,10 +253,19 @@ void AudiumApplication::handleAsyncUpdate()
         splashScreen.release(); // SplashScreen deletes itself (DeletedAtShutdown) once the delay/click fires
     }
 
-    crashReporter = std::make_unique<CrashReporter> ([this] (const juce::String& name, const juce::StringPairArray& params) {
-        logUsageEvent (name, params);
-    });
+    updateChecker = std::make_unique<audium::UpdateChecker> (getPreferences());
+    updateChecker->checkOnStartupIfDue();
 
+    // last: the prompts belong over the open main window, so wait until the
+    // window is mapped and painted and the splash (0.5 s) has gone
+    Timer::callAfterDelay (750, [this] {
+        if (mainWindow != nullptr)
+            showStartupPrompts();
+    });
+}
+
+void AudiumApplication::showStartupPrompts()
+{
     // one prompt at a time: restore first (it is about the user's work),
     // then consent (the crash event is only logged with it decided), then
     // the crash report
@@ -259,9 +274,6 @@ void AudiumApplication::handleAsyncUpdate()
             crashReporter->offerPendingReport();
         });
     });
-
-    updateChecker = std::make_unique<audium::UpdateChecker> (getPreferences());
-    updateChecker->checkOnStartupIfDue();
 }
 
 void AudiumApplication::loadStartupProject()
@@ -493,6 +505,18 @@ void AudiumApplication::askForUsageStatisticsConsent(std::function<void ()> then
                                                                   "You can change this anytime in Settings > Privacy."),
                                                            TRANS ("Share"),
                                                            TRANS ("No thanks"));
+
+    // owned by the main window, not a window of its own: a sheet on macOS,
+    // an owned dialog on Windows; on Linux the box is a JUCE AlertWindow,
+    // which only a parent component puts inside the window (the associated
+    // component would only centre it on screen, and both together misplace it)
+    if (mainWindow != nullptr) {
+       #if JUCE_LINUX || JUCE_BSD
+        options = options.withParentComponent (mainWindow->getContentComponent());
+       #else
+        options = options.withAssociatedComponent (mainWindow.get());
+       #endif
+    }
 
     NativeMessageBox::showAsync (options, [this, then] (int result) {
         const auto accepted = result == 0;

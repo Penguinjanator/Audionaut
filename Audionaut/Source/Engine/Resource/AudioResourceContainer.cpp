@@ -567,9 +567,13 @@ std::shared_ptr<AudioThumbnail> AudioResourceContainer::getThumbnailForResource(
     if (resource == nullptr || resource->audioFormatReader == nullptr)
         return nullptr;
 
+    // the map holds a weak reference per file ever asked for; drop the ones
+    // whose thumbnail is gone so it does not grow for the life of the engine
+    std::erase_if(sharedThumbnails, [](const auto& entry) { return entry.second.expired(); });
+
     const auto key = resource->getUrl().toString(true);
-    if (auto existing = sharedThumbnails[key].lock())
-        return existing;
+    if (auto found = sharedThumbnails.find(key); found != sharedThumbnails.end())
+        return found->second.lock();
 
     constexpr int sourceSamplesPerThumbnailSample = 64;
     auto thumbnail = std::make_shared<AudioThumbnail>(sourceSamplesPerThumbnailSample, *formatManager, *audioThumbnailCache);

@@ -591,9 +591,10 @@ json ProjectFileStore::documentOf (json state)
     return state;
 }
 
-/** Calls `f (clip)` for every play list item of every track in `state`. */
-template <typename Function>
-static void forEachClip (json& state, Function&& f)
+/** Calls `f (clip)` for every play list item of every track in `state`
+    (`State` is `json` or `const json`). */
+template <typename State, typename Function>
+static void forEachClip (State& state, Function&& f)
 {
     auto audium = state.find ("audium");
     if (audium == state.end() || ! audium->is_object())
@@ -628,10 +629,10 @@ static std::string clipKey (const json& clip)
 /** Puts `live`'s clip selection on `state`: a click while a verb ran is the
     user's, and the verb's engine never saw it. A clip the verb created is
     unselected. */
-static void carrySelection (json live, json& state)
+static void carrySelection (const json& live, json& state)
 {
     std::set<std::string> selected;
-    forEachClip (live, [&] (json& clip) {
+    forEachClip (live, [&] (const json& clip) {
         if (clip.value ("selected", false))
             selected.insert (clipKey (clip));
     });

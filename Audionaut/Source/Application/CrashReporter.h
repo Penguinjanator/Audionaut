@@ -34,14 +34,14 @@ namespace audium {
  * main thread gets an alternate signal stack, so a stack overflow there
  * still produces a report (other threads' overflows do not).
  *
- * offerPendingReport() runs on the next GUI start: if a report is waiting,
- * it shows the report, lets the user add what they were doing, and on
- * "Send Report" files it as a GitHub issue through the feature-request
- * relay that the MCP server's report_bug also uses. If the relay can't be
- * reached, it opens a prefilled issue page in the browser. The file is
- * consumed before the dialog appears, so a crash while asking can't nag
- * forever. The send runs on a thread the reporter owns and stops before it
- * goes away.
+ * On the next GUI start the constructor takes the report file, so a crash
+ * later in that startup (loading the startup project, say) can't overwrite
+ * it, and a crash while asking can't nag forever. offerPendingReport() then
+ * shows the report, lets the user add what they were doing, and on "Send
+ * Report" files it as a GitHub issue through the feature-request relay that
+ * the MCP server's report_bug also uses. If the relay can't be reached, it
+ * opens a prefilled issue page in the browser. The send runs on a thread
+ * the reporter owns and stops before it goes away.
  *
  * Release builds are stripped, so the backtrace is addresses. They are
  * symbolicated by hand with the release's dSYM / PDB: on macOS use
@@ -61,8 +61,10 @@ public:
     /// Where the handler writes the report, in the app data folder.
     static juce::File reportFile();
 
-    /// logUsageEvent receives one "app_crash" event per found report (the
-    /// app's logger drops it unless the user opted in to usage statistics).
+    /// Takes (and deletes) the report the last run left, if any; construct
+    /// before anything that could crash this run. logUsageEvent receives one
+    /// "app_crash" event per found report (the app's logger drops it unless
+    /// the user opted in to usage statistics).
     explicit CrashReporter (UsageEventLogger logUsageEvent);
     ~CrashReporter();
 
@@ -88,6 +90,7 @@ private:
                             const juce::String& report, const juce::String& comment);
 
     UsageEventLogger logUsageEvent;
+    juce::String pendingReport;
     std::unique_ptr<juce::AlertWindow> window;
     std::unique_ptr<juce::TextEditor> reportView;
     std::unique_ptr<Sender> sender;
