@@ -9,11 +9,12 @@
 #include <memory>
 #include <JuceHeader.h>
 
+#include "Engine/Resource/audium_AudioThumbnail.h"
+
 namespace audium {
 class AudiumEngine;
 class AudioTrack;
 class AudioResource;
-class AudioThumbnail;
 class PlayListItem;
 }
 
@@ -41,9 +42,19 @@ public:
     void changeListenerCallback (juce::ChangeBroadcaster*) override;
 
 private:
+    // The draw caches of one clip's ghost extensions: the thumbnail is
+    // shared per file, so each extension keeps its own columns. Both channel
+    // rows of a side share one (a cache holds all channels of its range).
+    struct GhostCaches
+    {
+        audium::AudioThumbnail::DrawCache fadeIn, fadeOut;
+        juce::uint32 paintPass = 0;   // the last paint() that drew this clip
+    };
+
     void paintItemExtensions (juce::Graphics& g,
                               const audium::PlayListItem& item,
-                              juce::Range<double> clipRange);
+                              juce::Range<double> clipRange,
+                              GhostCaches& caches);
 
     // Thumbnails for the ghost waveforms, one per source file (keyed by URL;
     // the heavy data is shared through the engine's AudioThumbnailCache).
@@ -55,6 +66,12 @@ private:
     std::shared_ptr<ZoomHandler> zoomHandler;
 
     std::map<juce::String, std::shared_ptr<audium::AudioThumbnail>> thumbnails;
+
+    // keyed by the clip; entries a paint pass did not draw are dropped at its
+    // end, so removed clips don't accumulate (an address reused by a new clip
+    // simply misses on its parameters and refills)
+    std::map<const audium::PlayListItem*, GhostCaches> ghostCaches;
+    juce::uint32 paintPass = 0;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (ClipFadeOverlay)
 };

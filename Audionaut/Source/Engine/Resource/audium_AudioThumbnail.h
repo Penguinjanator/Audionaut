@@ -64,6 +64,35 @@ public:
     ~AudioThumbnail() override;
 
     //==============================================================================
+    class CachedWindow;
+
+    /** The per-pixel min/max columns one caller draws from.
+
+        The thumbnail is shared per file, so each caller (a clip row view, a
+        ghost extension of a fade) owns the cache of its own range and passes
+        it to drawChannel. It refills when the range, width, zoom, the
+        thumbnail or its level data changed - never because another caller
+        drew in between.
+    */
+    class DrawCache
+    {
+    public:
+        DrawCache();
+        ~DrawCache();
+        DrawCache (DrawCache&&) noexcept;
+        DrawCache& operator= (DrawCache&&) noexcept;
+
+        /** How often the columns were rebuilt - diagnostics and tests. */
+        int64 getNumRefills() const noexcept;
+
+    private:
+        friend class AudioThumbnail;
+        std::unique_ptr<CachedWindow> window;
+
+        JUCE_DECLARE_NON_COPYABLE (DrawCache)
+    };
+
+    //==============================================================================
     /** Clears and resets the thumbnail. */
     void clear() override;
 
@@ -162,6 +191,10 @@ public:
     /** Same as drawChannel(), but scales each pixel column by the given
         amplitude envelope (the clip fades). A nullptr envelope means a
         flat 1.0, i.e. identical to the plain overload.
+
+        Both overloads without a DrawCache draw through one window owned by
+        the thumbnail, so callers that take turns on different ranges
+        rebuild it every time. Views pass their own cache instead.
     */
     void drawChannel (Graphics& g,
                       const juce::Rectangle<int>& area,
@@ -170,6 +203,16 @@ public:
                       int channelNum,
                       float verticalZoomFactor,
                       const WaveformEnvelope* envelope);
+
+    /** Draws from the caller's own cache of this range, see DrawCache. */
+    void drawChannel (Graphics& g,
+                      const juce::Rectangle<int>& area,
+                      double startTimeSeconds,
+                      double endTimeSeconds,
+                      int channelNum,
+                      float verticalZoomFactor,
+                      const WaveformEnvelope* envelope,
+                      DrawCache& cache);
 
     /** Draws the waveforms for all channels in the thumbnail.
 
@@ -219,18 +262,20 @@ private:
     class LevelDataSource;
     struct MinMaxValue;
     class ThumbData;
-    class CachedWindow;
 
     std::unique_ptr<LevelDataSource> source;
 
-    // One cached window per view of this thumbnail (it is shared per file,
-    // and every clip cut from the file draws its own range): a draw reuses
-    // the window with its parameters, or takes the least recently used one.
-    static constexpr int maxCachedWindows = 32;
-    std::vector<std::unique_ptr<CachedWindow>> windows;
-    uint32 windowUseCounter = 0;
-    CachedWindow& windowFor (int numSamples, double startTime, double endTime);
-    void invalidateWindows();
+    // the window the overloads without a DrawCache draw through
+    std::unique_ptr<CachedWindow> fallbackWindow;
+
+    // bumped whenever the level data changes; a window filled under an older
+    // generation (or from another thumbnail) refills on its next draw
+    uint32 levelsGeneration = 0;
+
+    void drawChannel (Graphics& g, const juce::Rectangle<int>& area,
+                      double startTimeSeconds, double endTimeSeconds,
+                      int channelNum, float verticalZoomFactor,
+                      const WaveformEnvelope* envelope, CachedWindow& window);
     OwnedArray<ThumbData> channels;
 
     int32 samplesPerThumbSample = 0;

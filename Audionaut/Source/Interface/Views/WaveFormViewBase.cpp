@@ -75,7 +75,8 @@ void WaveFormViewBase::paint (juce::Graphics& g)
                                         endSeconds,
                                         channel,
                                         verticalZoomFactor * getClipGain(),
-                                        envelopePtr);
+                                        envelopePtr,
+                                        drawCache);
         }
         else {
             std::cout << "error WaveFormViewBase channel mapping." << std::endl;
@@ -172,9 +173,11 @@ void WaveFormViewBase::createThumbnailCache()
             jassert(audioThumbnail);
         }
         
+        // the thumbnail is shared with every other view of the file, so
+        // nothing per view (the colour, say) is set on it: paint() applies
+        // the view's own colour
         if (audioThumbnail != nullptr) {
             audioThumbnail->addChangeListener(this);
-            audioThumbnail->setColour(colour);
         }
         
     }
