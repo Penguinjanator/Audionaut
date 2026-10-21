@@ -420,6 +420,10 @@
                 file="Source/Engine/Resource/AudioResourceContainer.cpp"/>
           <FILE id="W21ktc" name="AudioResourceContainer.h" compile="0" resource="0"
                 file="Source/Engine/Resource/AudioResourceContainer.h"/>
+          <FILE id="WylrD8" name="audium_AudioThumbnail.cpp" compile="1" resource="0"
+                file="Source/Engine/Resource/audium_AudioThumbnail.cpp"/>
+          <FILE id="iIxYr4" name="audium_AudioThumbnail.h" compile="0" resource="0"
+                file="Source/Engine/Resource/audium_AudioThumbnail.h"/>
           <FILE id="MR7guu" name="AudioResourceData.h" compile="0" resource="0"
                 file="Source/Engine/Resource/AudioResourceData.h"/>
           <FILE id="h0LKN6" name="ChannelMapping.cpp" compile="1" resource="0"
@@ -541,10 +545,6 @@
         </GROUP>
         <FILE id="WxdqR9" name="ColourIds.h" compile="0" resource="0" file="Source/Interface/ColourIds.h"/>
         <GROUP id="{5B27ED8A-CA94-0C20-47D2-019C8929A810}" name="Widgets">
-          <FILE id="WylrD8" name="audium_AudioThumbnail.cpp" compile="1" resource="0"
-                file="Source/Interface/Widgets/audium_AudioThumbnail.cpp"/>
-          <FILE id="iIxYr4" name="audium_AudioThumbnail.h" compile="0" resource="0"
-                file="Source/Interface/Widgets/audium_AudioThumbnail.h"/>
           <FILE id="SSghHx" name="audium_ListBox.cpp" compile="1" resource="0"
                 file="Source/Interface/Widgets/audium_ListBox.cpp"/>
           <FILE id="zmkbt8" name="audium_ListBox.h" compile="0" resource="0"

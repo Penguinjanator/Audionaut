@@ -330,6 +330,7 @@
     <ClCompile Include="..\..\Source\Engine\Recording\RecordingActionHandler.cpp"/>
     <ClCompile Include="..\..\Source\Engine\Resource\AudioResource.cpp"/>
     <ClCompile Include="..\..\Source\Engine\Resource\AudioResourceContainer.cpp"/>
+    <ClCompile Include="..\..\Source\Engine\Resource\audium_AudioThumbnail.cpp"/>
     <ClCompile Include="..\..\Source\Engine\Resource\ChannelMapping.cpp"/>
     <ClCompile Include="..\..\Source\Engine\Separation\Demucs\DemucsRunner.cpp">
       <AdditionalOptions>/bigobj /w /I..\..\..\Submodules\demucs.cpp\vendor\eigen /I..\..\..\Submodules\demucs.cpp\src %(AdditionalOptions)</AdditionalOptions>
@@ -342,7 +343,6 @@
     <ClCompile Include="..\..\Source\Engine\AudiumEngine.cpp"/>
     <ClCompile Include="..\..\Source\Interface\LookAndFeel\AudiumLookAndFeel.cpp"/>
     <ClCompile Include="..\..\Source\Interface\LookAndFeel\TrackColourLookAndFeel.cpp"/>
-    <ClCompile Include="..\..\Source\Interface\Widgets\audium_AudioThumbnail.cpp"/>
     <ClCompile Include="..\..\Source\Interface\Widgets\audium_ListBox.cpp"/>
     <ClCompile Include="..\..\Source\Interface\Handlers\SnapToGridHandler.cpp"/>
     <ClCompile Include="..\..\Source\Interface\Handlers\ZoomHandler.cpp"/>
@@ -3568,6 +3568,7 @@
     <ClInclude Include="..\..\Source\Engine\Recording\RecordingActionHandler.h"/>
     <ClInclude Include="..\..\Source\Engine\Resource\AudioResource.h"/>
     <ClInclude Include="..\..\Source\Engine\Resource\AudioResourceContainer.h"/>
+    <ClInclude Include="..\..\Source\Engine\Resource\audium_AudioThumbnail.h"/>
     <ClInclude Include="..\..\Source\Engine\Resource\AudioResourceData.h"/>
     <ClInclude Include="..\..\Source\Engine\Resource\ChannelMapping.h"/>
     <ClInclude Include="..\..\Source\Engine\Separation\Demucs\DemucsRunner.h"/>
@@ -3611,7 +3612,6 @@
     <ClInclude Include="..\..\Source\Interface\Dialogs\NewRegionDialog.h"/>
     <ClInclude Include="..\..\Source\Interface\Dialogs\SettingsDialog.h"/>
     <ClInclude Include="..\..\Source\Interface\ColourIds.h"/>
-    <ClInclude Include="..\..\Source\Interface\Widgets\audium_AudioThumbnail.h"/>
     <ClInclude Include="..\..\Source\Interface\Widgets\audium_ListBox.h"/>
     <ClInclude Include="..\..\Source\Interface\Handlers\SnapToGridHandler.h"/>
     <ClInclude Include="..\..\Source\Interface\Handlers\ZoomHandler.h"/>

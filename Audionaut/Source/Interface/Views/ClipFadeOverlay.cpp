@@ -21,7 +21,7 @@
 #include "Interface/Controls/DraggerControl.h"
 #include "Interface/Components/MiddlePanel/ArrangementView/AudioTrackComponent.h"
 #include "Interface/Views/WaveFormViewBase.h"
-#include "Interface/Widgets/audium_AudioThumbnail.h"
+#include "Engine/Resource/audium_AudioThumbnail.h"
 
 using namespace juce;
 
