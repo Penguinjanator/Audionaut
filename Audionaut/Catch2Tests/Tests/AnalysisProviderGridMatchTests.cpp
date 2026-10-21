@@ -3,8 +3,7 @@
 #include "Engine/Analysis/AnalysisProvider.h"
 #include "Engine/Provider/TempoProvider.h"
 
-// matchesGrid() is pure and free of Essentia, so everything here runs
-// unconditionally.
+// matchesGrid() is pure, so everything here runs without an analysis.
 
 using namespace audium;
 

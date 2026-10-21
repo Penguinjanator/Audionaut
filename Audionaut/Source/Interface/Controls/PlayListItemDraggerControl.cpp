@@ -181,12 +181,12 @@ void PlayListItemDraggerControl::updateAnalysisPaintCache() const
             continue;
 
         const auto audioFile = resource->getLocalFile();
-        const auto bpm = analysisProvider->getBpm(audium::AnalysisType::BeatDegara, audioFile);
+        const auto bpm = analysisProvider->getBpm(audium::AnalysisType::Beats, audioFile);
 
         if (bpm > 0.0f)
             bpms.add(juce::String(bpm, 1));
 
-        const auto beats = analysisProvider->getSegments(audium::AnalysisType::BeatDegara, audioFile);
+        const auto beats = analysisProvider->getSegments(audium::AnalysisType::Beats, audioFile);
 
         if (bpm <= 0.0f || beats.empty())
             continue;

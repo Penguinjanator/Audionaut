@@ -95,7 +95,7 @@ read or edit them.
 | `create_project` | `create` | New empty `.audium` package |
 | `import_audio` | `import` | Add audio files (creates a new track) |
 | `export_audio` | `export` | Offline render to WAV, FLAC, AIFF, Ogg Vorbis or MP3 |
-| `analyze` | `analyze` | Essentia analysis, cached next to the project |
+| `analyze` | `analyze` | Segment, beat and onset analysis, cached next to the project |
 | `auto_edit` | `auto-edit` | Segment a clip using cached analysis |
 | `assemble` | `assemble` | Build an arrangement from regions |
 | `split` | `split` | Split clips at a timeline position (bars/beats/seconds/clocks) |
@@ -116,8 +116,8 @@ read or edit them.
 
 A typical agent flow: `create_project` → `import_audio` → `analyze` →
 `auto_edit`/`assemble` → `export_audio`. CLI errors come back as tool errors
-carrying the CLI's own `code: message` (e.g. `essentia_unavailable: ...` in
-builds without Essentia), so agents can react.
+carrying the CLI's own `code: message` (e.g. `demucs_unavailable: ...` in
+builds without stem separation), so agents can react.
 
 ## Feature requests and bug reports from agents
 

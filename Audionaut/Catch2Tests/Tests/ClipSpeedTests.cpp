@@ -965,7 +965,7 @@ SCENARIO("locking seeds the clip tempo from the beat analysis", "[engine][clipsp
 
         WHEN("the analysis cache knows the source's tempo")
         {
-            provider->getCache()->put(file, AnalysisType::BeatDegara, { 0.5f, 1.0f, 1.5f }, 96.0f);
+            provider->getCache()->put(file, AnalysisType::Beats, { 0.5f, 1.0f, 1.5f }, 96.0f);
             const auto known = ClipTempo::lockToTempo(*item, *provider);
 
             THEN("the clip takes it")

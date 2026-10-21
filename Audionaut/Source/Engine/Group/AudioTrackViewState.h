@@ -50,7 +50,7 @@ public:
     bool getMinimized() const { return isMinimized; }
     void setMinimized(bool minimized) { isMinimized = minimized; }
 
-    // Which analysis types (SBic/onset/beat) are shown in this track's clips.
+    // Which analysis types (segments/onsets/beats) are shown in this track's clips.
     bool isAnalysisTypeVisible(AnalysisType type) const { return visibleAnalysisTypes.count(type) > 0; }
     void setAnalysisTypeVisible(AnalysisType type, bool visible)
     {

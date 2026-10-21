@@ -147,10 +147,11 @@ const std::vector<CliCommandSpec>& getCliCommands()
           runExport },
 
         { "analyze",
-          "analyze <project.audium|audio-file> [--types sbic,beat_degara] [--json]",
-          "Runs audio analysis (Essentia) and caches the results.",
+          "analyze <project.audium|audio-file> [--types segments,beats,onsets] [--json]",
+          "Runs audio analysis and caches the results.",
           "Analyses the project's audio files (or one given file) and persists the results next to the "
-          "project so auto-edit/assemble and the GUI can reuse them. Exits 3 in builds without Essentia.",
+          "project so auto-edit/assemble and the GUI can reuse them. --types defaults to the pair "
+          "auto-edit needs (segments,beats).",
           runAnalyze },
 
         { "auto-edit",

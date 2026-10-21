@@ -21,7 +21,7 @@
 
 // The assemble step arranges the regions a previous auto edit cut, so the
 // engine scenarios run a native auto edit first - fed from a hand-populated
-// analysis cache, like the AutoEdit scenarios, so no Essentia is needed.
+// analysis cache, like the AutoEdit scenarios, so no analysis runs.
 
 using namespace audium;
 
@@ -138,8 +138,8 @@ void cacheMergeAnalyses(const Fixture& fixture)
 {
     auto cache = fixture.engine->getAudioTrackContainer()->getAnalysisProvider()->getCache();
 
-    cache->put(fixture.analysedFile, AnalysisType::SBic, evenTimes(0.0f, 2.5f, 8));
-    cache->put(fixture.analysedFile, AnalysisType::BeatDegara, evenTimes(0.0f, 0.5f, 40));
+    cache->put(fixture.analysedFile, AnalysisType::Segments, evenTimes(0.0f, 2.5f, 8));
+    cache->put(fixture.analysedFile, AnalysisType::Beats, evenTimes(0.0f, 0.5f, 40));
 }
 
 // Cuts the fixture's clip into segments, giving the assemble scenarios several

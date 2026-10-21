@@ -12,10 +12,9 @@ juce::Colour SegmentationView::colourForType(audium::AnalysisType analysisType)
 {
     switch (analysisType)
     {
-        case audium::AnalysisType::SBic:       return Colours::orange;
-        case audium::AnalysisType::Onset:      return Colours::cyan;
-        case audium::AnalysisType::Beat:       return Colours::yellow;
-        case audium::AnalysisType::BeatDegara: return Colours::magenta;
+        case audium::AnalysisType::Segments: return Colours::orange;
+        case audium::AnalysisType::Onsets:   return Colours::cyan;
+        case audium::AnalysisType::Beats:    return Colours::magenta;
     }
 
     return Colours::white;
@@ -31,9 +30,9 @@ void SegmentationView::paint (juce::Graphics& g)
 
     for (const auto& [analysisType, segments] : segmentsByType)
     {
-        // Onsets are drawn as short top ticks; SBic/Beat boundaries span the
-        // full height so they read as region divisions.
-        const auto isOnset = (analysisType == audium::AnalysisType::Onset);
+        // Onsets are drawn as short top ticks; segment and beat boundaries
+        // span the full height so they read as region divisions.
+        const auto isOnset = (analysisType == audium::AnalysisType::Onsets);
         const auto lineBottom = isOnset ? fHeight * 0.25f : fHeight;
 
         g.setColour (colourForType(analysisType).withAlpha (0.7f));

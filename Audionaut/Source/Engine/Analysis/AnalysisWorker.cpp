@@ -28,10 +28,9 @@ AnalysisWorker::AnalysisWorker(std::shared_ptr<AnalysisProvider> analysisProvide
 const std::vector<AnalysisType>& AnalysisWorker::canonicalAnalysisTypes()
 {
     static const std::vector<AnalysisType> types {
-        AnalysisType::SBic,
-        AnalysisType::BeatDegara,
-        AnalysisType::Onset,
-        AnalysisType::Beat
+        AnalysisType::Segments,
+        AnalysisType::Beats,
+        AnalysisType::Onsets
     };
     return types;
 }
@@ -57,11 +56,10 @@ AnalysisWorker::~AnalysisWorker()
 {
     // Abandon the work rather than finish it: the queue is dropped and the
     // analysis running right now (if any) is told to give up at its next
-    // stage, so the wait below is bounded by a single Essentia stage instead
-    // of the rest of the file. The Essentia calls themselves cannot be
-    // interrupted, so the thread is never killed - a thread killed inside
-    // Essentia or the allocator would leave locks held that the exiting main
-    // thread then blocks on, which is worse than the wait.
+    // stage, so the wait below is bounded by a single analysis stage instead
+    // of the rest of the file. The thread is never killed - a thread killed
+    // inside the decoder or the allocator would leave locks held that the
+    // exiting main thread then blocks on, which is worse than the wait.
     abortRequested = true;
     cancelAll();
     thread.signalThreadShouldExit();

@@ -137,17 +137,14 @@ public:
         if (component != nullptr &&
             result != 0) {
             
-            if (result == CommandIDs::showSBic) {
-                component->toggleAnalysisVisibility(audium::AnalysisType::SBic);
+            if (result == CommandIDs::showSegments) {
+                component->toggleAnalysisVisibility(audium::AnalysisType::Segments);
             }
             else if (result == CommandIDs::showOnsets) {
-                component->toggleAnalysisVisibility(audium::AnalysisType::Onset);
+                component->toggleAnalysisVisibility(audium::AnalysisType::Onsets);
             }
             else if (result == CommandIDs::showBeats) {
-                component->toggleAnalysisVisibility(audium::AnalysisType::Beat);
-            }
-            else if (result == CommandIDs::showBeatsDegara) {
-                component->toggleAnalysisVisibility(audium::AnalysisType::BeatDegara);
+                component->toggleAnalysisVisibility(audium::AnalysisType::Beats);
             }
             else {
                 auto height = result;
@@ -217,14 +214,12 @@ public:
             
             // Toggle visibility of each analysis overlay (ticked = currently shown).
             PopupMenu showMenu;
-            showMenu.addItem (CommandIDs::showSBic, TRANS ("SBic"), true,
-                              audioTrack->getViewState().isAnalysisTypeVisible (audium::AnalysisType::SBic));
+            showMenu.addItem (CommandIDs::showSegments, TRANS ("Segments"), true,
+                              audioTrack->getViewState().isAnalysisTypeVisible (audium::AnalysisType::Segments));
             showMenu.addItem (CommandIDs::showOnsets, TRANS ("Onsets"), true,
-                              audioTrack->getViewState().isAnalysisTypeVisible (audium::AnalysisType::Onset));
+                              audioTrack->getViewState().isAnalysisTypeVisible (audium::AnalysisType::Onsets));
             showMenu.addItem (CommandIDs::showBeats, TRANS ("Beats"), true,
-                              audioTrack->getViewState().isAnalysisTypeVisible (audium::AnalysisType::Beat));
-            showMenu.addItem (CommandIDs::showBeatsDegara, TRANS ("Beats (Degara)"), true,
-                              audioTrack->getViewState().isAnalysisTypeVisible (audium::AnalysisType::BeatDegara));
+                              audioTrack->getViewState().isAnalysisTypeVisible (audium::AnalysisType::Beats));
 
             m.addSubMenu("Show Analysis", showMenu);
             

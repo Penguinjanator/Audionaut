@@ -13,14 +13,17 @@
 #include <atomic>
 #include <chrono>
 #include <cmath>
+#include <cstdlib>
+#include <fstream>
+#include <utility>
 
 using namespace audium;
 using namespace analysisReference;
 
-// The native beat tracking and onset detection (AnalysisAudioLoader -> Stft
-// -> OnsetStrength -> TempoEstimator / BeatTracker, or peak picking) held
-// against a synthetic click track and against what Essentia produced for
-// the test recordings. Runs in every build, with or without Essentia.
+// The beat tracking and onset detection (AnalysisAudioLoader -> Stft ->
+// OnsetStrength -> TempoEstimator / BeatTracker, or peak picking) held
+// against a synthetic click track. AnalysisReferenceTests holds them against
+// what Essentia produced for the test recordings.
 
 namespace {
 
@@ -72,7 +75,7 @@ std::vector<float> beatGrid(double bpm, double seconds)
 
 } // namespace
 
-SCENARIO("The native beat tracking follows a click track", "[engine][analysis][beats][native]")
+SCENARIO("The beat tracking follows a click track", "[engine][analysis][beats]")
 {
     for (auto sampleRate : { 44100.0, 48000.0 })
     {
@@ -82,10 +85,10 @@ SCENARIO("The native beat tracking follows a click track", "[engine][analysis][b
             const auto grid = beatGrid(120.0, 30.0);
 
             BeatSegmenter beatSegmenter;
-            const auto rhythm = beatSegmenter.analyzeNative(file, BeatSegmenter::nativeDefaults());
+            const auto rhythm = beatSegmenter.analyze(file);
 
             OnsetSegmenter onsetSegmenter;
-            const auto onsets = onsetSegmenter.analyzeNative(file, OnsetSegmenter::nativeDefaults());
+            const auto onsets = onsetSegmenter.analyze(file);
 
             const auto beatF = fMeasure(grid, rhythm.beats, beatToleranceSeconds);
             const auto onsetRecall = agreement(grid, onsets, onsetToleranceSeconds);
@@ -109,8 +112,8 @@ SCENARIO("The native beat tracking follows a click track", "[engine][analysis][b
 
         THEN("nothing comes back")
         {
-            CHECK(beatSegmenter.analyzeNative(missing, BeatSegmenter::nativeDefaults()).beats.empty());
-            CHECK(onsetSegmenter.analyzeNative(missing, OnsetSegmenter::nativeDefaults()).empty());
+            CHECK(beatSegmenter.analyze(missing).beats.empty());
+            CHECK(onsetSegmenter.analyze(missing).empty());
         }
     }
 
@@ -123,8 +126,8 @@ SCENARIO("The native beat tracking follows a click track", "[engine][analysis][b
 
         THEN("the analyses are abandoned")
         {
-            CHECK(beatSegmenter.analyzeNative(file, BeatSegmenter::nativeDefaults(), &abort).beats.empty());
-            CHECK(onsetSegmenter.analyzeNative(file, OnsetSegmenter::nativeDefaults(), &abort).empty());
+            CHECK(beatSegmenter.analyze(file, BeatSegmenter::Parameters(), &abort).beats.empty());
+            CHECK(onsetSegmenter.analyze(file, OnsetSegmenter::Parameters(), &abort).empty());
         }
 
         file.deleteFile();
@@ -134,14 +137,29 @@ SCENARIO("The native beat tracking follows a click track", "[engine][analysis][b
 // Hidden: for each recording, the tempo the estimator picks under various
 // priors, and the strongest autocorrelation lags it chooses from. Run with
 // "[tempo-sweep]" and the compact reporter.
-SCENARIO("Native tempo prior sweep", "[.][tempo-sweep]")
+SCENARIO("Tempo prior sweep", "[.][tempo-sweep]")
 {
+    // The recordings with a reference tempo, plus any extra audio files named
+    // in TEMPO_SWEEP_FILES (colon separated); TEMPO_SWEEP_DUMP_DIR receives
+    // each envelope's autocorrelation as JSON for prototyping a tempo rule.
+    std::vector<std::pair<std::string, Fixture>> material;
     for (const auto& name : recordings)
     {
         Fixture fixture;
-        if (load(name, fixture))
-            continue;
+        if (! load(name, fixture))
+            material.emplace_back(name, fixture);
+    }
+    if (const auto* extra = std::getenv("TEMPO_SWEEP_FILES"))
+        for (const auto& path : juce::StringArray::fromTokens(juce::String(extra), ":", {}))
+        {
+            Fixture fixture;
+            fixture.audioFile = juce::File(path);
+            if (fixture.audioFile.existsAsFile())
+                material.emplace_back(fixture.audioFile.getFileNameWithoutExtension().toStdString(), fixture);
+        }
 
+    for (const auto& [name, fixture] : material)
+    {
         AnalysisAudioLoader loader;
         AnalysisAudioLoader::Parameters loaderParams;
         loaderParams.targetSampleRate = 22050.0;
@@ -170,6 +188,21 @@ SCENARIO("Native tempo prior sweep", "[.][tempo-sweep]")
                 peaks.emplace_back(ac[(size_t) lag] / ac[0], lag);
         }
         std::sort(peaks.rbegin(), peaks.rend());
+
+        if (const auto* dumpDir = std::getenv("TEMPO_SWEEP_DUMP_DIR"))
+        {
+            nlohmann::json dump;
+            dump["name"] = name;
+            dump["fps"] = fps;
+            dump["referenceBpm"] = fixture.bpm;
+            std::vector<double> normalised;
+            for (auto value : ac)
+                normalised.push_back(ac[0] > 0.0 ? value / ac[0] : 0.0);
+            dump["autocorrelation"] = normalised;
+            std::ofstream out(juce::File(dumpDir).getChildFile(name + ".ac.json").getFullPathName().toStdString());
+            out << dump.dump() << "\n";
+        }
+
         report += "  ac peaks:";
         for (size_t i = 0; i < std::min<size_t>(5, peaks.size()); ++i)
             report += " " + std::to_string((int) std::lround(60.0 * fps / peaks[i].second)) + "bpm=" + std::to_string(peaks[i].first).substr(0, 5);
@@ -189,48 +222,5 @@ SCENARIO("Native tempo prior sweep", "[.][tempo-sweep]")
             report += "\n";
         }
         WARN(report);
-    }
-}
-
-SCENARIO("The native beat tracking and onsets agree with the recorded reference", "[engine][analysis][reference][native]")
-{
-    for (const auto& name : recordings)
-    {
-        DYNAMIC_SECTION(name)
-        {
-            Fixture fixture;
-            if (auto reason = load(name, fixture))
-                SKIP(*reason);
-
-            BeatSegmenter beatSegmenter;
-            auto started = std::chrono::steady_clock::now();
-            const auto rhythm = beatSegmenter.analyzeNative(fixture.audioFile, BeatSegmenter::nativeDefaults());
-            const auto beatSeconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - started).count();
-
-            OnsetSegmenter onsetSegmenter;
-            started = std::chrono::steady_clock::now();
-            const auto onsets = onsetSegmenter.analyzeNative(fixture.audioFile, OnsetSegmenter::nativeDefaults());
-            const auto onsetSeconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - started).count();
-
-            const auto beatF = fMeasure(fixture.beats, rhythm.beats, beatToleranceSeconds);
-            const auto onsetF = fMeasure(fixture.onsets, onsets, onsetToleranceSeconds);
-
-            WARN("native rhythm - " << name << " (" << fixture.duration << " s, beats in " << beatSeconds
-                 << " s, onsets in " << onsetSeconds << " s)\n"
-                 << "  beats: " << fixture.beats.size() << " reference / " << rhythm.beats.size()
-                 << " candidate, F = " << beatF << " at " << beatToleranceSeconds << " s\n"
-                 << "  bpm: " << fixture.bpm << " reference / " << rhythm.bpm << " candidate\n"
-                 << "  onsets: " << fixture.onsets.size() << " reference / " << onsets.size()
-                 << " candidate, F = " << onsetF << " at " << onsetToleranceSeconds << " s");
-
-            CHECK_FALSE(rhythm.beats.empty());
-            CHECK(std::is_sorted(rhythm.beats.begin(), rhythm.beats.end()));
-            CHECK(beatF >= minimumBeatFMeasure);
-            CHECK(rhythm.bpm > 0.0f);
-            CHECK(tempoAgrees(rhythm.bpm, fixture.bpm));
-
-            CHECK_FALSE(onsets.empty());
-            CHECK(onsetF >= minimumOnsetFMeasure);
-        }
     }
 }

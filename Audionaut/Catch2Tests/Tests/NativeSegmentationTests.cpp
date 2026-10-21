@@ -12,17 +12,11 @@
 using namespace audium;
 using namespace analysisReference;
 
-// The native segmentation (AnalysisAudioLoader -> Stft -> Mfcc ->
-// BicSegmenter) held against synthetic material and against what Essentia
-// produced for the test recordings. Runs in every build, with or without
-// Essentia.
+// The segmentation chain (AnalysisAudioLoader -> Stft -> Mfcc ->
+// BicSegmenter) held against synthetic material. AnalysisReferenceTests
+// holds it against what Essentia produced for the test recordings.
 
 namespace {
-
-SBicSegmenter::Parameters nativeParameters()
-{
-    return SBicSegmenter::nativeDefaults();
-}
 
 // Writes white noise coloured one way for the first half and the other way
 // for the second: a one-pole low-pass of the noise, then what it took away.
@@ -64,14 +58,14 @@ juce::File writeTwoColoursOfNoise(double sampleRate, double secondsPerHalf)
 
 } // namespace
 
-SCENARIO("The native segmentation cuts where the sound changes", "[engine][analysis][segmentation][native]")
+SCENARIO("The segmentation cuts where the sound changes", "[engine][analysis][segmentation]")
 {
     SBicSegmenter segmenter;
 
     GIVEN("fifteen seconds of one noise colour followed by fifteen of another")
     {
         const auto file = writeTwoColoursOfNoise(44100.0, 15.0);
-        const auto segments = segmenter.analyzeNative(file, nativeParameters());
+        const auto segments = segmenter.analyze(file);
 
         THEN("the boundaries are the ends and the one change")
         {
@@ -89,7 +83,7 @@ SCENARIO("The native segmentation cuts where the sound changes", "[engine][analy
     {
         THEN("nothing comes back")
         {
-            CHECK(segmenter.analyzeNative(juce::File("/non/existent/audio/file.wav"), nativeParameters()).empty());
+            CHECK(segmenter.analyze(juce::File("/non/existent/audio/file.wav")).empty());
         }
     }
 
@@ -100,7 +94,7 @@ SCENARIO("The native segmentation cuts where the sound changes", "[engine][analy
 
         THEN("the analysis is abandoned")
         {
-            CHECK(segmenter.analyzeNative(file, nativeParameters(), &abort).empty());
+            CHECK(segmenter.analyze(file, SBicSegmenter::Parameters(), &abort).empty());
         }
 
         file.deleteFile();
@@ -109,9 +103,9 @@ SCENARIO("The native segmentation cuts where the sound changes", "[engine][analy
 
 // Hidden: reports how the agreement with the reference moves with the
 // complexity penalty, with and without the small-sample correction, for
-// tuning SBicSegmenter::nativeDefaults(). Run with "[bic-sweep]"; the
+// tuning SBicSegmenter::Parameters. Run with "[bic-sweep]"; the
 // compact reporter keeps the boundary lists on one line each.
-SCENARIO("Native segmentation penalty sweep", "[.][bic-sweep]")
+SCENARIO("Segmentation penalty sweep", "[.][bic-sweep]")
 {
     for (auto correct : { true, false })
     for (auto penalty : { 0.5f, 0.6f, 0.65f, 0.7f, 0.75f, 1.0f })
@@ -123,11 +117,11 @@ SCENARIO("Native segmentation penalty sweep", "[.][bic-sweep]")
             if (load(name, fixture))
                 continue;
 
-            auto params = nativeParameters();
+            SBicSegmenter::Parameters params;
             params.complexityPenaltyWeight = penalty;
             params.correctSmallSampleBias = correct;
             SBicSegmenter segmenter;
-            const auto segments = segmenter.analyzeNative(fixture.audioFile, params);
+            const auto segments = segmenter.analyze(fixture.audioFile, params);
             const SegmentComparison comparison(fixture.segments, segments);
             // reference / candidate interior boundaries, then the agreement
             // in each direction
@@ -139,41 +133,5 @@ SCENARIO("Native segmentation penalty sweep", "[.][bic-sweep]")
                 report += "    " + describe(segments) + "\n";
         }
         WARN(report);
-    }
-}
-
-SCENARIO("The native segmentation agrees with the recorded reference", "[engine][analysis][reference][native]")
-{
-    for (const auto& name : recordings)
-    {
-        DYNAMIC_SECTION(name)
-        {
-            Fixture fixture;
-            if (auto reason = load(name, fixture))
-                SKIP(*reason);
-
-            SBicSegmenter segmenter;
-            const auto started = std::chrono::steady_clock::now();
-            const auto segments = segmenter.analyzeNative(fixture.audioFile, nativeParameters());
-            const auto elapsed = std::chrono::duration<double>(std::chrono::steady_clock::now() - started).count();
-
-            const SegmentComparison comparison(fixture.segments, segments);
-
-            WARN("native segmentation - " << name << " (" << fixture.duration << " s, analysed in " << elapsed << " s)\n"
-                 << comparison.report(fixture.segments, segments));
-
-            REQUIRE(segments.size() >= 2);
-            CHECK(segments.front() == Catch::Approx(0.0f).margin(0.001f));
-            CHECK(segments.back() == Catch::Approx((float) fixture.duration).margin(0.1f));
-            CHECK(std::is_sorted(segments.begin(), segments.end()));
-
-            if (! comparison.referenceInterior.empty())
-            {
-                CHECK(comparison.hits >= minimumSegmentAgreement);
-                CHECK(comparison.hitsReverse >= minimumSegmentAgreement);
-                CHECK_FALSE(comparison.candidateInterior.empty());
-                CHECK(comparison.countRatio <= maximumSegmentCountRatio);
-            }
-        }
     }
 }

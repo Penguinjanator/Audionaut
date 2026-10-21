@@ -584,15 +584,16 @@ int runClipSpeed (const juce::ArgumentList& args, CliContext& context)
     else if (lockValue == "on")
     {
         // Seed the clip tempo from the beat analysis, running it now when
-        // the source has none yet (a build without Essentia leaves the
-        // tempo unknown: the clip stays locked at ratio 1.0 until --tempo).
+        // the source has none yet (a file the tracker finds no beats in
+        // leaves the tempo unknown: the clip stays locked at ratio 1.0
+        // until --tempo).
         auto provider = trackContainer.getAnalysisProvider();
 
         if (provider != nullptr && ! ClipTempo::lockToTempo (*match.item, *provider))
         {
             if (auto file = ClipTempo::sourceFile (*match.item); file.existsAsFile())
             {
-                provider->analyzeFile (file, AnalysisType::BeatDegara);
+                provider->analyzeFile (file, AnalysisType::Beats);
                 ClipTempo::lockToTempo (*match.item, *provider);
                 provider->getCache()->saveToFolder (projectFile.getParentDirectory());
             }

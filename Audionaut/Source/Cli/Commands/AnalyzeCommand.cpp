@@ -7,18 +7,6 @@
 #include "Engine/Project/ProjectFileStore.h"
 #include "Cli/CommandSession.h"
 
-// Same auto-detection as the segmenters (see SBicSegmenter.cpp): the CMake
-// builds define ESSENTIA_ENABLED globally, but the Projucer app build relies
-// on per-file header detection - without this block the in-app CLI would
-// report analysis unavailable even though the app links Essentia.
-#ifndef ESSENTIA_ENABLED
- #if __has_include(<essentia/algorithmfactory.h>) && __has_include(<unsupported/Eigen/CXX11/Tensor>)
-  #define ESSENTIA_ENABLED 1
- #else
-  #define ESSENTIA_ENABLED 0
- #endif
-#endif
-
 #include "Engine/Analysis/AnalysisCache.h"
 #include "Engine/Analysis/AnalysisProvider.h"
 #include "Engine/Group/AudioTrack.h"
@@ -33,11 +21,6 @@ namespace cli {
 
 int runAnalyze (const juce::ArgumentList& args, CliContext& context)
 {
-#if ! ESSENTIA_ENABLED
-    juce::ignoreUnused (args);
-    return context.fail (exitUnavailable, "essentia_unavailable",
-                         "this build was made without Essentia, so analysis is unavailable");
-#else
     auto working = args;
     auto typesValue = takeOptionValue (working, "--types");
 
@@ -88,9 +71,8 @@ int runAnalyze (const juce::ArgumentList& args, CliContext& context)
 
     auto provider = session->getAudioTrackContainer()->getAnalysisProvider();
 
-    // Essentia runs each analysis in one go, so progress counts finished
-    // (file, type) runs - coarse for one long file, but never silent between
-    // them.
+    // Each analysis runs in one go, so progress counts finished (file, type)
+    // runs - coarse for one long file, but never silent between them.
     ProgressSteps steps (context);
     const auto totalRuns = static_cast<double> (audioFiles.size() * types.size());
     auto finishedRuns = 0;
@@ -130,7 +112,6 @@ int runAnalyze (const juce::ArgumentList& args, CliContext& context)
 
     std::cout << result.dump (2) << std::endl;
     return exitOk;
-#endif
 }
 
 } // namespace cli

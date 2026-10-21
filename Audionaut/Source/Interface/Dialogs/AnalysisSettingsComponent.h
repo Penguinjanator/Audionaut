@@ -38,7 +38,7 @@ public:
             typeToggles.emplace_back (type, std::move (toggle));
         }
 
-        hintLabel = std::make_unique<juce::Label> (String{}, TRANS ("Auto Edit uses SBic and Beats (Degara)."));
+        hintLabel = std::make_unique<juce::Label> (String{}, TRANS ("Auto Edit uses Segments and Beats."));
         hintLabel->setFont (juce::FontOptions (AudiumLookAndFeel::defaultFontSize));
         hintLabel->setAlpha (0.6f);
         addAndMakeVisible (hintLabel.get());
@@ -111,10 +111,9 @@ public:
     static juce::String displayName (audium::AnalysisType type)
     {
         switch (type) {
-            case audium::AnalysisType::SBic:       return TRANS ("SBic");
-            case audium::AnalysisType::Onset:      return TRANS ("Onsets");
-            case audium::AnalysisType::Beat:       return TRANS ("Beats (multifeature)");
-            case audium::AnalysisType::BeatDegara: return TRANS ("Beats (Degara)");
+            case audium::AnalysisType::Segments: return TRANS ("Segments");
+            case audium::AnalysisType::Onsets:   return TRANS ("Onsets");
+            case audium::AnalysisType::Beats:    return TRANS ("Beats");
         }
         jassertfalse;
         return {};

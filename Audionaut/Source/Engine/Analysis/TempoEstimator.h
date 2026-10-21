@@ -33,8 +33,14 @@ public:
         /// reported them; 120 tips the slowest of them to its double. See
         /// the tempo sweep in Catch2Tests/Tests/NativeRhythmTests.cpp.
         float startTempo = 110.0f;
-        /// Width of the prior, in octaves.
-        float tempoSpreadOctaves = 1.0f;
+        /// Width of the prior, in octaves. A full octave lets a strong
+        /// half-time feel win: an 8 minute 132 BPM piece correlates at 0.81
+        /// one bar apart and 0.53 one beat apart, and read as 66. At 0.7 it
+        /// reads as 132 and the slow recording still as 87, not 174. Summing
+        /// a lag's evidence with its double's, as Ellis's tempo estimator
+        /// does, is not an option here: it carries that piece but tips the
+        /// 87 BPM recording to 174.
+        float tempoSpreadOctaves = 0.7f;
         /// Longest lag considered, in frames.
         int maxLag = 384;
     };

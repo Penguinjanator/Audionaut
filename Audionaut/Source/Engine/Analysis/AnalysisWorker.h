@@ -67,7 +67,7 @@ public:
      *
      * Pending jobs are dropped and an analysis in flight is abandoned at its
      * next stage (see AnalysisProvider::analyzeFile's abort flag), so this
-     * returns after at most one Essentia stage rather than after the whole
+     * returns after at most one analysis stage rather than after the whole
      * file - quitting must not hang on a long recording's analysis. Nothing
      * of the abandoned analysis is cached.
      */

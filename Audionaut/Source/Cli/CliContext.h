@@ -22,7 +22,7 @@ namespace cli {
 constexpr int exitOk          = 0; ///< Success.
 constexpr int exitFailure     = 1; ///< The operation ran and failed.
 constexpr int exitUsage       = 2; ///< Bad arguments.
-constexpr int exitUnavailable = 3; ///< Feature not available in this build (e.g. Essentia off).
+constexpr int exitUnavailable = 3; ///< Feature not available in this build (e.g. Demucs off).
 
 /**
  * @class CliContext

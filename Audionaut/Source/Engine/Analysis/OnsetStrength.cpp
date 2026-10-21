@@ -24,7 +24,8 @@ float OnsetStrength::next(const float* power)
     filterbank.apply(power, bands.data());
 
     for (size_t band = 0; band < bands.size(); ++band)
-        currentDb[band] = 10.0f * std::log10(std::max(bands[band], parameters.floor));
+        currentDb[band] = parameters.linearFlux ? std::sqrt(std::max(bands[band], 0.0f))
+                                                : 10.0f * std::log10(std::max(bands[band], parameters.floor));
 
     float strength = 0.0f;
     if (hasPrevious)

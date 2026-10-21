@@ -1,21 +1,19 @@
 # Analysis and Auto Edit
 
 Audionaut can listen to your material and use what it hears to cut and
-arrange it. Analysis is powered by the [Essentia](https://essentia.upf.edu)
-library; in builds without Essentia these features are unavailable.
+arrange it.
 
 ## Analysis
 
-Four analysis types are available (*Settings → Analysis*):
+Three analysis types are available (*Settings → Analysis*):
 
-- **SBic** — segment boundaries (where the character of the audio changes)
+- **Segments** — segment boundaries (where the character of the audio changes)
+- **Beats** — beat tracking, with the tempo the beats follow
 - **Onsets** — note/event onsets
-- **Beats (multifeature)** and **Beats (Degara)** — beat tracking
 
 With *Analyse new audio files automatically* enabled, imported and recorded
 audio is analysed in the background. Results are cached inside the project,
-so analysis runs once per file. Auto Edit uses **SBic** and **Beats
-(Degara)**.
+so analysis runs once per file. Auto Edit uses **Segments** and **Beats**.
 
 ## Auto Edit step 1 — Create Segments
 
@@ -52,6 +50,6 @@ Analysis results can be displayed as overlays on a track's clips, so you can
 check what the analysis found before cutting.
 
 **Right-click the track header** and open the **Show Analysis** submenu: it
-lists **SBic**, **Onsets**, **Beats** and **Beats (Degara)**, each a toggle
+lists **Segments**, **Onsets** and **Beats**, each a toggle
 with a tick when currently shown. The setting is per track, so you can, say,
 show segment boundaries on one track and beats on another.

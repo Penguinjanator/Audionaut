@@ -39,7 +39,7 @@ SCENARIO("track view state restores defaults for keys absent from the JSON", "[e
         WHEN("a minimized state is written and a JSON without the key is read back into the same object")
         {
             viewState.setMinimized(true);
-            viewState.setAnalysisTypeVisible(AnalysisType::Onset, true);
+            viewState.setAnalysisTypeVisible(AnalysisType::Onsets, true);
 
             json minimized;
             REQUIRE(viewState.writeToJson(minimized));

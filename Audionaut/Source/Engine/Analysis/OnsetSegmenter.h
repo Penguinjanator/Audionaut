@@ -13,13 +13,11 @@ namespace audium {
 
 /**
  * @class OnsetSegmenter
- * @brief Detects note/percussive onsets in an audio file using Essentia's
- *        OnsetRate algorithm.
+ * @brief Detects note and percussive onsets in an audio file.
  *
- * As with SBicSegmenter, the public interface is deliberately free of any
- * Essentia types so this header can be included from engine code (e.g.
- * AnalysisProvider) that does not itself link against Essentia. The signal
- * chain (MonoLoader -> OnsetRate) lives entirely in the .cpp.
+ * The chain is AnalysisAudioLoader -> Stft -> OnsetStrength -> peak picking,
+ * all in this directory. This class turns a file into onset timestamps and
+ * is what AnalysisProvider runs for AnalysisType::Onsets.
  */
 class OnsetSegmenter {
 
@@ -28,7 +26,9 @@ public:
      * @brief Tunable parameters for the onset detection.
      */
     struct Parameters {
-        float sampleRate = 44100.0f;
+        /// The audio is resampled to this rate and analysed in 2048-sample
+        /// frames with a hop of 512.
+        float sampleRate = 22050.0f;
     };
 
     OnsetSegmenter() = default;
@@ -45,7 +45,7 @@ public:
      * @param audioFile The audio file to analyse.
      * @param params Onset-detection parameters.
      * @param shouldAbort Optional flag polled between the analysis stages
-     *        (decoding, onset detection). Once set, the analysis gives up at
+     *        (decoding, the STFT frames). Once set, the analysis gives up at
      *        the next poll and returns empty, so a caller shutting down (see
      *        AnalysisWorker) waits for one stage at most rather than for the
      *        whole file.
@@ -54,25 +54,6 @@ public:
     std::vector<float> analyze(const juce::File& audioFile,
                                const Parameters& params,
                                const std::atomic<bool>* shouldAbort = nullptr);
-
-    /**
-     * @brief The parameters the native implementation is calibrated for:
-     *        22050 Hz, analysed in 2048-sample frames with a hop of 512.
-     *        Becomes the default once Essentia goes.
-     */
-    static Parameters nativeDefaults();
-
-    /**
-     * @brief The native implementation, independent of Essentia:
-     *        AnalysisAudioLoader -> Stft -> OnsetStrength -> peak picking.
-     *
-     * What analyze() runs in builds without Essentia, and what it becomes
-     * once Essentia goes; until then callable on its own so the two can be
-     * held against each other.
-     */
-    std::vector<float> analyzeNative(const juce::File& audioFile,
-                                     const Parameters& params,
-                                     const std::atomic<bool>* shouldAbort = nullptr);
 
 private:
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (OnsetSegmenter)

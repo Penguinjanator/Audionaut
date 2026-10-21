@@ -7,31 +7,34 @@
 #include "Engine/Analysis/BeatSegmenter.h"
 #include "Engine/Analysis/OnsetSegmenter.h"
 
-// Until the native analysis lands, a build without Essentia has no analysis
-// at all - nothing to compare. See ESSENTIA_ENABLED in the segmenters.
-#ifndef ESSENTIA_ENABLED
- #if __has_include(<essentia/algorithmfactory.h>) && __has_include(<unsupported/Eigen/CXX11/Tensor>)
-  #define ESSENTIA_ENABLED 1
- #else
-  #define ESSENTIA_ENABLED 0
- #endif
-#endif
+#include <chrono>
 
 using namespace audium;
 using namespace analysisReference;
 
-// The analysis is being moved off Essentia. The fixtures under
-// TestFiles/AnalysisReference record what the Essentia-backed segmenters
-// produced for the test recordings (see capture.sh there), and this scenario
-// holds whichever implementation is built against them. It must pass at 100 %
-// with Essentia itself - that is what makes the tolerances in
-// AnalysisReference.h meaningful for the native implementation that follows.
+// The analysis ran on Essentia until it was replaced by the segmenters in
+// Source/Engine/Analysis. The fixtures under TestFiles/AnalysisReference
+// record what Essentia produced for the test recordings (see capture.sh
+// there), and this scenario holds the segmenters against them. Essentia
+// itself passed it at 100 %, which is what makes the tolerances in
+// AnalysisReference.h meaningful: a change that drifts past them changes
+// what Auto Edit, the grid snapping and the clip tempo see.
+
+namespace {
+
+template <typename Fn>
+auto timed(Fn&& fn, double& seconds)
+{
+    const auto started = std::chrono::steady_clock::now();
+    auto result = fn();
+    seconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - started).count();
+    return result;
+}
+
+} // namespace
 
 SCENARIO("The analysis reproduces the recorded reference results", "[engine][analysis][reference]")
 {
-    if (! ESSENTIA_ENABLED)
-        SKIP("this build has no analysis backend");
-
     for (const auto& name : recordings)
     {
         DYNAMIC_SECTION(name)
@@ -40,16 +43,16 @@ SCENARIO("The analysis reproduces the recorded reference results", "[engine][ana
             if (auto reason = load(name, fixture))
                 SKIP(*reason);
 
+            double segmentSeconds = 0.0, beatSeconds = 0.0, onsetSeconds = 0.0;
+
             SBicSegmenter sbic;
-            const auto segments = sbic.analyze(fixture.audioFile);
+            const auto segments = timed([&] { return sbic.analyze(fixture.audioFile); }, segmentSeconds);
 
             BeatSegmenter beatSegmenter;
-            BeatSegmenter::Parameters beatParams;
-            beatParams.method = BeatSegmenter::Method::Degara;
-            const auto rhythm = beatSegmenter.analyze(fixture.audioFile, beatParams);
+            const auto rhythm = timed([&] { return beatSegmenter.analyze(fixture.audioFile); }, beatSeconds);
 
             OnsetSegmenter onsetSegmenter;
-            const auto onsets = onsetSegmenter.analyze(fixture.audioFile);
+            const auto onsets = timed([&] { return onsetSegmenter.analyze(fixture.audioFile); }, onsetSeconds);
 
             const auto beatF = fMeasure(fixture.beats, rhythm.beats, beatToleranceSeconds);
             const auto onsetF = fMeasure(fixture.onsets, onsets, onsetToleranceSeconds);
@@ -57,7 +60,8 @@ SCENARIO("The analysis reproduces the recorded reference results", "[engine][ana
 
             // Reported on every run: how close the two implementations are is
             // the point of the scenario, not only whether they clear the bar.
-            WARN("analysis reference - " << name << " (" << fixture.duration << " s)\n"
+            WARN("analysis reference - " << name << " (" << fixture.duration << " s; analysed in "
+                 << segmentSeconds << " + " << beatSeconds << " + " << onsetSeconds << " s)\n"
                  << "  beats: " << fixture.beats.size() << " reference / " << rhythm.beats.size()
                  << " candidate, F = " << beatF << " at " << beatToleranceSeconds << " s\n"
                  << "  bpm: " << fixture.bpm << " reference / " << rhythm.bpm << " candidate\n"

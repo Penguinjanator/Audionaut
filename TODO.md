@@ -296,3 +296,33 @@ the one-gesture crossfade UX on top:
   change. Fix: on a non-rebuild read, keep the chain when region,
   resources and speed are unchanged and only refresh the cheap state
   (position, gain, fades).
+
+## Analysis — follow-ups (found 2026-10-21 in the Essentia removal)
+
+- [ ] **The analysis loader's resampler bends the top of the spectrum.**
+  `AnalysisAudioLoader` brings the audio to 22050 Hz through
+  `juce::ResamplingAudioSource`, whose anti-alias filter is a second-order
+  Butterworth at the new Nyquist. Measured against Essentia's windowed-sinc
+  resampler on the same recording (`MfccReferenceTests`, second part): the
+  top mel bands come out up to 1 dB low and the very top band about 2.5
+  times hot from energy aliasing into it, so the high MFCCs correlate at
+  only about 0.90 with the reference while the MFCC chain itself is exact
+  (first part of the same test: 0.00003 on the same samples). Replace it
+  with an FIR low-pass designed by
+  `juce::dsp::FilterDesign::designFIRLowpassWindowMethod` at about 0.95 of
+  the new Nyquist, followed by `juce::LagrangeInterpolator`; then tighten
+  the test's second part towards the first and re-check the segmentation
+  penalty with the hidden `[bic-sweep]` scenario, since the features feed
+  the BIC. Changes analysis results, so it needs a `dataVersion` bump.
+- [ ] **The Auto Edit merge is chaotic on long material.** The hidden
+  `[merge-jitter]` scenario (`MergeSensitivityTests`) moves Essentia's own
+  recorded boundaries by 0.1 s and re-merges: on the 173 s recording that
+  keeps only about half of the cuts, 0.25 s keeps a third, while the 15 s
+  and 60 s recordings keep nearly all. Two inherited quirks of
+  `EventMerger` do it: the top-N peak ranking of the summed activation,
+  and the minimum-length pass that measures each gap against the previous
+  peak rather than the last one kept, so a run of close peaks collapses to
+  whichever follows a large enough gap. Neither is behind a flag yet, unlike
+  the quirks `EventMerger::Parameters` already names; changing them changes
+  every user's cuts, so it wants a listening session on the demo material,
+  not only the harness.

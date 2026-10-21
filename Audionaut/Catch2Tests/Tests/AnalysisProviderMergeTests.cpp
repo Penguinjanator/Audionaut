@@ -3,16 +3,6 @@
 
 #include "Engine/Analysis/AnalysisProvider.h"
 
-// makeMergeStreams() and the cache lookups are free of Essentia, so most of
-// these run unconditionally. Only the end-to-end scenario needs a real analysis.
-#ifndef ESSENTIA_ENABLED
- #if __has_include(<essentia/algorithmfactory.h>) && __has_include(<unsupported/Eigen/CXX11/Tensor>)
-  #define ESSENTIA_ENABLED 1
- #else
-  #define ESSENTIA_ENABLED 0
- #endif
-#endif
-
 using namespace audium;
 
 namespace {
@@ -20,7 +10,7 @@ namespace {
 std::shared_ptr<AnalysisProvider> makeProvider(std::shared_ptr<AnalysisCache> cache)
 {
     // The segmenters do no work until analyze() is called, so constructing them
-    // here costs nothing and needs no Essentia.
+    // here costs nothing.
     return std::make_shared<AnalysisProvider>(std::make_shared<SBicSegmenter>(),
                                               std::make_shared<OnsetSegmenter>(),
                                               std::make_shared<BeatSegmenter>(),
@@ -60,13 +50,13 @@ SCENARIO("AnalysisProvider assembles the merge's input streams",
 
         THEN("the structural boundaries lead, as the merge expects")
         {
-            REQUIRE(streams[0].label == "sbic");
+            REQUIRE(streams[0].label == "segments");
             REQUIRE(streams[0].kind == EventMerger::Kind::Segmentation);
         }
 
         THEN("beats are an event stream, not a structural one")
         {
-            REQUIRE(streams[1].label == "beats_degara");
+            REQUIRE(streams[1].label == "beats");
             REQUIRE(streams[1].kind == EventMerger::Kind::Beat);
         }
 
@@ -86,7 +76,7 @@ SCENARIO("AnalysisProvider assembles the merge's input streams",
         THEN("it contributes no stream at all, rather than an empty one")
         {
             REQUIRE(streams.size() == 1);
-            REQUIRE(streams[0].label == "sbic");
+            REQUIRE(streams[0].label == "segments");
         }
     }
 
@@ -130,13 +120,13 @@ SCENARIO("AnalysisProvider merges only what the cache already holds",
 
     GIVEN("only some of the analyses cached")
     {
-        cache->put(audioFile, AnalysisType::SBic, evenTimes(0.0f, 10.0f, 6));
+        cache->put(audioFile, AnalysisType::Segments, evenTimes(0.0f, 10.0f, 6));
 
         THEN("the outstanding one is named")
         {
             auto missing = provider->findMissingMergeAnalyses(audioFile);
             REQUIRE(missing.size() == 1);
-            REQUIRE(missing[0] == AnalysisType::BeatDegara);
+            REQUIRE(missing[0] == AnalysisType::Beats);
         }
 
         THEN("merging still yields nothing - a partial merge would mislead")
@@ -148,8 +138,8 @@ SCENARIO("AnalysisProvider merges only what the cache already holds",
 
     GIVEN("both analyses cached")
     {
-        cache->put(audioFile, AnalysisType::SBic, evenTimes(0.0f, 7.5f, 8));
-        cache->put(audioFile, AnalysisType::BeatDegara, evenTimes(0.0f, 0.5f, 120));
+        cache->put(audioFile, AnalysisType::Segments, evenTimes(0.0f, 7.5f, 8));
+        cache->put(audioFile, AnalysisType::Beats, evenTimes(0.0f, 0.5f, 120));
 
         THEN("nothing is reported missing")
         {
@@ -195,9 +185,8 @@ SCENARIO("AnalysisProvider merges only what the cache already holds",
     }
 }
 
-#if ESSENTIA_ENABLED
 SCENARIO("AnalysisProvider merges analyses it produced itself",
-         "[engine][analysis][merge][essentia]")
+         "[engine][analysis][merge]")
 {
     auto cache = std::make_shared<AnalysisCache>();
     auto provider = makeProvider(cache);
@@ -235,4 +224,3 @@ SCENARIO("AnalysisProvider merges analyses it produced itself",
         }
     }
 }
-#endif // ESSENTIA_ENABLED

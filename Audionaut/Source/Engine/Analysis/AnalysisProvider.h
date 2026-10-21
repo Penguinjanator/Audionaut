@@ -46,10 +46,9 @@ public:
     {}
 
 
-    void analyzeSBic(AudioTrack& audioTrack);
+    void analyzeSegments(AudioTrack& audioTrack);
     void analyzeOnsets(AudioTrack& audioTrack);
     void analyzeBeats(AudioTrack& audioTrack);
-    void analyzeBeatsDegara(AudioTrack& audioTrack);
 
     /**
      * @brief Analyses a single audio file for one analysis type, consulting and
@@ -106,8 +105,8 @@ public:
      *
      * Decides whether a clip's beat-tracking result lines up with the
      * project's beat grid, so the UI can flag clips that already sit on the
-     * grid (see PlayListItemDraggerControl). Pure and free of any Essentia
-     * dependency, so it can be exercised without running an analysis.
+     * grid (see PlayListItemDraggerControl). Pure, so it can be exercised
+     * without running an analysis.
      */
     ///@{
     /** @brief How far the detected BPM may deviate from the project tempo,
@@ -164,15 +163,14 @@ public:
      * beats the event stream. An analysis with no results contributes no stream
      * at all, rather than an empty one.
      *
-     * Pure and free of any Essentia dependency, so it can be exercised without
-     * running an analysis.
+     * Pure, so it can be exercised without running an analysis.
      *
-     * @param sBicSegments Boundaries from AnalysisType::SBic, in seconds.
-     * @param degaraBeats  Beats from AnalysisType::BeatDegara, in seconds.
+     * @param segments Boundaries from AnalysisType::Segments, in seconds.
+     * @param beats    Beats from AnalysisType::Beats, in seconds.
      */
     static std::vector<EventMerger::EventStream>
-        makeMergeStreams(const std::vector<float>& sBicSegments,
-                         const std::vector<float>& degaraBeats);
+        makeMergeStreams(const std::vector<float>& segments,
+                         const std::vector<float>& beats);
 
     /**
      * @brief Which of the merge's analyses are not yet cached for a file.
@@ -279,7 +277,7 @@ private:
     std::shared_ptr<AnalysisCache> analysisCache;
 
     // Serialises segmenter access so a background (AnalysisWorker) analysis and
-    // a UI-triggered one never run the same Essentia algorithms concurrently.
+    // a UI-triggered one never run the same segmenter concurrently.
     std::mutex segmenterMutex;
 
     // Active merge preview (see setMergePreview). Message thread only.

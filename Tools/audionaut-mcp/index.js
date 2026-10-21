@@ -377,16 +377,15 @@ server.registerTool(
   {
     title: "Analyze audio",
     description:
-      "Runs Essentia audio analysis (segment boundaries, beats, BPM) on the project's audio files - or one " +
+      "Runs audio analysis (segment boundaries, beats with BPM, onsets) on the project's audio files - or one " +
       "standalone audio file - and caches the results next to the project for auto_edit/assemble to use. " +
-      "Fails with essentia_unavailable in builds without Essentia. Reports progress as each file and type " +
-      "finishes when the call carries a progressToken.",
+      "Reports progress as each file and type finishes when the call carries a progressToken.",
     inputSchema: {
       target: z.string().describe("A .audium project package or a single audio file"),
       types: z
         .string()
         .optional()
-        .describe("Comma-separated analysis types, e.g. \"sbic,beat_degara\" (default: the merge set)"),
+        .describe("Comma-separated analysis types from segments, beats, onsets (default: segments,beats, what auto_edit needs)"),
     },
   },
   async ({ target, types }, extra) => runCli(["analyze", target, ...(types ? ["--types", types] : [])], [], extra)

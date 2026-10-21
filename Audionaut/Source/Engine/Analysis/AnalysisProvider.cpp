@@ -17,24 +17,19 @@
 
 namespace audium {
 
-void AnalysisProvider::analyzeSBic(AudioTrack& audioTrack)
+void AnalysisProvider::analyzeSegments(AudioTrack& audioTrack)
 {
-    analyzeTrack(audioTrack, AnalysisType::SBic);
+    analyzeTrack(audioTrack, AnalysisType::Segments);
 }
 
 void AnalysisProvider::analyzeOnsets(AudioTrack& audioTrack)
 {
-    analyzeTrack(audioTrack, AnalysisType::Onset);
+    analyzeTrack(audioTrack, AnalysisType::Onsets);
 }
 
 void AnalysisProvider::analyzeBeats(AudioTrack& audioTrack)
 {
-    analyzeTrack(audioTrack, AnalysisType::Beat);
-}
-
-void AnalysisProvider::analyzeBeatsDegara(AudioTrack& audioTrack)
-{
-    analyzeTrack(audioTrack, AnalysisType::BeatDegara);
+    analyzeTrack(audioTrack, AnalysisType::Beats);
 }
 
 void AnalysisProvider::analyzeTrack(AudioTrack& audioTrack, AnalysisType analysisType)
@@ -61,20 +56,13 @@ AnalysisProvider::SegmentResult AnalysisProvider::runSegmenter(AnalysisType anal
 {
     switch (analysisType)
     {
-        case AnalysisType::SBic:
+        case AnalysisType::Segments:
             return { sBicSegmenter->analyze(audioFile, SBicSegmenter::Parameters(), shouldAbort), 0.0f };
-        case AnalysisType::Onset:
+        case AnalysisType::Onsets:
             return { onsetSegmenter->analyze(audioFile, OnsetSegmenter::Parameters(), shouldAbort), 0.0f };
-        case AnalysisType::Beat:
+        case AnalysisType::Beats:
         {
             auto result = beatSegmenter->analyze(audioFile, BeatSegmenter::Parameters(), shouldAbort);
-            return { std::move(result.beats), result.bpm };
-        }
-        case AnalysisType::BeatDegara:
-        {
-            BeatSegmenter::Parameters params;
-            params.method = BeatSegmenter::Method::Degara;
-            auto result = beatSegmenter->analyze(audioFile, params, shouldAbort);
             return { std::move(result.beats), result.bpm };
         }
     }
@@ -183,16 +171,16 @@ const std::vector<AnalysisType>& AnalysisProvider::getMergeAnalysisTypes()
 {
     // Stream order matters: EventMerger expects the segmentation stream first.
     static const std::vector<AnalysisType> types {
-        AnalysisType::SBic,
-        AnalysisType::BeatDegara
+        AnalysisType::Segments,
+        AnalysisType::Beats
     };
 
     return types;
 }
 
 std::vector<EventMerger::EventStream>
-    AnalysisProvider::makeMergeStreams(const std::vector<float>& sBicSegments,
-                                       const std::vector<float>& degaraBeats)
+    AnalysisProvider::makeMergeStreams(const std::vector<float>& segments,
+                                       const std::vector<float>& beats)
 {
     std::vector<EventMerger::EventStream> streams;
 
@@ -216,8 +204,8 @@ std::vector<EventMerger::EventStream>
     // The structural boundaries are the rare events, so they carry the widest
     // kernel and dominate the merge. Beats are the dense event stream they are
     // aligned to.
-    add("sbic", EventMerger::Kind::Segmentation, sBicSegments);
-    add("beats_degara", EventMerger::Kind::Beat, degaraBeats);
+    add("segments", EventMerger::Kind::Segmentation, segments);
+    add("beats", EventMerger::Kind::Beat, beats);
 
     return streams;
 }
@@ -238,17 +226,16 @@ EventMerger::Result AnalysisProvider::mergeCachedAnalyses(const juce::File& audi
                                                           float durationSeconds,
                                                           const EventMerger::Parameters& params) const
 {
-    // Cache-only by design: running three Essentia analyses here would block
-    // whichever thread called us, and AnalysisWorker has normally cached them
-    // already. A caller wanting to explain the gap asks
-    // findMissingMergeAnalyses().
-    auto sBicSegments = analysisCache->get(audioFile, AnalysisType::SBic);
-    auto degaraBeats  = analysisCache->get(audioFile, AnalysisType::BeatDegara);
+    // Cache-only by design: running the analyses here would block whichever
+    // thread called us, and AnalysisWorker has normally cached them already.
+    // A caller wanting to explain the gap asks findMissingMergeAnalyses().
+    auto segments = analysisCache->get(audioFile, AnalysisType::Segments);
+    auto beats    = analysisCache->get(audioFile, AnalysisType::Beats);
 
-    if (! sBicSegments || ! degaraBeats)
+    if (! segments || ! beats)
         return {};
 
-    auto streams = makeMergeStreams(*sBicSegments, *degaraBeats);
+    auto streams = makeMergeStreams(*segments, *beats);
 
     if (streams.empty())
         return {};

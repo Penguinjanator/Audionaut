@@ -1112,14 +1112,10 @@ SCENARIO ("cli long verbs report progress from 0 to 1, once per 5% step", "[cli]
     }
 
     WHEN ("the project is analyzed") {
-        const auto exitCode = cli::runAnalyze (makeArgs ("analyze " + project.getFullPathName() + " --types sbic"),
-                                               context);
-
-        // builds without Essentia have nothing to report
-        if (exitCode != cli::exitUnavailable) {
-            REQUIRE (exitCode == cli::exitOk);
-            requireSteppedFromZeroToOne();
-        }
+        REQUIRE (cli::runAnalyze (makeArgs ("analyze " + project.getFullPathName() + " --types segments"),
+                                  context)
+                 == cli::exitOk);
+        requireSteppedFromZeroToOne();
     }
 
     workDir.deleteRecursively();

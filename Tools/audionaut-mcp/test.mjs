@@ -168,7 +168,7 @@ const workDir = process.env.AUDIONAUT_TEST_DIR
     : mkdtempSync(join(tmpdir(), "audionaut-mcp-test-"));
 
 const testFiles = join(workDir, "fixtures");
-for (const fixture of [join("Sessions", "simple-sine.audium"), "120-funk-1-sec.wav", "sine-0dB.wav"])
+for (const fixture of [join("Sessions", "simple-sine.audium"), "120-funk-1-sec.wav", "120-funk-export.wav", "sine-0dB.wav"])
   cpSync(join(repoTestFiles, fixture), join(testFiles, fixture), { recursive: true });
 
 // Stand-in for the issue relay: records what request_feature / report_bug
@@ -238,9 +238,11 @@ try {
   const created = await client.callTool({ name: "create_project", arguments: { project, channels: 1 } });
   check("create_project", !created.isError, created.content?.[0]?.text);
 
+  // Four seconds of material: the auto edit keeps segments a second long,
+  // so a two-second clip has room for one cut at most.
   const imported = await client.callTool({
     name: "import_audio",
-    arguments: { project, files: [join(testFiles, "120-funk-1-sec.wav")] },
+    arguments: { project, files: [join(testFiles, "120-funk-export.wav")] },
   });
   check("import_audio", !imported.isError, imported.content?.[0]?.text);
 
@@ -289,10 +291,8 @@ try {
           mp3.content[0].text.includes('"bitrateKbps": 192'),
         mp3.content?.[0]?.text);
 
-  // Analysis needs Essentia; accept either success or a clean unavailable error.
   const analyzed = await client.callTool({ name: "analyze", arguments: { target: project } });
-  const analyzeClean = !analyzed.isError || analyzed.content[0].text.startsWith("essentia_unavailable");
-  check("analyze succeeds or reports essentia_unavailable", analyzeClean, analyzed.content?.[0]?.text);
+  check("analyze succeeds", !analyzed.isError, analyzed.content?.[0]?.text);
 
   if (!analyzed.isError) {
     // imported audio lands on a new track (id 1)
@@ -331,7 +331,7 @@ try {
 
   // Last: these mutate the arrangement, so they run after the auto_edit flow.
   // Sub-second positions keep the range inside the first clip in both layouts
-  // (the plain 1 s import, or 0.25 s assembled segments when Essentia ran).
+  // (the plain 1 s import, or the assembled segments).
   const region = await client.callTool({
     name: "create_region",
     arguments: { project, name: "smoke-region", start: 0.05, end: 0.2, unit: "seconds" },

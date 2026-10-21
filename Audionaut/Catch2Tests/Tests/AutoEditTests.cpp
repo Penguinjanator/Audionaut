@@ -21,7 +21,7 @@
 #include "Engine/Resource/AudioResourceContainer.h"
 
 // The native auto edit reads analyses from the cache and never runs one, so
-// these scenarios populate the cache directly and need no Essentia.
+// these scenarios populate the cache directly and run no analysis.
 
 using namespace audium;
 
@@ -152,8 +152,8 @@ void cacheMergeAnalyses(const Fixture& fixture)
 {
     auto cache = fixture.engine->getAudioTrackContainer()->getAnalysisProvider()->getCache();
 
-    cache->put(fixture.analysedFile, AnalysisType::SBic, evenTimes(0.0f, 2.5f, 8));
-    cache->put(fixture.analysedFile, AnalysisType::BeatDegara, evenTimes(0.0f, 0.5f, 40));
+    cache->put(fixture.analysedFile, AnalysisType::Segments, evenTimes(0.0f, 2.5f, 8));
+    cache->put(fixture.analysedFile, AnalysisType::Beats, evenTimes(0.0f, 0.5f, 40));
 }
 
 } // namespace
@@ -259,7 +259,7 @@ SCENARIO("AutoEdit refuses to edit before the analyses are cached",
         // Deliberately cache only one of the two the merge needs. A partial
         // merge would produce plausible but different cuts.
         auto cache = fixture.engine->getAudioTrackContainer()->getAnalysisProvider()->getCache();
-        cache->put(fixture.analysedFile, AnalysisType::SBic, evenTimes(0.0f, 2.5f, 8));
+        cache->put(fixture.analysedFile, AnalysisType::Segments, evenTimes(0.0f, 2.5f, 8));
 
         AutoEdit autoEdit(fixture.engine);
 
@@ -282,7 +282,7 @@ SCENARIO("AutoEdit refuses to edit before the analyses are cached",
             THEN("it names the analysis still outstanding")
             {
                 REQUIRE_FALSE(reportedError.empty());
-                REQUIRE(reportedError.find(analysisTypeToString(AnalysisType::BeatDegara))
+                REQUIRE(reportedError.find(analysisTypeToString(AnalysisType::Beats))
                             != std::string::npos);
             }
         }
@@ -317,7 +317,7 @@ SCENARIO("AutoEdit reports whether the target's analyses are done",
         WHEN("only one of the analyses the merge needs is cached")
         {
             auto cache = fixture.engine->getAudioTrackContainer()->getAnalysisProvider()->getCache();
-            cache->put(fixture.analysedFile, AnalysisType::SBic, evenTimes(0.0f, 2.5f, 8));
+            cache->put(fixture.analysedFile, AnalysisType::Segments, evenTimes(0.0f, 2.5f, 8));
 
             THEN("the analyses are still not done")
             {
@@ -393,12 +393,12 @@ SCENARIO("AutoEdit names the switched-off analyses waiting will not supply",
 
         WHEN("one merge analysis is excluded from the default types")
         {
-            worker->setDefaultAnalysisTypes({ AnalysisType::SBic });
+            worker->setDefaultAnalysisTypes({ AnalysisType::Segments });
 
             THEN("only the excluded one is reported")
             {
                 REQUIRE(autoEdit.findSwitchedOffMergeAnalyses(config)
-                            == std::vector<AnalysisType> { AnalysisType::BeatDegara });
+                            == std::vector<AnalysisType> { AnalysisType::Beats });
             }
         }
 
@@ -497,8 +497,8 @@ SCENARIO("AutoEdit edits the audio the chosen playlist item refers to",
         // Shaped like cacheMergeAnalyses() so the merge places cuts clear of
         // the clip's edges, where the sub-beat-sliver rule would skip them.
         auto cache = trackContainer->getAnalysisProvider()->getCache();
-        cache->put(secondAnalysed, AnalysisType::SBic, evenTimes(0.0f, 2.5f, 8));
-        cache->put(secondAnalysed, AnalysisType::BeatDegara, evenTimes(0.0f, 0.5f, 40));
+        cache->put(secondAnalysed, AnalysisType::Segments, evenTimes(0.0f, 2.5f, 8));
+        cache->put(secondAnalysed, AnalysisType::Beats, evenTimes(0.0f, 0.5f, 40));
 
         const auto baseline = secondGroup->getAudioRegionContainer()->getObjects().size();
 
@@ -930,8 +930,8 @@ SCENARIO("AutoEdit resolves the segment count the edit would cut inside the clip
             // minimum segment length, so the merge places cuts well inside
             // the clip - the grid snapping the edit applies skips cuts within
             // a beat of the clip's edges.
-            cache->put(fixture.analysedFile, AnalysisType::SBic, evenTimes(0.0f, 10.0f, 6));
-            cache->put(fixture.analysedFile, AnalysisType::BeatDegara,
+            cache->put(fixture.analysedFile, AnalysisType::Segments, evenTimes(0.0f, 10.0f, 6));
+            cache->put(fixture.analysedFile, AnalysisType::Beats,
                        evenTimes(0.0f, 0.5f, 120), 120.0f);
 
             config.segmentMeasures = 4.0;
