@@ -248,7 +248,7 @@ const taskParam = z
   .describe(
     'Name of the task this edit is part of, e.g. "remove speech pauses". In the open app, all edits ' +
       "with the same task name become one undo step: keep the name for every call of the task and " +
-      "change it when the next task starts"
+      "change it when the next task starts. Without a task name, all edits of this session share one step"
   );
 
 const server = new McpServer(

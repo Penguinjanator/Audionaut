@@ -359,6 +359,38 @@ SCENARIO("the verbs of one agent task share one undo step",
         }
     }
 
+    GIVEN("verbs of one session that name no task") {
+        const ProjectFileStore::AgentEditGroup untitled { "session-1", "" };
+        REQUIRE(store->applyAgentState(stateWithGain(0.5), untitled, nullptr));
+        REQUIRE(store->applyAgentState(stateWithGain(0.25), untitled, nullptr));
+
+        THEN("the session is the task: one step under the generic name") {
+            REQUIRE(numUndoSteps() == 1);
+            REQUIRE(undoManager->getUndoDescription() == "Agent edits");
+            REQUIRE(undoManager->undo());
+            REQUIRE(container->getMasterGain() == Catch::Approx(1.0f));
+        }
+
+        WHEN("the agent then names a task") {
+            REQUIRE(store->applyAgentState(stateWithGain(0.75), pauses, nullptr));
+
+            THEN("that starts a step of its own") {
+                REQUIRE(numUndoSteps() == 2);
+                REQUIRE(undoManager->getUndoDescription() == "Agent: remove pauses");
+                REQUIRE(undoManager->undo());
+                REQUIRE(container->getMasterGain() == Catch::Approx(0.25f));
+            }
+        }
+
+        WHEN("another session names no task either") {
+            REQUIRE(store->applyAgentState(stateWithGain(0.3), { "session-2", "" }, nullptr));
+
+            THEN("it gets a step of its own") {
+                REQUIRE(numUndoSteps() == 2);
+            }
+        }
+    }
+
     GIVEN("verbs that name no session") {
         REQUIRE(store->applyAgentState(stateWithGain(0.5), {}, nullptr));
         REQUIRE(store->applyAgentState(stateWithGain(0.25), { "", "remove pauses" }, nullptr));

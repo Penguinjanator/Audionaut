@@ -167,7 +167,8 @@ The server sets two variables for every Audionaut it runs, which the open
 app uses to group an agent's edits into undo steps: `AUDIONAUT_AGENT_SESSION`
 (one id per server process) and `AUDIONAUT_AGENT_TASK` (the editing tool's
 `task` parameter). Edits with the same session and task share one undo step
-in the user's app; a user edit, an undo or ten idle minutes start a new one.
+in the user's app, and edits that name no task share one step per session; a
+user edit, an undo or ten idle minutes start a new one.
 
 ## Developing: building the CLI from source
 

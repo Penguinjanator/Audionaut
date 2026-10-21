@@ -26,8 +26,9 @@ command then acts on the document **as you currently see it**, unsaved changes
 included. Its result lands in your undo history, with the window title marked
 *Edited By Agent*, so ⌘Z takes it back like any other edit. An agent that
 names the task it is working on gets one entry per task — *Undo Agent: remove
-speech pauses* — however many commands the task took; an edit of your own, an
-undo, or ten idle minutes close that entry. Nothing is written to
+speech pauses* — however many commands the task took; one that names no task
+gets a single *Undo Agent edits* entry for its whole session. An edit of your
+own, an undo, or ten idle minutes close that entry. Nothing is written to
 `Project.json`; saving stays yours to do.
 
 Your own edits take precedence. If you change the project while a command is

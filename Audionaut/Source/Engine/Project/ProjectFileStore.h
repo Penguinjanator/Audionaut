@@ -205,7 +205,9 @@ public:
         juce::String session; ///< the agent session (one MCP server process); empty for a bare CLI call
         juce::String task;    ///< the task the agent named its edits with, if any
 
-        juce::String key() const { return session + "/" + task; }
+        /// What the edits have in common: the task within its session, or
+        /// the session itself when the agent names no task
+        juce::String key() const { return task.isEmpty() ? session : session + "/" + task; }
     };
 
     /**
@@ -220,9 +222,11 @@ public:
      * edit within `agentBatchIdleMinutes`. Extending applies the state
      * directly and moves the batch's redo state; nothing is added to the
      * undo history. Otherwise a batch starts: one `UndoableAgentBatchAction`,
-     * named after the task ("Agent: <task>") or "Agent edits". A group
-     * without a session (a bare CLI call, an older MCP server) never
-     * extends: each of its verbs is a step of its own.
+     * named after the task ("Agent: <task>") or "Agent edits". A session
+     * that names no task groups by session: its verbs share one step until
+     * a task is named or something else ends the batch. A group without a
+     * session (a bare CLI call, an older MCP server) never extends: each of
+     * its verbs is a step of its own.
      *
      * The user's view and clip selection win over the verb's: the applied
      * state carries the live `ui_state` and `selected` flags.
