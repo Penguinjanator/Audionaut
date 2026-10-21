@@ -65,7 +65,9 @@ namespace
 
     struct Canvas
     {
-        juce::Image image { juce::Image::ARGB, 120, 40, true };
+        // a software image: the native type is Direct2D on Windows, which has
+        // nothing to draw with on a runner without a GPU
+        juce::Image image { juce::Image::ARGB, 120, 40, true, juce::SoftwareImageType() };
         juce::Graphics g { image };
         const juce::Rectangle<int> area { 0, 0, 100, 40 };
 
