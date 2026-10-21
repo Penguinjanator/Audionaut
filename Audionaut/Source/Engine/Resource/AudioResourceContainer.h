@@ -13,7 +13,7 @@
 #include "Engine/Group/ResourceGroup.h"
 #include "Engine/Provider/TempoProvider.h"
 #include "Engine/Project/ProjectDirectories.h"
-#include "Interface/Widgets/audium_AudioThumbnail.h"
+#include "Engine/Resource/audium_AudioThumbnail.h"
 #include <map>
 
 namespace audium {

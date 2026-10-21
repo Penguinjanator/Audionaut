@@ -10,7 +10,7 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include "Engine/Resource/AudioResourceContainer.h"
-#include "Interface/Widgets/audium_AudioThumbnail.h"
+#include "Engine/Resource/audium_AudioThumbnail.h"
 #include "TestEngine.h"
 
 namespace

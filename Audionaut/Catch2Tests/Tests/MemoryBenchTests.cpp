@@ -29,7 +29,7 @@
 #include <rubberband/RubberBandStretcher.h>
 #include "Engine/Resource/AudioResourceContainer.h"
 #include "Engine/Resource/AudioResource.h"
-#include "Interface/Widgets/audium_AudioThumbnail.h"
+#include "Engine/Resource/audium_AudioThumbnail.h"
 #include "TestEngine.h"
 
 // Exact live-heap numbers come from Darwin's libmalloc; the bench is hidden

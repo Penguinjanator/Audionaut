@@ -16,7 +16,7 @@
 #include "Engine/Group/AudioTrack.h"
 #include "Engine/AudiumEngine.h"
 #include "Engine/Factory/AudioResourceFactory.h"
-#include "Interface/Widgets/audium_AudioThumbnail.h"
+#include "Engine/Resource/audium_AudioThumbnail.h"
 #include "Engine/Resource/ChannelMapping.h"
 
 //==============================================================================

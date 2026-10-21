@@ -9,7 +9,7 @@
 #include <memory>
 #include <JuceHeader.h>
 
-#include "Interface/Widgets/audium_AudioThumbnail.h"
+#include "Engine/Resource/audium_AudioThumbnail.h"
 
 namespace audium {
 class AudiumEngine;

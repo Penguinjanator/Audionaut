@@ -181,6 +181,7 @@ OBJECTS_APP := \
   $(JUCE_OBJDIR)/RecordingActionHandler_f74d436f.o \
   $(JUCE_OBJDIR)/AudioResource_bb5eaf91.o \
   $(JUCE_OBJDIR)/AudioResourceContainer_8bac313a.o \
+  $(JUCE_OBJDIR)/audium_AudioThumbnail_6e6a6571.o \
   $(JUCE_OBJDIR)/ChannelMapping_6a0229a8.o \
   $(JUCE_OBJDIR)/DemucsRunner_51e25204.o \
   $(JUCE_OBJDIR)/DemucsBackend_ddb7140.o \
@@ -191,7 +192,6 @@ OBJECTS_APP := \
   $(JUCE_OBJDIR)/AudiumEngine_147f6ae1.o \
   $(JUCE_OBJDIR)/AudiumLookAndFeel_1d32727.o \
   $(JUCE_OBJDIR)/TrackColourLookAndFeel_7098fc17.o \
-  $(JUCE_OBJDIR)/audium_AudioThumbnail_f5797f4f.o \
   $(JUCE_OBJDIR)/audium_ListBox_b1d2231e.o \
   $(JUCE_OBJDIR)/SnapToGridHandler_51ca2978.o \
   $(JUCE_OBJDIR)/ZoomHandler_aafc8870.o \
@@ -801,6 +801,11 @@ $(JUCE_OBJDIR)/AudioResourceContainer_8bac313a.o: ../../Source/Engine/Resource/A
 	@echo "Compiling AudioResourceContainer.cpp"
 	$(V_AT)$(CXX) $(JUCE_CXXFLAGS) $(JUCE_CPPFLAGS_APP) $(JUCE_CFLAGS_APP) -o "$@" -c "$<"
 
+$(JUCE_OBJDIR)/audium_AudioThumbnail_6e6a6571.o: ../../Source/Engine/Resource/audium_AudioThumbnail.cpp
+	-$(V_AT)mkdir -p $(@D)
+	@echo "Compiling audium_AudioThumbnail.cpp"
+	$(V_AT)$(CXX) $(JUCE_CXXFLAGS) $(JUCE_CPPFLAGS_APP) $(JUCE_CFLAGS_APP) -o "$@" -c "$<"
+
 $(JUCE_OBJDIR)/ChannelMapping_6a0229a8.o: ../../Source/Engine/Resource/ChannelMapping.cpp
 	-$(V_AT)mkdir -p $(@D)
 	@echo "Compiling ChannelMapping.cpp"
@@ -849,11 +854,6 @@ $(JUCE_OBJDIR)/AudiumLookAndFeel_1d32727.o: ../../Source/Interface/LookAndFeel/A
 $(JUCE_OBJDIR)/TrackColourLookAndFeel_7098fc17.o: ../../Source/Interface/LookAndFeel/TrackColourLookAndFeel.cpp
 	-$(V_AT)mkdir -p $(@D)
 	@echo "Compiling TrackColourLookAndFeel.cpp"
-	$(V_AT)$(CXX) $(JUCE_CXXFLAGS) $(JUCE_CPPFLAGS_APP) $(JUCE_CFLAGS_APP) -o "$@" -c "$<"
-
-$(JUCE_OBJDIR)/audium_AudioThumbnail_f5797f4f.o: ../../Source/Interface/Widgets/audium_AudioThumbnail.cpp
-	-$(V_AT)mkdir -p $(@D)
-	@echo "Compiling audium_AudioThumbnail.cpp"
 	$(V_AT)$(CXX) $(JUCE_CXXFLAGS) $(JUCE_CPPFLAGS_APP) $(JUCE_CFLAGS_APP) -o "$@" -c "$<"
 
 $(JUCE_OBJDIR)/audium_ListBox_b1d2231e.o: ../../Source/Interface/Widgets/audium_ListBox.cpp
