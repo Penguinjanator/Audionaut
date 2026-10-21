@@ -90,7 +90,10 @@ protected:
     std::shared_ptr<RegionSelector> regionSelector;
     
     std::shared_ptr<audium::AudioThumbnail> audioThumbnail;
-    
+
+    // the thumbnail is shared per file; this view's columns live here
+    audium::AudioThumbnail::DrawCache drawCache;
+
     static constexpr float verticalZoomFactor = 1.f;
     
     int channelNumber = 0;
