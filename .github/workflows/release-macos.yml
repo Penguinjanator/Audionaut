@@ -38,8 +38,7 @@ jobs:
   package:
 
     # Apple silicon runner: the app is built arm64-only (VALID_ARCHS in the
-    # .jucer), and the Essentia cache key is per runner.os/arch, so this
-    # shares the cache the macOS test workflow saves.
+    # .jucer).
     runs-on: macos-15
 
     steps:
@@ -61,12 +60,6 @@ jobs:
           echo "::error::Tag version ($TAG_VERSION) does not match Audionaut.jucer version ($JUCER_VERSION). Bump the .jucer version (and re-save with Projucer) or fix the tag."
           exit 1
         fi
-
-    # A tag run can only restore caches scoped to the tag itself or to the
-    # default branch, so a release cut before the macOS test workflow has
-    # run on main builds Essentia cold here - correct, just slower.
-    - name: Build Essentia
-      uses: ./.github/actions/build-essentia
 
     - name: Write analytics credentials
       # the GA4 API secret is never committed; without the repository

@@ -26,15 +26,15 @@ Tests use **Catch2** and are built with CMake (separate from the app build). Run
 cmake -B build -S Audionaut/Catch2Tests
 cmake --build build
 ./build/AudionautTests_artefacts/AudionautTests          # run all tests
-./build/AudionautTests_artefacts/AudionautTests "[essentia]"   # run one tag/scenario
+./build/AudionautTests_artefacts/AudionautTests "[analysis]"   # run one tag/scenario
 ```
-Test sources live in `Audionaut/Catch2Tests/Tests/*.cpp`; scenarios are tagged (e.g. `[engine][essentia][segmentation]`) so you can filter by tag. Test audio/data lives in `Audionaut/Catch2Tests/TestFiles/` and is located at runtime via the `CURRENT_SOURCE_DIR` compile define. `Audionaut/Catch2Tests/CMakeLists.txt` globs engine/interface source directories — **a newly added Source subdirectory must be added to the `file(GLOB ...)` list there** or its `.cpp` files won't be compiled into the test binary.
+Test sources live in `Audionaut/Catch2Tests/Tests/*.cpp`; scenarios are tagged (e.g. `[engine][analysis][segmentation]`) so you can filter by tag. Test audio/data lives in `Audionaut/Catch2Tests/TestFiles/` and is located at runtime via the `CURRENT_SOURCE_DIR` compile define. `Audionaut/Catch2Tests/CMakeLists.txt` globs engine/interface source directories — **a newly added Source subdirectory must be added to the `file(GLOB ...)` list there** or its `.cpp` files won't be compiled into the test binary.
 
 CI (`.github/workflows/`) runs this same CMake build + `ctest` on macOS and Linux for pushes/PRs to `main` and `develop`.
 
-## Essentia (audio analysis)
+## Audio analysis
 
-The `essentia` submodule is a **prebuilt static library** dependency, not built by CMake/Projucer. The test CMakeLists links `Submodules/essentia/build/src/libessentia.a` plus its 3rd-party `.a` files under `Submodules/essentia/packaging/debian_3rdparty/lib/`. If those artifacts are missing, essentia must be built first with its own waf-based build system (`Submodules/essentia/waf`, `wscript`) before analysis code will link. Essentia is the engine behind the analysis features (BIC segmentation, onset detection, beat tracking).
+Segments (BIC over MFCCs), beats with tempo, and onsets are native code in `Source/Engine/Analysis`: `AnalysisRun` makes one pass per file (decode, sinc resampling to 22050 Hz, STFT) and the building blocks live in `Analysis/Dsp`. Results are cached per file in the project's `AnalysisData.json`; **bump `AnalysisCache::dataVersion` whenever a change alters what an analysis produces**. `AnalysisReferenceTests` and `MfccReferenceTests` hold the output against fixtures recorded from Essentia, the library this replaced (`TestFiles/AnalysisReference`).
 
 ## Architecture
 

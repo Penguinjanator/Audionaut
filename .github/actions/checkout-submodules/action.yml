@@ -11,9 +11,9 @@ runs:
   steps:
     - name: Update submodules (with retry)
       shell: bash
-      # actions/checkout skips LFS smudge by default; keep that, or the
-      # essentia/test/models submodule fails (its LFS is disabled upstream).
-      # Our own LFS test wavs come from the workflows' `git lfs pull` step.
+      # actions/checkout skips LFS smudge by default; keep that for the
+      # submodules, none of which needs its LFS content here. Our own LFS
+      # test wavs come from the workflows' `git lfs pull` step.
       env:
         GIT_LFS_SKIP_SMUDGE: "1"
       run: |

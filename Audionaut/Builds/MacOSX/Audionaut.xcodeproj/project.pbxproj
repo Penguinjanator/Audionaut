@@ -2022,7 +2022,6 @@
 					"$(SRCROOT)/../../JuceLibraryCode",
 					"$(SRCROOT)/../../../Submodules/JUCE/modules",
 					"$(SRCROOT)/../../Source",
-					"$(SRCROOT)/../../../Submodules/essentia/src",
 					"$(SRCROOT)/../../../Submodules/json/include/",
 					"$(SRCROOT)/../../../Submodules/link/include/",
 					"$(SRCROOT)/../../../Submodules/link/modules/asio-standalone/asio/include",
@@ -2035,10 +2034,10 @@
 				INFOPLIST_PREPROCESS = NO;
 				INSTALL_PATH = "/Applications";
 				MACOSX_DEPLOYMENT_TARGET = 13.0;
-				MTL_HEADER_SEARCH_PATHS = "$(SRCROOT)/../../JuceLibraryCode $(SRCROOT)/../../../Submodules/JUCE/modules $(SRCROOT)/../../Source $(SRCROOT)/../../../Submodules/essentia/src $(SRCROOT)/../../../Submodules/json/include/ $(SRCROOT)/../../../Submodules/link/include/ $(SRCROOT)/../../../Submodules/link/modules/asio-standalone/asio/include $(SRCROOT)/../../../Submodules/farbot/include/ $(SRCROOT)/../../../Submodules/rubberband/ $(SRCROOT)/../../../ThirdParty/lame/include";
-				OTHER_CFLAGS = "$(inherited) -isystem $(SRCROOT)/../../../Submodules/essentia/packaging/debian_3rdparty/include/eigen3";
-				OTHER_CPLUSPLUSFLAGS = "$(inherited) -isystem $(SRCROOT)/../../../Submodules/essentia/packaging/debian_3rdparty/include/eigen3";
-				OTHER_LDFLAGS = "$(inherited) $(SRCROOT)/../../../Submodules/essentia/build/src/libessentia.a $(SRCROOT)/../../../Submodules/essentia/packaging/debian_3rdparty/lib/libavcodec.a $(SRCROOT)/../../../Submodules/essentia/packaging/debian_3rdparty/lib/libchromaprint.a $(SRCROOT)/../../../Submodules/essentia/packaging/debian_3rdparty/lib/libavformat.a $(SRCROOT)/../../../Submodules/essentia/packaging/debian_3rdparty/lib/libfftw3f.a $(SRCROOT)/../../../Submodules/essentia/packaging/debian_3rdparty/lib/libswresample.a $(SRCROOT)/../../../Submodules/essentia/packaging/debian_3rdparty/lib/libz.a $(SRCROOT)/../../../Submodules/essentia/packaging/debian_3rdparty/lib/libavutil.a $(SRCROOT)/../../../Submodules/essentia/packaging/debian_3rdparty/lib/libsamplerate.a $(SRCROOT)/../../../Submodules/essentia/packaging/debian_3rdparty/lib/libyaml.a -liconv";
+				MTL_HEADER_SEARCH_PATHS = "$(SRCROOT)/../../JuceLibraryCode $(SRCROOT)/../../../Submodules/JUCE/modules $(SRCROOT)/../../Source $(SRCROOT)/../../../Submodules/json/include/ $(SRCROOT)/../../../Submodules/link/include/ $(SRCROOT)/../../../Submodules/link/modules/asio-standalone/asio/include $(SRCROOT)/../../../Submodules/farbot/include/ $(SRCROOT)/../../../Submodules/rubberband/ $(SRCROOT)/../../../ThirdParty/lame/include";
+				OTHER_CFLAGS = "$(inherited)";
+				OTHER_CPLUSPLUSFLAGS = "$(inherited)";
+				OTHER_LDFLAGS = "$(inherited)";
 				PRODUCT_BUNDLE_IDENTIFIER = com.voltmer-systems.audionaut;
 				PRODUCT_NAME = "Audionaut";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -2208,7 +2207,6 @@
 					"$(SRCROOT)/../../JuceLibraryCode",
 					"$(SRCROOT)/../../../Submodules/JUCE/modules",
 					"$(SRCROOT)/../../Source",
-					"$(SRCROOT)/../../../Submodules/essentia/src",
 					"$(SRCROOT)/../../../Submodules/json/include/",
 					"$(SRCROOT)/../../../Submodules/link/include/",
 					"$(SRCROOT)/../../../Submodules/link/modules/asio-standalone/asio/include",
@@ -2222,10 +2220,10 @@
 				INSTALL_PATH = "/Applications";
 				LLVM_LTO = YES;
 				MACOSX_DEPLOYMENT_TARGET = 13.0;
-				MTL_HEADER_SEARCH_PATHS = "$(SRCROOT)/../../JuceLibraryCode $(SRCROOT)/../../../Submodules/JUCE/modules $(SRCROOT)/../../Source $(SRCROOT)/../../../Submodules/essentia/src $(SRCROOT)/../../../Submodules/json/include/ $(SRCROOT)/../../../Submodules/link/include/ $(SRCROOT)/../../../Submodules/link/modules/asio-standalone/asio/include $(SRCROOT)/../../../Submodules/farbot/include/ $(SRCROOT)/../../../Submodules/rubberband/ $(SRCROOT)/../../../ThirdParty/lame/include";
-				OTHER_CFLAGS = "$(inherited) -isystem $(SRCROOT)/../../../Submodules/essentia/packaging/debian_3rdparty/include/eigen3";
-				OTHER_CPLUSPLUSFLAGS = "$(inherited) -isystem $(SRCROOT)/../../../Submodules/essentia/packaging/debian_3rdparty/include/eigen3";
-				OTHER_LDFLAGS = "$(inherited) $(SRCROOT)/../../../Submodules/essentia/build/src/libessentia.a $(SRCROOT)/../../../Submodules/essentia/packaging/debian_3rdparty/lib/libavcodec.a $(SRCROOT)/../../../Submodules/essentia/packaging/debian_3rdparty/lib/libchromaprint.a $(SRCROOT)/../../../Submodules/essentia/packaging/debian_3rdparty/lib/libavformat.a $(SRCROOT)/../../../Submodules/essentia/packaging/debian_3rdparty/lib/libfftw3f.a $(SRCROOT)/../../../Submodules/essentia/packaging/debian_3rdparty/lib/libswresample.a $(SRCROOT)/../../../Submodules/essentia/packaging/debian_3rdparty/lib/libz.a $(SRCROOT)/../../../Submodules/essentia/packaging/debian_3rdparty/lib/libavutil.a $(SRCROOT)/../../../Submodules/essentia/packaging/debian_3rdparty/lib/libsamplerate.a $(SRCROOT)/../../../Submodules/essentia/packaging/debian_3rdparty/lib/libyaml.a -liconv";
+				MTL_HEADER_SEARCH_PATHS = "$(SRCROOT)/../../JuceLibraryCode $(SRCROOT)/../../../Submodules/JUCE/modules $(SRCROOT)/../../Source $(SRCROOT)/../../../Submodules/json/include/ $(SRCROOT)/../../../Submodules/link/include/ $(SRCROOT)/../../../Submodules/link/modules/asio-standalone/asio/include $(SRCROOT)/../../../Submodules/farbot/include/ $(SRCROOT)/../../../Submodules/rubberband/ $(SRCROOT)/../../../ThirdParty/lame/include";
+				OTHER_CFLAGS = "$(inherited)";
+				OTHER_CPLUSPLUSFLAGS = "$(inherited)";
+				OTHER_LDFLAGS = "$(inherited)";
 				PRODUCT_BUNDLE_IDENTIFIER = com.voltmer-systems.audionaut;
 				PRODUCT_NAME = "Audionaut";
 				PROVISIONING_PROFILE_SPECIFIER = "";

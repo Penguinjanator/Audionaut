@@ -13,7 +13,6 @@ THIRD-PARTY COMPONENTS
 Audionaut includes or links the following components, each under its own license:
 
 - JUCE (https://juce.com) - AGPLv3
-- Essentia (https://essentia.upf.edu) - AGPLv3
 - Ableton Link (https://www.ableton.com/link/) - GPLv2 or later
 - Rubber Band Library (https://breakfastquay.com/rubberband/) - GPLv2 or later
 - LAME MP3 encoder (https://lame.sourceforge.io) - LGPLv2 or later
