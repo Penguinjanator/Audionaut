@@ -183,6 +183,7 @@ file(GLOB SRC_AUDIUM
         ${SRC_PATH}/Engine/*.cpp
         ${SRC_PATH}/Engine/Project/*.cpp
         ${SRC_PATH}/Engine/Analysis/*.cpp
+        ${SRC_PATH}/Engine/Analysis/Dsp/*.cpp
         ${SRC_PATH}/Engine/Core/*.cpp
         ${SRC_PATH}/Engine/Channel/*.cpp
         ${SRC_PATH}/Engine/AutoEdit/*.cpp

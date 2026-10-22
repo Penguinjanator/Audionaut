@@ -2,7 +2,7 @@
 #include <nlohmann/json.hpp>
 
 #include "Engine/Analysis/AnalysisAudioLoader.h"
-#include "Engine/Analysis/Stft.h"
+#include "Engine/Analysis/Dsp/Stft.h"
 #include "Engine/Analysis/BeatSegmenter.h"
 #include "AnalysisReference.h"
 

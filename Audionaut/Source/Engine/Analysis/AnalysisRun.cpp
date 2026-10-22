@@ -7,12 +7,12 @@
 #include "AnalysisAbort.h"
 
 #include "AnalysisAudioLoader.h"
-#include "Stft.h"
-#include "Mfcc.h"
-#include "BicSegmenter.h"
-#include "OnsetStrength.h"
-#include "TempoEstimator.h"
-#include "BeatTracker.h"
+#include "Dsp/Stft.h"
+#include "Dsp/Mfcc.h"
+#include "Dsp/BicSegmenter.h"
+#include "Dsp/OnsetStrength.h"
+#include "Dsp/TempoEstimator.h"
+#include "Dsp/BeatTracker.h"
 
 #include <algorithm>
 

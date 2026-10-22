@@ -6,9 +6,9 @@
 #include "Engine/Analysis/BeatSegmenter.h"
 #include "Engine/Analysis/OnsetSegmenter.h"
 #include "Engine/Analysis/AnalysisAudioLoader.h"
-#include "Engine/Analysis/Stft.h"
-#include "Engine/Analysis/OnsetStrength.h"
-#include "Engine/Analysis/TempoEstimator.h"
+#include "Engine/Analysis/Dsp/Stft.h"
+#include "Engine/Analysis/Dsp/OnsetStrength.h"
+#include "Engine/Analysis/Dsp/TempoEstimator.h"
 
 #include <atomic>
 #include <chrono>

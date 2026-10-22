@@ -4,7 +4,7 @@
 //    Audionaut uses a GPL/commercial licence - see LICENCE.md for details.
 
 #include "BicSegmenter.h"
-#include "AnalysisAbort.h"
+#include "../AnalysisAbort.h"
 
 #include <algorithm>
 #include <cmath>

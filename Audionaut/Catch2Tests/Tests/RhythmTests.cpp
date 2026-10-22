@@ -1,9 +1,9 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/catch_approx.hpp>
 
-#include "Engine/Analysis/OnsetStrength.h"
-#include "Engine/Analysis/TempoEstimator.h"
-#include "Engine/Analysis/BeatTracker.h"
+#include "Engine/Analysis/Dsp/OnsetStrength.h"
+#include "Engine/Analysis/Dsp/TempoEstimator.h"
+#include "Engine/Analysis/Dsp/BeatTracker.h"
 
 #include <atomic>
 #include <cmath>

@@ -5,7 +5,7 @@
 
 #include "AnalysisAudioLoader.h"
 #include "AnalysisAbort.h"
-#include "SincResampler.h"
+#include "Dsp/SincResampler.h"
 
 #include <algorithm>
 #include <cmath>

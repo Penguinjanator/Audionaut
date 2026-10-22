@@ -1,8 +1,8 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/catch_approx.hpp>
 
-#include "Engine/Analysis/MelFilterbank.h"
-#include "Engine/Analysis/Mfcc.h"
+#include "Engine/Analysis/Dsp/MelFilterbank.h"
+#include "Engine/Analysis/Dsp/Mfcc.h"
 
 #include <cmath>
 

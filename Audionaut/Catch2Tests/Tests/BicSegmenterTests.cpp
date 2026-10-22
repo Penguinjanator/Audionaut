@@ -1,6 +1,6 @@
 #include <catch2/catch_test_macros.hpp>
 
-#include "Engine/Analysis/BicSegmenter.h"
+#include "Engine/Analysis/Dsp/BicSegmenter.h"
 
 #include <atomic>
 #include <cmath>

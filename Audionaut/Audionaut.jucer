@@ -183,6 +183,36 @@
       </GROUP>
       <GROUP id="{06AEFCBA-E882-6AD0-6A51-92C0D7211F2A}" name="Engine">
         <GROUP id="{F264B579-6549-549F-C533-C737634896B7}" name="Analysis">
+          <GROUP id="{8A7285D3-B192-4BF2-AF34-5E649A1359AC}" name="Dsp">
+            <FILE id="stftCp" name="Stft.cpp" compile="1" resource="0" file="Source/Engine/Analysis/Dsp/Stft.cpp"/>
+            <FILE id="stftHd" name="Stft.h" compile="0" resource="0" file="Source/Engine/Analysis/Dsp/Stft.h"/>
+            <FILE id="melFbC" name="MelFilterbank.cpp" compile="1" resource="0"
+                  file="Source/Engine/Analysis/Dsp/MelFilterbank.cpp"/>
+            <FILE id="melFbH" name="MelFilterbank.h" compile="0" resource="0"
+                  file="Source/Engine/Analysis/Dsp/MelFilterbank.h"/>
+            <FILE id="mfccCp" name="Mfcc.cpp" compile="1" resource="0" file="Source/Engine/Analysis/Dsp/Mfcc.cpp"/>
+            <FILE id="mfccHd" name="Mfcc.h" compile="0" resource="0" file="Source/Engine/Analysis/Dsp/Mfcc.h"/>
+            <FILE id="bicSgC" name="BicSegmenter.cpp" compile="1" resource="0"
+                  file="Source/Engine/Analysis/Dsp/BicSegmenter.cpp"/>
+            <FILE id="bicSgH" name="BicSegmenter.h" compile="0" resource="0"
+                  file="Source/Engine/Analysis/Dsp/BicSegmenter.h"/>
+            <FILE id="onStrC" name="OnsetStrength.cpp" compile="1" resource="0"
+                  file="Source/Engine/Analysis/Dsp/OnsetStrength.cpp"/>
+            <FILE id="onStrH" name="OnsetStrength.h" compile="0" resource="0"
+                  file="Source/Engine/Analysis/Dsp/OnsetStrength.h"/>
+            <FILE id="tmpEsC" name="TempoEstimator.cpp" compile="1" resource="0"
+                  file="Source/Engine/Analysis/Dsp/TempoEstimator.cpp"/>
+            <FILE id="tmpEsH" name="TempoEstimator.h" compile="0" resource="0"
+                  file="Source/Engine/Analysis/Dsp/TempoEstimator.h"/>
+            <FILE id="btTrkC" name="BeatTracker.cpp" compile="1" resource="0"
+                  file="Source/Engine/Analysis/Dsp/BeatTracker.cpp"/>
+            <FILE id="btTrkH" name="BeatTracker.h" compile="0" resource="0"
+                  file="Source/Engine/Analysis/Dsp/BeatTracker.h"/>
+            <FILE id="sincRC" name="SincResampler.cpp" compile="1" resource="0"
+                  file="Source/Engine/Analysis/Dsp/SincResampler.cpp"/>
+            <FILE id="sincRH" name="SincResampler.h" compile="0" resource="0"
+                  file="Source/Engine/Analysis/Dsp/SincResampler.h"/>
+          </GROUP>
           <FILE id="aWMWyc" name="AnalysisProvider.cpp" compile="1" resource="0"
                 file="Source/Engine/Analysis/AnalysisProvider.cpp"/>
           <FILE id="H2DipS" name="AnalysisProvider.h" compile="0" resource="0"
@@ -216,34 +246,6 @@
                 file="Source/Engine/Analysis/AnalysisRun.cpp"/>
           <FILE id="anRunH" name="AnalysisRun.h" compile="0" resource="0"
                 file="Source/Engine/Analysis/AnalysisRun.h"/>
-          <FILE id="sincRC" name="SincResampler.cpp" compile="1" resource="0"
-                file="Source/Engine/Analysis/SincResampler.cpp"/>
-          <FILE id="sincRH" name="SincResampler.h" compile="0" resource="0"
-                file="Source/Engine/Analysis/SincResampler.h"/>
-          <FILE id="stftCp" name="Stft.cpp" compile="1" resource="0" file="Source/Engine/Analysis/Stft.cpp"/>
-          <FILE id="stftHd" name="Stft.h" compile="0" resource="0" file="Source/Engine/Analysis/Stft.h"/>
-          <FILE id="melFbC" name="MelFilterbank.cpp" compile="1" resource="0"
-                file="Source/Engine/Analysis/MelFilterbank.cpp"/>
-          <FILE id="melFbH" name="MelFilterbank.h" compile="0" resource="0"
-                file="Source/Engine/Analysis/MelFilterbank.h"/>
-          <FILE id="mfccCp" name="Mfcc.cpp" compile="1" resource="0" file="Source/Engine/Analysis/Mfcc.cpp"/>
-          <FILE id="mfccHd" name="Mfcc.h" compile="0" resource="0" file="Source/Engine/Analysis/Mfcc.h"/>
-          <FILE id="bicSgC" name="BicSegmenter.cpp" compile="1" resource="0"
-                file="Source/Engine/Analysis/BicSegmenter.cpp"/>
-          <FILE id="bicSgH" name="BicSegmenter.h" compile="0" resource="0"
-                file="Source/Engine/Analysis/BicSegmenter.h"/>
-          <FILE id="onStrC" name="OnsetStrength.cpp" compile="1" resource="0"
-                file="Source/Engine/Analysis/OnsetStrength.cpp"/>
-          <FILE id="onStrH" name="OnsetStrength.h" compile="0" resource="0"
-                file="Source/Engine/Analysis/OnsetStrength.h"/>
-          <FILE id="tmpEsC" name="TempoEstimator.cpp" compile="1" resource="0"
-                file="Source/Engine/Analysis/TempoEstimator.cpp"/>
-          <FILE id="tmpEsH" name="TempoEstimator.h" compile="0" resource="0"
-                file="Source/Engine/Analysis/TempoEstimator.h"/>
-          <FILE id="btTrkC" name="BeatTracker.cpp" compile="1" resource="0"
-                file="Source/Engine/Analysis/BeatTracker.cpp"/>
-          <FILE id="btTrkH" name="BeatTracker.h" compile="0" resource="0"
-                file="Source/Engine/Analysis/BeatTracker.h"/>
         </GROUP>
         <GROUP id="{9A6C6646-1E27-4BE7-C47B-E234FDD003D4}" name="AudioSources">
           <GROUP id="{9A6C6646-1E27-4BE7-C47B-E234FDD0057A}" name="Stretch">

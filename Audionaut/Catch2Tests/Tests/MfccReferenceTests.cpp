@@ -2,8 +2,8 @@
 #include <nlohmann/json.hpp>
 
 #include "Engine/Analysis/AnalysisAudioLoader.h"
-#include "Engine/Analysis/Stft.h"
-#include "Engine/Analysis/Mfcc.h"
+#include "Engine/Analysis/Dsp/Stft.h"
+#include "Engine/Analysis/Dsp/Mfcc.h"
 
 #include <cmath>
 #include <fstream>

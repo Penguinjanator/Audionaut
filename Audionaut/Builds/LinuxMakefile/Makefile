@@ -132,6 +132,14 @@ OBJECTS_APP := \
   $(JUCE_OBJDIR)/GuiUserPrompter_9790b659.o \
   $(JUCE_OBJDIR)/EngineAccess_b7e0d334.o \
   $(JUCE_OBJDIR)/Preferences_96bfe954.o \
+  $(JUCE_OBJDIR)/Stft_698d9aec.o \
+  $(JUCE_OBJDIR)/MelFilterbank_7a0b9d95.o \
+  $(JUCE_OBJDIR)/Mfcc_fa136b6.o \
+  $(JUCE_OBJDIR)/BicSegmenter_378a2301.o \
+  $(JUCE_OBJDIR)/OnsetStrength_5deb0071.o \
+  $(JUCE_OBJDIR)/TempoEstimator_7e22a7a2.o \
+  $(JUCE_OBJDIR)/BeatTracker_cd06028f.o \
+  $(JUCE_OBJDIR)/SincResampler_245f3e17.o \
   $(JUCE_OBJDIR)/AnalysisProvider_7450833c.o \
   $(JUCE_OBJDIR)/SBicSegmenter_68bb20f2.o \
   $(JUCE_OBJDIR)/AnalysisCache_e40fdde1.o \
@@ -141,14 +149,6 @@ OBJECTS_APP := \
   $(JUCE_OBJDIR)/EventMerger_5b3b38cf.o \
   $(JUCE_OBJDIR)/AnalysisAudioLoader_a9b2ae8.o \
   $(JUCE_OBJDIR)/AnalysisRun_c3f35eea.o \
-  $(JUCE_OBJDIR)/SincResampler_eab50605.o \
-  $(JUCE_OBJDIR)/Stft_6cd08f3e.o \
-  $(JUCE_OBJDIR)/MelFilterbank_40616583.o \
-  $(JUCE_OBJDIR)/Mfcc_12e42b08.o \
-  $(JUCE_OBJDIR)/BicSegmenter_9084a553.o \
-  $(JUCE_OBJDIR)/OnsetStrength_2440c85f.o \
-  $(JUCE_OBJDIR)/TempoEstimator_8285dd74.o \
-  $(JUCE_OBJDIR)/BeatTracker_e068edfd.o \
   $(JUCE_OBJDIR)/RubberBandStretchBackend_17987107.o \
   $(JUCE_OBJDIR)/VoiceSource_a16dcd6e.o \
   $(JUCE_OBJDIR)/VoiceSourceContainer_3bb45bfd.o \
@@ -566,6 +566,46 @@ $(JUCE_OBJDIR)/Preferences_96bfe954.o: ../../Source/Util/Preferences.cpp
 	@echo "Compiling Preferences.cpp"
 	$(V_AT)$(CXX) $(JUCE_CXXFLAGS) $(JUCE_CPPFLAGS_APP) $(JUCE_CFLAGS_APP) -o "$@" -c "$<"
 
+$(JUCE_OBJDIR)/Stft_698d9aec.o: ../../Source/Engine/Analysis/Dsp/Stft.cpp
+	-$(V_AT)mkdir -p $(@D)
+	@echo "Compiling Stft.cpp"
+	$(V_AT)$(CXX) $(JUCE_CXXFLAGS) $(JUCE_CPPFLAGS_APP) $(JUCE_CFLAGS_APP) -o "$@" -c "$<"
+
+$(JUCE_OBJDIR)/MelFilterbank_7a0b9d95.o: ../../Source/Engine/Analysis/Dsp/MelFilterbank.cpp
+	-$(V_AT)mkdir -p $(@D)
+	@echo "Compiling MelFilterbank.cpp"
+	$(V_AT)$(CXX) $(JUCE_CXXFLAGS) $(JUCE_CPPFLAGS_APP) $(JUCE_CFLAGS_APP) -o "$@" -c "$<"
+
+$(JUCE_OBJDIR)/Mfcc_fa136b6.o: ../../Source/Engine/Analysis/Dsp/Mfcc.cpp
+	-$(V_AT)mkdir -p $(@D)
+	@echo "Compiling Mfcc.cpp"
+	$(V_AT)$(CXX) $(JUCE_CXXFLAGS) $(JUCE_CPPFLAGS_APP) $(JUCE_CFLAGS_APP) -o "$@" -c "$<"
+
+$(JUCE_OBJDIR)/BicSegmenter_378a2301.o: ../../Source/Engine/Analysis/Dsp/BicSegmenter.cpp
+	-$(V_AT)mkdir -p $(@D)
+	@echo "Compiling BicSegmenter.cpp"
+	$(V_AT)$(CXX) $(JUCE_CXXFLAGS) $(JUCE_CPPFLAGS_APP) $(JUCE_CFLAGS_APP) -o "$@" -c "$<"
+
+$(JUCE_OBJDIR)/OnsetStrength_5deb0071.o: ../../Source/Engine/Analysis/Dsp/OnsetStrength.cpp
+	-$(V_AT)mkdir -p $(@D)
+	@echo "Compiling OnsetStrength.cpp"
+	$(V_AT)$(CXX) $(JUCE_CXXFLAGS) $(JUCE_CPPFLAGS_APP) $(JUCE_CFLAGS_APP) -o "$@" -c "$<"
+
+$(JUCE_OBJDIR)/TempoEstimator_7e22a7a2.o: ../../Source/Engine/Analysis/Dsp/TempoEstimator.cpp
+	-$(V_AT)mkdir -p $(@D)
+	@echo "Compiling TempoEstimator.cpp"
+	$(V_AT)$(CXX) $(JUCE_CXXFLAGS) $(JUCE_CPPFLAGS_APP) $(JUCE_CFLAGS_APP) -o "$@" -c "$<"
+
+$(JUCE_OBJDIR)/BeatTracker_cd06028f.o: ../../Source/Engine/Analysis/Dsp/BeatTracker.cpp
+	-$(V_AT)mkdir -p $(@D)
+	@echo "Compiling BeatTracker.cpp"
+	$(V_AT)$(CXX) $(JUCE_CXXFLAGS) $(JUCE_CPPFLAGS_APP) $(JUCE_CFLAGS_APP) -o "$@" -c "$<"
+
+$(JUCE_OBJDIR)/SincResampler_245f3e17.o: ../../Source/Engine/Analysis/Dsp/SincResampler.cpp
+	-$(V_AT)mkdir -p $(@D)
+	@echo "Compiling SincResampler.cpp"
+	$(V_AT)$(CXX) $(JUCE_CXXFLAGS) $(JUCE_CPPFLAGS_APP) $(JUCE_CFLAGS_APP) -o "$@" -c "$<"
+
 $(JUCE_OBJDIR)/AnalysisProvider_7450833c.o: ../../Source/Engine/Analysis/AnalysisProvider.cpp
 	-$(V_AT)mkdir -p $(@D)
 	@echo "Compiling AnalysisProvider.cpp"
@@ -609,46 +649,6 @@ $(JUCE_OBJDIR)/AnalysisAudioLoader_a9b2ae8.o: ../../Source/Engine/Analysis/Analy
 $(JUCE_OBJDIR)/AnalysisRun_c3f35eea.o: ../../Source/Engine/Analysis/AnalysisRun.cpp
 	-$(V_AT)mkdir -p $(@D)
 	@echo "Compiling AnalysisRun.cpp"
-	$(V_AT)$(CXX) $(JUCE_CXXFLAGS) $(JUCE_CPPFLAGS_APP) $(JUCE_CFLAGS_APP) -o "$@" -c "$<"
-
-$(JUCE_OBJDIR)/SincResampler_eab50605.o: ../../Source/Engine/Analysis/SincResampler.cpp
-	-$(V_AT)mkdir -p $(@D)
-	@echo "Compiling SincResampler.cpp"
-	$(V_AT)$(CXX) $(JUCE_CXXFLAGS) $(JUCE_CPPFLAGS_APP) $(JUCE_CFLAGS_APP) -o "$@" -c "$<"
-
-$(JUCE_OBJDIR)/Stft_6cd08f3e.o: ../../Source/Engine/Analysis/Stft.cpp
-	-$(V_AT)mkdir -p $(@D)
-	@echo "Compiling Stft.cpp"
-	$(V_AT)$(CXX) $(JUCE_CXXFLAGS) $(JUCE_CPPFLAGS_APP) $(JUCE_CFLAGS_APP) -o "$@" -c "$<"
-
-$(JUCE_OBJDIR)/MelFilterbank_40616583.o: ../../Source/Engine/Analysis/MelFilterbank.cpp
-	-$(V_AT)mkdir -p $(@D)
-	@echo "Compiling MelFilterbank.cpp"
-	$(V_AT)$(CXX) $(JUCE_CXXFLAGS) $(JUCE_CPPFLAGS_APP) $(JUCE_CFLAGS_APP) -o "$@" -c "$<"
-
-$(JUCE_OBJDIR)/Mfcc_12e42b08.o: ../../Source/Engine/Analysis/Mfcc.cpp
-	-$(V_AT)mkdir -p $(@D)
-	@echo "Compiling Mfcc.cpp"
-	$(V_AT)$(CXX) $(JUCE_CXXFLAGS) $(JUCE_CPPFLAGS_APP) $(JUCE_CFLAGS_APP) -o "$@" -c "$<"
-
-$(JUCE_OBJDIR)/BicSegmenter_9084a553.o: ../../Source/Engine/Analysis/BicSegmenter.cpp
-	-$(V_AT)mkdir -p $(@D)
-	@echo "Compiling BicSegmenter.cpp"
-	$(V_AT)$(CXX) $(JUCE_CXXFLAGS) $(JUCE_CPPFLAGS_APP) $(JUCE_CFLAGS_APP) -o "$@" -c "$<"
-
-$(JUCE_OBJDIR)/OnsetStrength_2440c85f.o: ../../Source/Engine/Analysis/OnsetStrength.cpp
-	-$(V_AT)mkdir -p $(@D)
-	@echo "Compiling OnsetStrength.cpp"
-	$(V_AT)$(CXX) $(JUCE_CXXFLAGS) $(JUCE_CPPFLAGS_APP) $(JUCE_CFLAGS_APP) -o "$@" -c "$<"
-
-$(JUCE_OBJDIR)/TempoEstimator_8285dd74.o: ../../Source/Engine/Analysis/TempoEstimator.cpp
-	-$(V_AT)mkdir -p $(@D)
-	@echo "Compiling TempoEstimator.cpp"
-	$(V_AT)$(CXX) $(JUCE_CXXFLAGS) $(JUCE_CPPFLAGS_APP) $(JUCE_CFLAGS_APP) -o "$@" -c "$<"
-
-$(JUCE_OBJDIR)/BeatTracker_e068edfd.o: ../../Source/Engine/Analysis/BeatTracker.cpp
-	-$(V_AT)mkdir -p $(@D)
-	@echo "Compiling BeatTracker.cpp"
 	$(V_AT)$(CXX) $(JUCE_CXXFLAGS) $(JUCE_CPPFLAGS_APP) $(JUCE_CFLAGS_APP) -o "$@" -c "$<"
 
 $(JUCE_OBJDIR)/RubberBandStretchBackend_17987107.o: ../../Source/Engine/AudioSources/Stretch/RubberBandStretchBackend.cpp

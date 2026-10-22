@@ -1,7 +1,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/catch_approx.hpp>
 
-#include "Engine/Analysis/Stft.h"
+#include "Engine/Analysis/Dsp/Stft.h"
 
 #include <atomic>
 #include <cmath>
