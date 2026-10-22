@@ -6,8 +6,8 @@
 
 #include "Engine/Analysis/EventMerger.h"
 
-// EventMerger is pure arithmetic and does not link against Essentia, so unlike
-// the segmenter scenarios these run unconditionally.
+// EventMerger is pure arithmetic over event times, so unlike the segmenter
+// scenarios these need no recording.
 
 using namespace audium;
 

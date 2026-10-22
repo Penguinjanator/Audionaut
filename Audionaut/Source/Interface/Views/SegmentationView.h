@@ -15,8 +15,8 @@
 
 /**
  * @class SegmentationView
- * @brief Overlay that draws the stored analysis results (SBic segment
- *        boundaries, onsets, ...) as vertical markers over a region.
+ * @brief Overlay that draws the stored analysis results (segment
+ *        boundaries, beats, onsets) as vertical markers over a region.
  *
  * Follows the same pattern as FadeInOutView: a lightweight juce::Component
  * child of AudioClipView that renders in paint() from data supplied by its

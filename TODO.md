@@ -296,3 +296,30 @@ the one-gesture crossfade UX on top:
   change. Fix: on a non-rebuild read, keep the chain when region,
   resources and speed are unchanged and only refresh the cheap state
   (position, gain, fades).
+
+## Analysis — follow-ups (found 2026-10-21 in the Essentia removal)
+
+- [ ] **Show Analysis shows nothing for a type that is off in Settings.**
+  The auto-analysis defaults (Settings > Analysis) are Segments and Beats;
+  Onsets is off. Ticking *Onsets* in a track's Show Analysis menu only
+  toggles the overlay's visibility (`toggleAnalysisVisibility` in
+  `ChannelGroupHeaderComponent`), and with nothing in the cache for that
+  type the overlay stays empty, without a word. Asking to see an analysis
+  is asking for it: the toggle should enqueue the type for the track's
+  files when the cache lacks it (`AnalysisWorker::enqueue` with an explicit
+  type list runs even while auto-analysis is off) and show the clip
+  header's progress meanwhile. Worth a hint that the type is off by
+  default and where to turn it on, so the next file gets it without the
+  detour.
+- [ ] **The Auto Edit merge is chaotic on long material.** The hidden
+  `[merge-jitter]` scenario (`MergeSensitivityTests`) moves Essentia's own
+  recorded boundaries by 0.1 s and re-merges: on the 173 s recording that
+  keeps only about half of the cuts, 0.25 s keeps a third, while the 15 s
+  and 60 s recordings keep nearly all. Two inherited quirks of
+  `EventMerger` do it: the top-N peak ranking of the summed activation,
+  and the minimum-length pass that measures each gap against the previous
+  peak rather than the last one kept, so a run of close peaks collapses to
+  whichever follows a large enough gap. Neither is behind a flag yet, unlike
+  the quirks `EventMerger::Parameters` already names; changing them changes
+  every user's cuts, so it wants a listening session on the demo material,
+  not only the harness.

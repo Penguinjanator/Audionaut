@@ -12,7 +12,7 @@ SCENARIO("AnalysisCache stores and retrieves results", "[engine][analysis][cache
     REQUIRE(file.existsAsFile());
 
     AnalysisCache cache;
-    const auto analysisType = AnalysisType::SBic;
+    const auto analysisType = AnalysisType::Segments;
 
     GIVEN("an empty cache")
     {
@@ -37,7 +37,7 @@ SCENARIO("AnalysisCache stores and retrieves results", "[engine][analysis][cache
 
             THEN("a different analysis type misses")
             {
-                REQUIRE_FALSE(cache.get(file, AnalysisType::Onset).has_value());
+                REQUIRE_FALSE(cache.get(file, AnalysisType::Onsets).has_value());
             }
 
             THEN("a different file misses")
@@ -57,7 +57,7 @@ SCENARIO("AnalysisCache stores and retrieves results", "[engine][analysis][cache
 
     WHEN("a result is stored with a BPM estimate")
     {
-        const auto beatType = AnalysisType::Beat;
+        const auto beatType = AnalysisType::Beats;
         cache.put(file, beatType, { 0.5f, 1.0f }, 128.0f);
 
         THEN("the BPM estimate can be retrieved for the same file and type")
@@ -69,7 +69,7 @@ SCENARIO("AnalysisCache stores and retrieves results", "[engine][analysis][cache
 
         THEN("a different analysis type misses the BPM lookup")
         {
-            REQUIRE_FALSE(cache.getBpm(file, AnalysisType::BeatDegara).has_value());
+            REQUIRE_FALSE(cache.getBpm(file, AnalysisType::Onsets).has_value());
         }
     }
 
@@ -102,21 +102,21 @@ SCENARIO("AnalysisCache stores and retrieves results", "[engine][analysis][cache
     WHEN("results of several types are stored for the same and different files")
     {
         auto other = File(testFilesDirectory + "another.wav");
-        cache.put(file, AnalysisType::SBic, { 1.0f, 2.0f });
-        cache.put(file, AnalysisType::Onset, { 3.0f });
-        cache.put(other, AnalysisType::SBic, { 4.0f });
+        cache.put(file, AnalysisType::Segments, { 1.0f, 2.0f });
+        cache.put(file, AnalysisType::Onsets, { 3.0f });
+        cache.put(other, AnalysisType::Segments, { 4.0f });
 
         THEN("getAll returns only the per-file results for the requested type")
         {
-            auto sbic = cache.getAll(AnalysisType::SBic);
+            auto sbic = cache.getAll(AnalysisType::Segments);
             REQUIRE(sbic.size() == 2);
             REQUIRE(sbic.at(file.getFullPathName().toStdString()) == std::vector<float>{ 1.0f, 2.0f });
             REQUIRE(sbic.at(other.getFullPathName().toStdString()) == std::vector<float>{ 4.0f });
 
-            auto onset = cache.getAll(AnalysisType::Onset);
+            auto onset = cache.getAll(AnalysisType::Onsets);
             REQUIRE(onset.size() == 1);
 
-            REQUIRE(cache.getAll(AnalysisType::Beat).empty());
+            REQUIRE(cache.getAll(AnalysisType::Beats).empty());
         }
     }
 }
@@ -146,9 +146,9 @@ SCENARIO("AnalysisCache persists to and loads from a project folder",
     GIVEN("a populated cache")
     {
         AnalysisCache cache;
-        cache.put(audioFile, AnalysisType::SBic, sbic);
-        cache.put(audioFile, AnalysisType::Onset, onset);
-        cache.put(audioFile, AnalysisType::Beat, beats, beatsBpm);
+        cache.put(audioFile, AnalysisType::Segments, sbic);
+        cache.put(audioFile, AnalysisType::Onsets, onset);
+        cache.put(audioFile, AnalysisType::Beats, beats, beatsBpm);
 
         WHEN("it is saved to the project folder")
         {
@@ -164,16 +164,16 @@ SCENARIO("AnalysisCache persists to and loads from a project folder",
                 AnalysisCache loaded;
                 REQUIRE(loaded.loadFromFolder(projectFolder));
                 REQUIRE(loaded.size() == 3);
-                REQUIRE(loaded.get(audioFile, AnalysisType::SBic) == sbic);
-                REQUIRE(loaded.get(audioFile, AnalysisType::Onset) == onset);
-                REQUIRE(loaded.get(audioFile, AnalysisType::Beat) == beats);
+                REQUIRE(loaded.get(audioFile, AnalysisType::Segments) == sbic);
+                REQUIRE(loaded.get(audioFile, AnalysisType::Onsets) == onset);
+                REQUIRE(loaded.get(audioFile, AnalysisType::Beats) == beats);
             }
 
             THEN("the BPM estimate round-trips with it")
             {
                 AnalysisCache loaded;
                 REQUIRE(loaded.loadFromFolder(projectFolder));
-                auto bpm = loaded.getBpm(audioFile, AnalysisType::Beat);
+                auto bpm = loaded.getBpm(audioFile, AnalysisType::Beats);
                 REQUIRE(bpm.has_value());
                 REQUIRE(*bpm == beatsBpm);
             }
@@ -181,10 +181,11 @@ SCENARIO("AnalysisCache persists to and loads from a project folder",
             THEN("loading discards any pre-existing entries first")
             {
                 AnalysisCache loaded;
-                loaded.put(File(testFilesDirectory + "stale.wav"), AnalysisType::BeatDegara, { 9.0f });
+                const auto stale = File(testFilesDirectory + "stale.wav");
+                loaded.put(stale, AnalysisType::Beats, { 9.0f });
                 REQUIRE(loaded.loadFromFolder(projectFolder));
                 REQUIRE(loaded.size() == 3);
-                REQUIRE(loaded.getAll(AnalysisType::BeatDegara).empty());
+                REQUIRE_FALSE(loaded.get(stale, AnalysisType::Beats).has_value());
             }
 
             THEN("results are treated as stale once the file is modified")
@@ -195,7 +196,7 @@ SCENARIO("AnalysisCache persists to and loads from a project folder",
                 REQUIRE(loaded.loadFromFolder(projectFolder));
                 // The entry is still present, but keyed to the old identity, so
                 // a lookup against the now-changed file misses.
-                REQUIRE_FALSE(loaded.get(audioFile, AnalysisType::SBic).has_value());
+                REQUIRE_FALSE(loaded.get(audioFile, AnalysisType::Segments).has_value());
             }
         }
     }
@@ -210,7 +211,7 @@ SCENARIO("AnalysisCache persists to and loads from a project folder",
         REQUIRE(sourceFile.copyFileTo(origAudio));
 
         AnalysisCache cache;
-        cache.put(origAudio, AnalysisType::SBic, sbic);
+        cache.put(origAudio, AnalysisType::Segments, sbic);
         REQUIRE(cache.saveToFolder(origFolder));
 
         WHEN("the whole project folder is renamed/moved")
@@ -225,7 +226,7 @@ SCENARIO("AnalysisCache persists to and loads from a project folder",
             {
                 AnalysisCache loaded;
                 REQUIRE(loaded.loadFromFolder(movedFolder));
-                REQUIRE(loaded.get(movedAudio, AnalysisType::SBic) == sbic);
+                REQUIRE(loaded.get(movedAudio, AnalysisType::Segments) == sbic);
             }
         }
     }
@@ -239,7 +240,7 @@ SCENARIO("AnalysisCache persists to and loads from a project folder",
         REQUIRE(sourceFile.copyFileTo(oldAudio));
 
         AnalysisCache cache;
-        cache.put(oldAudio, AnalysisType::SBic, sbic);
+        cache.put(oldAudio, AnalysisType::Segments, sbic);
 
         WHEN("the audio is copied into the project and the cache is rebased")
         {
@@ -252,8 +253,8 @@ SCENARIO("AnalysisCache persists to and loads from a project folder",
 
             THEN("results are found under the new path and not the old one")
             {
-                REQUIRE(cache.get(newAudio, AnalysisType::SBic) == sbic);
-                REQUIRE_FALSE(cache.get(oldAudio, AnalysisType::SBic).has_value());
+                REQUIRE(cache.get(newAudio, AnalysisType::Segments) == sbic);
+                REQUIRE_FALSE(cache.get(oldAudio, AnalysisType::Segments).has_value());
                 REQUIRE(cache.size() == 1);
             }
 
@@ -264,7 +265,7 @@ SCENARIO("AnalysisCache persists to and loads from a project folder",
 
                 AnalysisCache loaded;
                 REQUIRE(loaded.loadFromFolder(savedProject));
-                REQUIRE(loaded.get(newAudio, AnalysisType::SBic) == sbic);
+                REQUIRE(loaded.get(newAudio, AnalysisType::Segments) == sbic);
             }
         }
 
@@ -277,7 +278,7 @@ SCENARIO("AnalysisCache persists to and loads from a project folder",
 
             THEN("the entry is left pointing at its original file")
             {
-                REQUIRE(cache.get(oldAudio, AnalysisType::SBic) == sbic);
+                REQUIRE(cache.get(oldAudio, AnalysisType::Segments) == sbic);
             }
         }
     }
@@ -301,7 +302,7 @@ SCENARIO("AnalysisCache persists to and loads from a project folder",
         THEN("loading is a clean no-op")
         {
             AnalysisCache cache;
-            cache.put(File(testFilesDirectory + "x.wav"), AnalysisType::SBic, { 1.0f });
+            cache.put(File(testFilesDirectory + "x.wav"), AnalysisType::Segments, { 1.0f });
             REQUIRE(cache.loadFromFolder(emptyFolder));
             REQUIRE(cache.size() == 0);
         }
@@ -328,7 +329,7 @@ SCENARIO("AnalysisCache discards data written by another version",
     GIVEN("a sidecar this build wrote")
     {
         AnalysisCache cache;
-        cache.put(file, AnalysisType::SBic, { 0.0f, 1.5f, 3.25f });
+        cache.put(file, AnalysisType::Segments, { 0.0f, 1.5f, 3.25f });
         REQUIRE(cache.saveToFolder(folder));
 
         WHEN("it is loaded back")
@@ -339,7 +340,7 @@ SCENARIO("AnalysisCache discards data written by another version",
             THEN("the results are kept")
             {
                 REQUIRE(reloaded.size() == 1);
-                REQUIRE(reloaded.get(file, AnalysisType::SBic).has_value());
+                REQUIRE(reloaded.get(file, AnalysisType::Segments).has_value());
             }
         }
     }
@@ -347,7 +348,7 @@ SCENARIO("AnalysisCache discards data written by another version",
     GIVEN("a sidecar carrying a different version")
     {
         AnalysisCache cache;
-        cache.put(file, AnalysisType::SBic, { 0.0f, 1.5f, 3.25f });
+        cache.put(file, AnalysisType::Segments, { 0.0f, 1.5f, 3.25f });
         REQUIRE(cache.saveToFolder(folder));
 
         // Rewrite the version as an older build would have left it.
@@ -365,7 +366,7 @@ SCENARIO("AnalysisCache discards data written by another version",
                 // Not an error: the analyses simply run again.
                 REQUIRE(reloaded.loadFromFolder(folder));
                 REQUIRE(reloaded.size() == 0);
-                REQUIRE_FALSE(reloaded.get(file, AnalysisType::SBic).has_value());
+                REQUIRE_FALSE(reloaded.get(file, AnalysisType::Segments).has_value());
             }
         }
     }
@@ -377,11 +378,12 @@ SCENARIO("Analysis type lists round-trip through their string form", "[engine][a
 {
     GIVEN("every analysis type")
     {
-        const std::vector<AnalysisType> all { AnalysisType::SBic, AnalysisType::BeatDegara,
-                                              AnalysisType::Onset, AnalysisType::Beat };
+        const std::vector<AnalysisType> all { AnalysisType::Segments, AnalysisType::Beats,
+                                              AnalysisType::Onsets };
 
         THEN("the list round-trips unchanged")
         {
+            REQUIRE(analysisTypesToString(all) == "segments,beats,onsets");
             REQUIRE(analysisTypesFromString(analysisTypesToString(all)) == all);
         }
     }
@@ -390,7 +392,22 @@ SCENARIO("Analysis type lists round-trip through their string form", "[engine][a
     {
         THEN("its string form has no separator")
         {
-            REQUIRE(analysisTypesToString({ AnalysisType::Onset }) == "onset");
+            REQUIRE(analysisTypesToString({ AnalysisType::Onsets }) == "onsets");
+        }
+    }
+
+    GIVEN("the names from the Essentia days")
+    {
+        THEN("they still parse, both beat trackers as the one that remains")
+        {
+            const std::vector<AnalysisType> expected { AnalysisType::Segments, AnalysisType::Onsets,
+                                                       AnalysisType::Beats, AnalysisType::Beats };
+            REQUIRE(analysisTypesFromString("sbic,onset,beat_degara,beat") == expected);
+        }
+
+        THEN("they are written back under the current names")
+        {
+            REQUIRE(analysisTypesToString(analysisTypesFromString("sbic,beat_degara")) == "segments,beats");
         }
     }
 
@@ -407,8 +424,8 @@ SCENARIO("Analysis type lists round-trip through their string form", "[engine][a
     {
         THEN("names are trimmed and unrecognised ones are skipped")
         {
-            const std::vector<AnalysisType> expected { AnalysisType::SBic, AnalysisType::Beat };
-            REQUIRE(analysisTypesFromString(" sbic , from_the_future ,, beat ") == expected);
+            const std::vector<AnalysisType> expected { AnalysisType::Segments, AnalysisType::Beats };
+            REQUIRE(analysisTypesFromString(" segments , from_the_future ,, beats ") == expected);
         }
     }
 }

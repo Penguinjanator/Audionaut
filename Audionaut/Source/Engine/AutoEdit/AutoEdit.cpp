@@ -193,7 +193,7 @@ int effectiveNumSegments(const AutoEditConfig& config,
 
     if (parameter.isActive())
     {
-        const auto bpm = analysisProvider.getBpm(AnalysisType::BeatDegara, audioFile);
+        const auto bpm = analysisProvider.getBpm(AnalysisType::Beats, audioFile);
         const auto derived = parameter.numSegmentsFor(durationSeconds, bpm);
 
         if (derived > 0)
@@ -221,7 +221,7 @@ EventMerger::Parameters effectiveMergeParameters(const AutoEditConfig& config,
 
     if (parameter.isActive())
     {
-        const auto bpm = analysisProvider.getBpm(AnalysisType::BeatDegara, audioFile);
+        const auto bpm = analysisProvider.getBpm(AnalysisType::Beats, audioFile);
         const auto minSeconds = parameter.minSegmentSeconds(bpm);
 
         if (minSeconds > 0.0)
@@ -254,8 +254,8 @@ std::vector<float> snapBoundariesForTarget(std::vector<float> boundaries,
         return boundaries;
 
     const auto projectTempo = tempoProvider->getTempo();
-    const auto bpm = analysisProvider.getBpm(AnalysisType::BeatDegara, audioFile);
-    const auto beats = analysisProvider.getSegments(AnalysisType::BeatDegara, audioFile);
+    const auto bpm = analysisProvider.getBpm(AnalysisType::Beats, audioFile);
+    const auto beats = analysisProvider.getSegments(AnalysisType::Beats, audioFile);
 
     if (! AnalysisProvider::matchesGrid(projectTempo, bpm, beats,
                                         target.clipStartClocks, target.extent))
@@ -860,7 +860,7 @@ juce::Range<double> AutoEdit::resolveSegmentLengthBounds(AutoEditConfig &config)
         return {};
 
     const auto audioFile = juce::File(target.resource->getFullPathName());
-    const auto bpm = analysisProvider->getBpm(AnalysisType::BeatDegara, audioFile);
+    const auto bpm = analysisProvider->getBpm(AnalysisType::Beats, audioFile);
 
     // Both bounds are zero when the tempo is unknown, which is the empty range
     // the caller checks for.

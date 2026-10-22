@@ -31,12 +31,11 @@ sessions over MCP. This page lists what it does. The
 
 ## Analysis and Auto Edit
 
-Powered by [Essentia](https://essentia.upf.edu).
 ([Analysis and Auto Edit](manual/08-analysis-and-auto-edit.md))
 
-- **Analysis:** segment boundaries (SBic), onsets and beat tracking (two
-  algorithms). It can run automatically on new audio, results are cached in
-  the project, and they can be shown as overlays on a track.
+- **Analysis:** segment boundaries, beats with the tempo they follow, and
+  onsets. It can run automatically on new audio, results are cached in the
+  project, and they can be shown as overlays on a track.
 - **Auto Edit, Create Segments:** cuts a clip at analysed, musically
   aligned boundaries, with a live preview (fewer or more segments) and
   optional crossfades at every joint.

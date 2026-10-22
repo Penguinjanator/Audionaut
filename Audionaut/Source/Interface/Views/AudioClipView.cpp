@@ -13,6 +13,8 @@
 #include "Engine/PlayList/PlayListScheduler.h"
 #include "Engine/Analysis/AnalysisProvider.h"
 
+#include <iterator>
+
 using namespace juce;
 
 double AudioClipView::getRegionStart(audium::TimeContextType context) const
@@ -98,13 +100,13 @@ void AudioClipView::refreshSegments()
     const auto audioFile = audioResource->getLocalFile();
 
     // Only display the analysis types the track is configured to show.
-    constexpr audium::AnalysisType allTypes[] = { audium::AnalysisType::SBic,
-                                                  audium::AnalysisType::Onset,
-                                                  audium::AnalysisType::Beat,
-                                                  audium::AnalysisType::BeatDegara };
+    constexpr audium::AnalysisType allTypes[] = { audium::AnalysisType::Segments,
+                                                  audium::AnalysisType::Onsets,
+                                                  audium::AnalysisType::Beats };
+    constexpr int numTypes = (int) std::size(allTypes);
 
     int visibleTypes = 0;
-    for (int i = 0; i < 4; ++i)
+    for (int i = 0; i < numTypes; ++i)
         if (audioTrack->getViewState().isAnalysisTypeVisible(allTypes[i]))
             visibleTypes |= (1 << i);
 
@@ -127,7 +129,7 @@ void AudioClipView::refreshSegments()
     lastAnalysisPath = audioFile.getFullPathName();
 
     std::unordered_map<audium::AnalysisType, std::vector<float>> segmentsByType;
-    for (int i = 0; i < 4; ++i)
+    for (int i = 0; i < numTypes; ++i)
         if ((visibleTypes & (1 << i)) != 0)
             segmentsByType[allTypes[i]] = analysisProvider->getSegments(allTypes[i], audioFile);
 

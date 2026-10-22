@@ -121,7 +121,7 @@ struct AssembleConfig {
  * @brief Cuts a track's audio into regions at automatically chosen boundaries.
  *
  * The native path merges the analyses already held in the `AnalysisCache` -
- * BIC segmentation and Degara beat tracking - through `EventMerger`, which
+ * BIC segmentation and beat tracking - through `EventMerger`, which
  * weights rare structural boundaries above frequent beats so the cuts land on
  * beat-aligned segment boundaries.
  *

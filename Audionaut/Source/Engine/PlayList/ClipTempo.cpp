@@ -32,11 +32,7 @@ float ClipTempo::detectedClipTempo (const PlayListItem& item, const AnalysisProv
     if (file == juce::File())
         return 0.0f;
 
-    for (auto type : { AnalysisType::Beat, AnalysisType::BeatDegara })
-        if (auto bpm = provider.getBpm (type, file); bpm > 0.0f)
-            return bpm;
-
-    return 0.0f;
+    return provider.getBpm (AnalysisType::Beats, file);
 }
 
 int ClipTempo::requestClipTempoDetection (const PlayListItem& item, AnalysisWorker& worker)
@@ -45,7 +41,7 @@ int ClipTempo::requestClipTempoDetection (const PlayListItem& item, AnalysisWork
     if (file == juce::File())
         return 0;
 
-    return worker.enqueue (file, { AnalysisType::BeatDegara });
+    return worker.enqueue (file, { AnalysisType::Beats });
 }
 
 bool ClipTempo::lockToTempo (PlayListItem& item, const AnalysisProvider& provider)

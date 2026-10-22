@@ -1112,14 +1112,10 @@ SCENARIO ("cli long verbs report progress from 0 to 1, once per 5% step", "[cli]
     }
 
     WHEN ("the project is analyzed") {
-        const auto exitCode = cli::runAnalyze (makeArgs ("analyze " + project.getFullPathName() + " --types sbic"),
-                                               context);
-
-        // builds without Essentia have nothing to report
-        if (exitCode != cli::exitUnavailable) {
-            REQUIRE (exitCode == cli::exitOk);
-            requireSteppedFromZeroToOne();
-        }
+        REQUIRE (cli::runAnalyze (makeArgs ("analyze " + project.getFullPathName() + " --types segments"),
+                                  context)
+                 == cli::exitOk);
+        requireSteppedFromZeroToOne();
     }
 
     workDir.deleteRecursively();
@@ -1563,4 +1559,55 @@ SCENARIO ("cli import stops at the project's channel limit", "[cli][channels]")
     }
 
     workDir.deleteRecursively();
+}
+
+SCENARIO ("cli analyze reports results under the requested names and refuses what it cannot decode", "[cli][analysis]")
+{
+    const auto testFiles = juce::String (CURRENT_SOURCE_DIR) + "/TestFiles/";
+    const auto audioFile = juce::File (testFiles + "120-funk-export.wav");
+    REQUIRE (audioFile.existsAsFile());
+
+    cli::CliContext context;
+    context.json = true;
+    context.quiet = true;
+    nlohmann::json envelope;
+    context.envelopeSink = [&envelope] (const nlohmann::json& e) { envelope = e; };
+
+    WHEN ("the types are given by their old names")
+    {
+        const auto exitCode = cli::runAnalyze (makeArgs ("analyze " + audioFile.getFullPathName()
+                                                         + " --types sbic,beat_degara,onsets --json"),
+                                               context);
+
+        THEN ("each result sits under the name it was asked for")
+        {
+            REQUIRE (exitCode == cli::exitOk);
+            const auto& analyses = envelope["result"]["files"][0]["analyses"];
+            REQUIRE (analyses.contains ("sbic"));
+            REQUIRE (analyses.contains ("beat_degara"));
+            REQUIRE (analyses.contains ("onsets"));
+            CHECK (analyses["sbic"]["segments"].size() >= 2);
+            CHECK (analyses["beat_degara"]["bpm"].get<float>() > 0.0f);
+            CHECK_FALSE (analyses.contains ("segments"));
+        }
+    }
+
+    WHEN ("the file is not audio")
+    {
+        const auto bogus = juce::File::getSpecialLocation (juce::File::tempDirectory)
+                               .getChildFile ("AudionautTests").getChildFile ("not-audio.wav");
+        bogus.getParentDirectory().createDirectory();
+        bogus.replaceWithText ("this is not a wav file");
+
+        const auto exitCode = cli::runAnalyze (makeArgs ("analyze " + bogus.getFullPathName() + " --json"), context);
+
+        THEN ("it fails with decode_failed instead of reporting empty analyses")
+        {
+            REQUIRE (exitCode == cli::exitFailure);
+            REQUIRE (envelope["ok"] == false);
+            CHECK (envelope["error"]["code"] == "decode_failed");
+        }
+
+        bogus.deleteFile();
+    }
 }

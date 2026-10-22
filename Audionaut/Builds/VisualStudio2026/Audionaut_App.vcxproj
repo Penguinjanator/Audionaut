@@ -281,6 +281,14 @@
     </ClCompile>
     <ClCompile Include="..\..\Source\Util\EngineAccess.cpp"/>
     <ClCompile Include="..\..\Source\Util\Preferences.cpp"/>
+    <ClCompile Include="..\..\Source\Engine\Analysis\Dsp\Stft.cpp"/>
+    <ClCompile Include="..\..\Source\Engine\Analysis\Dsp\MelFilterbank.cpp"/>
+    <ClCompile Include="..\..\Source\Engine\Analysis\Dsp\Mfcc.cpp"/>
+    <ClCompile Include="..\..\Source\Engine\Analysis\Dsp\BicSegmenter.cpp"/>
+    <ClCompile Include="..\..\Source\Engine\Analysis\Dsp\OnsetStrength.cpp"/>
+    <ClCompile Include="..\..\Source\Engine\Analysis\Dsp\TempoEstimator.cpp"/>
+    <ClCompile Include="..\..\Source\Engine\Analysis\Dsp\BeatTracker.cpp"/>
+    <ClCompile Include="..\..\Source\Engine\Analysis\Dsp\SincResampler.cpp"/>
     <ClCompile Include="..\..\Source\Engine\Analysis\AnalysisProvider.cpp"/>
     <ClCompile Include="..\..\Source\Engine\Analysis\SBicSegmenter.cpp"/>
     <ClCompile Include="..\..\Source\Engine\Analysis\AnalysisCache.cpp"/>
@@ -288,6 +296,8 @@
     <ClCompile Include="..\..\Source\Engine\Analysis\BeatSegmenter.cpp"/>
     <ClCompile Include="..\..\Source\Engine\Analysis\AnalysisWorker.cpp"/>
     <ClCompile Include="..\..\Source\Engine\Analysis\EventMerger.cpp"/>
+    <ClCompile Include="..\..\Source\Engine\Analysis\AnalysisAudioLoader.cpp"/>
+    <ClCompile Include="..\..\Source\Engine\Analysis\AnalysisRun.cpp"/>
     <ClCompile Include="..\..\Source\Engine\AudioSources\Stretch\RubberBandStretchBackend.cpp"/>
     <ClCompile Include="..\..\Source\Engine\AudioSources\VoiceSource.cpp"/>
     <ClCompile Include="..\..\Source\Engine\AudioSources\VoiceSourceContainer.cpp"/>
@@ -3486,6 +3496,14 @@
     <ClInclude Include="..\..\Source\Util\EngineAccess.h"/>
     <ClInclude Include="..\..\Source\Util\Preferences.h"/>
     <ClInclude Include="..\..\Source\Util\VersionCompare.h"/>
+    <ClInclude Include="..\..\Source\Engine\Analysis\Dsp\Stft.h"/>
+    <ClInclude Include="..\..\Source\Engine\Analysis\Dsp\MelFilterbank.h"/>
+    <ClInclude Include="..\..\Source\Engine\Analysis\Dsp\Mfcc.h"/>
+    <ClInclude Include="..\..\Source\Engine\Analysis\Dsp\BicSegmenter.h"/>
+    <ClInclude Include="..\..\Source\Engine\Analysis\Dsp\OnsetStrength.h"/>
+    <ClInclude Include="..\..\Source\Engine\Analysis\Dsp\TempoEstimator.h"/>
+    <ClInclude Include="..\..\Source\Engine\Analysis\Dsp\BeatTracker.h"/>
+    <ClInclude Include="..\..\Source\Engine\Analysis\Dsp\SincResampler.h"/>
     <ClInclude Include="..\..\Source\Engine\Analysis\AnalysisProvider.h"/>
     <ClInclude Include="..\..\Source\Engine\Analysis\SBicSegmenter.h"/>
     <ClInclude Include="..\..\Source\Engine\Analysis\AnalysisCache.h"/>
@@ -3493,6 +3511,9 @@
     <ClInclude Include="..\..\Source\Engine\Analysis\BeatSegmenter.h"/>
     <ClInclude Include="..\..\Source\Engine\Analysis\AnalysisWorker.h"/>
     <ClInclude Include="..\..\Source\Engine\Analysis\EventMerger.h"/>
+    <ClInclude Include="..\..\Source\Engine\Analysis\AnalysisAbort.h"/>
+    <ClInclude Include="..\..\Source\Engine\Analysis\AnalysisAudioLoader.h"/>
+    <ClInclude Include="..\..\Source\Engine\Analysis\AnalysisRun.h"/>
     <ClInclude Include="..\..\Source\Engine\AudioSources\Stretch\RubberBandStretchBackend.h"/>
     <ClInclude Include="..\..\Source\Engine\AudioSources\Stretch\StretchOutputFifo.h"/>
     <ClInclude Include="..\..\Source\Engine\AudioSources\VolumeFade.h"/>

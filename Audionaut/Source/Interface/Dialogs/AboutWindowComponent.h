@@ -15,22 +15,6 @@
 
 using json = nlohmann::json;
 
-// See SBicSegmenter.cpp for the rationale: Essentia is a prebuilt library that
-// may not be present/linked in every build, so its availability is auto-detected
-// via header presence unless the build system defines ESSENTIA_ENABLED explicitly.
-#ifndef ESSENTIA_ENABLED
- #if __has_include(<essentia/algorithmfactory.h>) && __has_include(<unsupported/Eigen/CXX11/Tensor>)
-  #define ESSENTIA_ENABLED 1
- #else
-  #define ESSENTIA_ENABLED 0
- #endif
-#endif
-
-#if ESSENTIA_ENABLED
- #define EIGEN_HAS_STD_RESULT_OF 0
- #include <essentia/essentia.h>
-#endif
-
 class AboutWindowComponent final : public Component
 {
 public:
@@ -72,10 +56,6 @@ public:
         addCredit (jsonVersionString, "https://github.com/nlohmann/json");
         addCredit ("Ableton Link 3.1.2", "https://github.com/Ableton/link");
         addCredit ("FAbian's Realtime Box o' Tricks", "https://github.com/hogliux/farbot");
-#if ESSENTIA_ENABLED
-        addCredit ("Essentia " + String (essentia::version) + " (Music Technology Group, Universitat Pompeu Fabra)",
-                   "https://essentia.upf.edu");
-#endif
 #if DEMUCS_ENABLED
         addCredit ("demucs.cpp (Sevag Hanssian, MIT)", "https://github.com/sevagh/demucs.cpp");
         addCredit ("Demucs & the htdemucs model (Alexandre Defossez et al., Meta AI Research)",

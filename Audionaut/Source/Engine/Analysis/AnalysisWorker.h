@@ -28,7 +28,9 @@ class AnalysisProvider;
  * background `juce::TimeSliceThread` and a queue of pending (file, analysis
  * type) jobs. Callers `enqueue()` a file - e.g. `AudioResourceContainer` does so
  * whenever a new audio resource is added - and the worker analyses it later,
- * one job per time slice, delegating to `AnalysisProvider::analyzeFile()`.
+ * taking every queued job of one file in a single time slice, so the file is
+ * decoded once for all of them (`AnalysisProvider::analyzeFile()` with the
+ * list of types).
  *
  * Results land in the shared `AnalysisCache` (via the provider), so the UI picks
  * them up through the usual `AnalysisProvider::getSegments()` query once ready.
@@ -67,7 +69,7 @@ public:
      *
      * Pending jobs are dropped and an analysis in flight is abandoned at its
      * next stage (see AnalysisProvider::analyzeFile's abort flag), so this
-     * returns after at most one Essentia stage rather than after the whole
+     * returns after at most one analysis stage rather than after the whole
      * file - quitting must not hang on a long recording's analysis. Nothing
      * of the abandoned analysis is cached.
      */
@@ -105,8 +107,9 @@ public:
     /**
      * @brief Queues background analysis of @p audioFile for the given types.
      *
-     * Duplicate (file, type) jobs already pending are ignored, and the file
-     * must exist. Safe to call from the message thread.
+     * Duplicate (file, type) jobs already pending are ignored, so are types
+     * the cache already holds for the file, and the file must exist. Safe to
+     * call from the message thread.
      *
      * @param audioFile The audio file to analyse.
      * @param types     The analyses to run.
@@ -147,6 +150,15 @@ public:
     /** @brief Number of queued analyses not yet started (excludes any running). */
     int getPendingCount() const;
 
+    /**
+     * @brief Files with analyses still queued, not counting the one running.
+     *
+     * One pass serves all of a file's analyses, so this is the count that
+     * steps down as the worker gets through its queue; the job count does
+     * not move while a pass runs.
+     */
+    int getPendingFileCount() const;
+
     /** @brief True while an analysis is actively running on the worker thread. */
     bool isBusy() const { return busy.load(); }
 
@@ -154,8 +166,8 @@ public:
     int getRemainingCount() const;
 
     /**
-     * @brief Analyses left for @p audioFile alone: its queued jobs plus one
-     *        if an analysis of it is running right now.
+     * @brief Analyses left for @p audioFile alone: its queued jobs plus the
+     *        ones running right now, if it is the file being analysed.
      *
      * Lets the UI show per-clip progress (the arrangement clip header) rather
      * than only the global status line. Safe to call from the message thread.
@@ -165,8 +177,22 @@ public:
     /** @brief Name of the file being analysed right now, or empty if idle. */
     juce::String getCurrentFileName() const;
 
-    /** @brief Type of the analysis running right now, or std::nullopt if idle. */
+    /** @brief The file being analysed right now, or an invalid File if idle. */
+    juce::File getCurrentFile() const;
+
+    /**
+     * @brief How far the running pass has got, 0 to 1; 0 when idle.
+     *
+     * One pass serves every queued analysis of a file, so a count of its
+     * jobs does not move while it runs; this does.
+     */
+    float getCurrentProgress() const { return currentProgress.load(); }
+
+    /** @brief First of the analyses running right now, or std::nullopt if idle. */
     std::optional<AnalysisType> getCurrentAnalysisType() const;
+
+    /** @brief The analyses running right now, in one pass; empty if idle. */
+    std::vector<AnalysisType> getCurrentAnalysisTypes() const;
 
 private:
     int useTimeSlice() override;
@@ -194,6 +220,9 @@ private:
     // True only while useTimeSlice() is running an analysis; read by the UI.
     std::atomic<bool> busy { false };
 
+    // Progress of the running pass, written by the analysis thread.
+    std::atomic<float> currentProgress { 0.0f };
+
     // Set by the destructor; the running analysis polls it between its stages
     // and gives up once it is set.
     std::atomic<bool> abortRequested { false };
@@ -207,7 +236,7 @@ private:
     juce::File currentFile;
 
     // Type of the analysis currently running (nullopt when idle); guarded by mutex.
-    std::optional<AnalysisType> currentAnalysisType;
+    std::vector<AnalysisType> currentAnalysisTypes;
 
     juce::TimeSliceThread thread { "analysis worker" };
 

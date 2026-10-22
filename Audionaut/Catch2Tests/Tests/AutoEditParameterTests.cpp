@@ -3,7 +3,7 @@
 
 #include "Engine/AutoEdit/AutoEditParameter.h"
 
-// Pure arithmetic - no engine, no Essentia. The measure convention (four
+// Pure arithmetic - no engine, no analysis. The measure convention (four
 // beats to a measure) matches TempoProvider, which these values pin.
 
 using namespace audium;

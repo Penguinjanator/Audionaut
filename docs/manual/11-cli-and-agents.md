@@ -68,7 +68,7 @@ info            project summary (tempo, tracks, clips) or raw project JSON
 create          new empty project
 import          add audio files at a position
 export          offline bounce (whole project, a window, or one region)
-analyze         run Essentia analysis and cache the results
+analyze         run the analyses and cache the results
 auto-edit       segment a clip at analysed boundaries
 assemble        build an arrangement from a track's regions
 split           split clips at a timeline position

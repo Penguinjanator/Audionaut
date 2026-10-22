@@ -41,7 +41,7 @@ int runImport (const juce::ArgumentList& args, CliContext& context);
 /** `export <project> -o <out.wav|.flac|.aiff|.ogg|.mp3> [format/range options]` - offline bounce. */
 int runExport (const juce::ArgumentList& args, CliContext& context);
 
-/** `analyze <project> [--types a,b]` - run Essentia analyses, persist cache. */
+/** `analyze <project> [--types a,b]` - run the analyses, persist cache. */
 int runAnalyze (const juce::ArgumentList& args, CliContext& context);
 
 /** `auto-edit <project> [--track N --clip N --measures M]` - segment a clip. */

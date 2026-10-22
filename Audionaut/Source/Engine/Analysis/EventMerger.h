@@ -28,9 +28,9 @@ namespace audium {
  * boundaries) outweigh frequent ones (beats), so the final cuts land on
  * beat-aligned segment boundaries.
  *
- * Unlike the segmenters in this directory this class needs no Essentia - it is
- * pure arithmetic over `std::vector<float>` - so it builds and is tested
- * unconditionally. Do not introduce an Essentia dependency here.
+ * Unlike the segmenters in this directory this class reads no audio - it is
+ * pure arithmetic over `std::vector<float>` - so it is tested without any
+ * recording. Keep it that way.
  *
  * The public interface speaks seconds, matching SBicSegmenter, OnsetSegmenter,
  * BeatSegmenter and AnalysisProvider. Internally the merge runs on a discrete

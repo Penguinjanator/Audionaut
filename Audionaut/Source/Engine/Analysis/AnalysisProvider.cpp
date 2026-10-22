@@ -9,32 +9,29 @@
 */
 
 #include "AnalysisProvider.h"
+#include "Engine/Analysis/AnalysisAbort.h"
 #include "Engine/Resource/AudioResource.h"
 #include "Engine/Provider/TempoProvider.h"
 
+#include <algorithm>
 #include <cmath>
 
 
 namespace audium {
 
-void AnalysisProvider::analyzeSBic(AudioTrack& audioTrack)
+void AnalysisProvider::analyzeSegments(AudioTrack& audioTrack)
 {
-    analyzeTrack(audioTrack, AnalysisType::SBic);
+    analyzeTrack(audioTrack, AnalysisType::Segments);
 }
 
 void AnalysisProvider::analyzeOnsets(AudioTrack& audioTrack)
 {
-    analyzeTrack(audioTrack, AnalysisType::Onset);
+    analyzeTrack(audioTrack, AnalysisType::Onsets);
 }
 
 void AnalysisProvider::analyzeBeats(AudioTrack& audioTrack)
 {
-    analyzeTrack(audioTrack, AnalysisType::Beat);
-}
-
-void AnalysisProvider::analyzeBeatsDegara(AudioTrack& audioTrack)
-{
-    analyzeTrack(audioTrack, AnalysisType::BeatDegara);
+    analyzeTrack(audioTrack, AnalysisType::Beats);
 }
 
 void AnalysisProvider::analyzeTrack(AudioTrack& audioTrack, AnalysisType analysisType)
@@ -55,88 +52,97 @@ void AnalysisProvider::analyzeTrack(AudioTrack& audioTrack, AnalysisType analysi
     }
 }
 
-AnalysisProvider::SegmentResult AnalysisProvider::runSegmenter(AnalysisType analysisType,
-                                                                const juce::File& audioFile,
-                                                                const std::atomic<bool>* shouldAbort)
-{
-    switch (analysisType)
-    {
-        case AnalysisType::SBic:
-            return { sBicSegmenter->analyze(audioFile, SBicSegmenter::Parameters(), shouldAbort), 0.0f };
-        case AnalysisType::Onset:
-            return { onsetSegmenter->analyze(audioFile, OnsetSegmenter::Parameters(), shouldAbort), 0.0f };
-        case AnalysisType::Beat:
-        {
-            auto result = beatSegmenter->analyze(audioFile, BeatSegmenter::Parameters(), shouldAbort);
-            return { std::move(result.beats), result.bpm };
-        }
-        case AnalysisType::BeatDegara:
-        {
-            BeatSegmenter::Parameters params;
-            params.method = BeatSegmenter::Method::Degara;
-            auto result = beatSegmenter->analyze(audioFile, params, shouldAbort);
-            return { std::move(result.beats), result.bpm };
-        }
-    }
-    return {};
-}
-
 std::vector<float> AnalysisProvider::analyzeFile(const juce::File& audioFile,
                                                  AnalysisType analysisType,
                                                  const std::atomic<bool>* shouldAbort)
 {
-    // Reuse a cached result when the file is unchanged; otherwise run the
-    // (expensive) analysis and cache it for next time.
-    if (auto cached = analysisCache->get(audioFile, analysisType))
+    auto results = analyzeFile(audioFile, std::vector<AnalysisType> { analysisType }, shouldAbort);
+    const auto it = results.find(analysisType);
+    return it != results.end() ? std::move(it->second) : std::vector<float>{};
+}
+
+std::unordered_map<AnalysisType, std::vector<float>>
+    AnalysisProvider::analyzeFile(const juce::File& audioFile,
+                                  const std::vector<AnalysisType>& analysisTypes,
+                                  const std::atomic<bool>* shouldAbort,
+                                  const AnalysisRun::ProgressFn& progress)
+{
+    std::unordered_map<AnalysisType, std::vector<float>> results;
+
+    // Reuse cached results when the file is unchanged; what is left runs in
+    // one pass and is cached for next time.
+    const auto collectMissing = [&]
+    {
+        std::vector<AnalysisType> missing;
+        for (auto analysisType : analysisTypes)
+        {
+            if (results.count(analysisType) > 0 || std::find(missing.begin(), missing.end(), analysisType) != missing.end())
+                continue;
+            if (auto cached = analysisCache->get(audioFile, analysisType))
+                results[analysisType] = std::move(*cached);
+            else
+                missing.push_back(analysisType);
+        }
+        return missing;
+    };
+
+    auto missing = collectMissing();
+    if (missing.empty())
     {
         std::cout << "AnalysisProvider::analyzeFile() - cache hit for "
                   << audioFile.getFileName() << std::endl;
-        return std::move(*cached);
+        return results;
     }
 
-    SegmentResult result;
+    AnalysisRun::Result run;
     {
-        // Serialise the actual segmenter run; a concurrent caller may have
-        // computed the same result while we waited, so re-check the cache.
+        // Serialise the actual run; a concurrent caller may have computed
+        // some of it while we waited, so re-check the cache.
         std::lock_guard<std::mutex> lock(segmenterMutex);
-        if (auto cached = analysisCache->get(audioFile, analysisType))
-            return std::move(*cached);
-
-        result = runSegmenter(analysisType, audioFile, shouldAbort);
+        missing = collectMissing();
+        if (! missing.empty())
+            run = analysisRun.analyze(audioFile, missing, shouldAbort, progress);
     }
 
     // An abandoned analysis (see AnalysisWorker's destructor) has no result
     // worth caching or announcing.
-    if (shouldAbort != nullptr && shouldAbort->load())
+    if (isAborted(shouldAbort))
     {
         std::cout << "AnalysisProvider::analyzeFile() - abandoned analysis of "
                   << audioFile.getFileName() << std::endl;
-        return {};
+        return results;
     }
 
     // Only cache successful analyses so failures are retried next time.
-    if (! result.segments.empty())
+    auto changed = false;
+    const auto store = [&](AnalysisType analysisType, const std::vector<float>& segments, float bpm)
     {
-        analysisCache->put(audioFile, analysisType, result.segments, result.bpm);
+        if (! segments.empty())
+        {
+            analysisCache->put(audioFile, analysisType, segments, bpm);
+            results[analysisType] = segments;
+            changed = true;
+        }
+        std::cout << "AnalysisProvider::analyzeFile() - " << segments.size()
+                  << " " << analysisTypeToString(analysisType) << " for " << audioFile.getFileName() << std::endl;
+    };
+    if (run.segments)
+        store(AnalysisType::Segments, *run.segments, 0.0f);
+    if (run.beats)
+        store(AnalysisType::Beats, run.beats->beats, run.beats->bpm);
+    if (run.onsets)
+        store(AnalysisType::Onsets, *run.onsets, 0.0f);
 
-        // Notify listeners (e.g. AudioClipView) that new results are ready to
-        // display. Safe to call from any thread - AnalysisWorker runs this on
-        // a background thread and ChangeBroadcaster dispatches asynchronously
-        // on the message thread.
+    // Notify listeners (e.g. AudioClipView) that new results are ready to
+    // display. Safe to call from any thread - AnalysisWorker runs this on a
+    // background thread and ChangeBroadcaster dispatches asynchronously on
+    // the message thread.
+    if (changed)
         sendChangeMessage();
-    }
-
-    std::cout << "AnalysisProvider::analyzeFile() - " << result.segments.size()
-              << " boundary/boundaries for " << audioFile.getFileName() << std::endl;
-
-#if 0
-    for (auto seconds : result.segments)
-        std::cout << "  at " << seconds << " s" << std::endl;
-#endif
 
     // Results are held (and persisted) by the cache - the UI queries them
     // back via getSegments()/getBpm(), so nothing further to store here.
-    return result.segments;
+    return results;
 }
 
 bool AnalysisProvider::matchesGrid(double projectTempoBpm,
@@ -183,16 +189,16 @@ const std::vector<AnalysisType>& AnalysisProvider::getMergeAnalysisTypes()
 {
     // Stream order matters: EventMerger expects the segmentation stream first.
     static const std::vector<AnalysisType> types {
-        AnalysisType::SBic,
-        AnalysisType::BeatDegara
+        AnalysisType::Segments,
+        AnalysisType::Beats
     };
 
     return types;
 }
 
 std::vector<EventMerger::EventStream>
-    AnalysisProvider::makeMergeStreams(const std::vector<float>& sBicSegments,
-                                       const std::vector<float>& degaraBeats)
+    AnalysisProvider::makeMergeStreams(const std::vector<float>& segments,
+                                       const std::vector<float>& beats)
 {
     std::vector<EventMerger::EventStream> streams;
 
@@ -216,8 +222,8 @@ std::vector<EventMerger::EventStream>
     // The structural boundaries are the rare events, so they carry the widest
     // kernel and dominate the merge. Beats are the dense event stream they are
     // aligned to.
-    add("sbic", EventMerger::Kind::Segmentation, sBicSegments);
-    add("beats_degara", EventMerger::Kind::Beat, degaraBeats);
+    add("segments", EventMerger::Kind::Segmentation, segments);
+    add("beats", EventMerger::Kind::Beat, beats);
 
     return streams;
 }
@@ -238,17 +244,16 @@ EventMerger::Result AnalysisProvider::mergeCachedAnalyses(const juce::File& audi
                                                           float durationSeconds,
                                                           const EventMerger::Parameters& params) const
 {
-    // Cache-only by design: running three Essentia analyses here would block
-    // whichever thread called us, and AnalysisWorker has normally cached them
-    // already. A caller wanting to explain the gap asks
-    // findMissingMergeAnalyses().
-    auto sBicSegments = analysisCache->get(audioFile, AnalysisType::SBic);
-    auto degaraBeats  = analysisCache->get(audioFile, AnalysisType::BeatDegara);
+    // Cache-only by design: running the analyses here would block whichever
+    // thread called us, and AnalysisWorker has normally cached them already.
+    // A caller wanting to explain the gap asks findMissingMergeAnalyses().
+    auto segments = analysisCache->get(audioFile, AnalysisType::Segments);
+    auto beats    = analysisCache->get(audioFile, AnalysisType::Beats);
 
-    if (! sBicSegments || ! degaraBeats)
+    if (! segments || ! beats)
         return {};
 
-    auto streams = makeMergeStreams(*sBicSegments, *degaraBeats);
+    auto streams = makeMergeStreams(*segments, *beats);
 
     if (streams.empty())
         return {};

@@ -7,17 +7,6 @@
 #include "Engine/Analysis/AnalysisProvider.h"
 #include "Engine/Analysis/AnalysisWorker.h"
 
-// The in-flight scenario needs a real (slow) analysis, which is only available
-// when the codebase is built against Essentia. See ESSENTIA_ENABLED in the
-// segmenters.
-#ifndef ESSENTIA_ENABLED
- #if __has_include(<essentia/algorithmfactory.h>) && __has_include(<unsupported/Eigen/CXX11/Tensor>)
-  #define ESSENTIA_ENABLED 1
- #else
-  #define ESSENTIA_ENABLED 0
- #endif
-#endif
-
 using namespace audium;
 
 SCENARIO("AnalysisWorker cancels queued analyses", "[engine][analysis][worker]")
@@ -30,7 +19,7 @@ SCENARIO("AnalysisWorker cancels queued analyses", "[engine][analysis][worker]")
     REQUIRE(otherFile.existsAsFile());
 
     // A null provider makes each job a no-op, so the queue handling can be
-    // exercised without running (slow) Essentia analyses.
+    // exercised without running any analysis.
     AnalysisWorker worker(nullptr);
 
     WHEN("jobs for a file are enqueued and cancelled")
@@ -148,7 +137,7 @@ SCENARIO("AnalysisWorker runs the merge's analyses first", "[engine][analysis][w
 
         THEN("the remaining analyses still run afterwards")
         {
-            REQUIRE(defaults.size() == 4);
+            REQUIRE(defaults.size() == 3);
         }
     }
 }
@@ -173,20 +162,20 @@ SCENARIO("AnalysisWorker's automatic analysis can be configured", "[engine][anal
 
         THEN("an explicitly requested analysis still queues")
         {
-            REQUIRE(worker.enqueue(audioFile, { AnalysisType::Onset }) == 1);
+            REQUIRE(worker.enqueue(audioFile, { AnalysisType::Onsets }) == 1);
         }
 
         THEN("re-enabling restores the default behaviour")
         {
             worker.setAutoAnalysisEnabled(true);
-            REQUIRE(worker.enqueue(audioFile) == 4);
+            REQUIRE(worker.enqueue(audioFile) == 3);
         }
     }
 
     WHEN("the default types are replaced in an arbitrary order")
     {
-        worker.setDefaultAnalysisTypes({ AnalysisType::Beat, AnalysisType::Onset,
-                                         AnalysisType::SBic, AnalysisType::BeatDegara });
+        worker.setDefaultAnalysisTypes({ AnalysisType::Onsets, AnalysisType::Beats,
+                                         AnalysisType::Segments });
 
         THEN("they are stored in canonical, merge-first order")
         {
@@ -196,11 +185,11 @@ SCENARIO("AnalysisWorker's automatic analysis can be configured", "[engine][anal
 
     WHEN("the default types are replaced with a subset")
     {
-        worker.setDefaultAnalysisTypes({ AnalysisType::Onset, AnalysisType::SBic });
+        worker.setDefaultAnalysisTypes({ AnalysisType::Onsets, AnalysisType::Segments });
 
         THEN("the canonical order is kept within the subset")
         {
-            const std::vector<AnalysisType> expected { AnalysisType::SBic, AnalysisType::Onset };
+            const std::vector<AnalysisType> expected { AnalysisType::Segments, AnalysisType::Onsets };
             REQUIRE(worker.getDefaultAnalysisTypes() == expected);
         }
     }
@@ -216,7 +205,7 @@ SCENARIO("AnalysisWorker's automatic analysis can be configured", "[engine][anal
 
         THEN("an explicitly requested analysis still queues")
         {
-            REQUIRE(worker.enqueue(audioFile, { AnalysisType::Beat }) == 1);
+            REQUIRE(worker.enqueue(audioFile, { AnalysisType::Beats }) == 1);
         }
     }
 }
@@ -225,10 +214,7 @@ namespace {
 
 std::shared_ptr<AnalysisProvider> makeRealProvider(std::shared_ptr<AnalysisCache> cache)
 {
-    return std::make_shared<AnalysisProvider>(std::make_shared<SBicSegmenter>(),
-                                              std::make_shared<OnsetSegmenter>(),
-                                              std::make_shared<BeatSegmenter>(),
-                                              cache);
+    return std::make_shared<AnalysisProvider>(cache);
 }
 
 } // namespace
@@ -263,9 +249,8 @@ SCENARIO("AnalysisProvider abandons an analysis whose abort flag is set",
     }
 }
 
-#if ESSENTIA_ENABLED
 SCENARIO("AnalysisWorker's destructor abandons the analysis in flight",
-         "[engine][analysis][worker][essentia]")
+         "[engine][analysis][worker]")
 {
     // Quitting the app destroys the worker; that must not wait for a long
     // recording's analysis to run to completion.
@@ -280,10 +265,10 @@ SCENARIO("AnalysisWorker's destructor abandons the analysis in flight",
     {
         auto worker = std::make_unique<AnalysisWorker>(provider,
                                                        AnalysisWorker::canonicalAnalysisTypes());
-        REQUIRE(worker->enqueue(audioFile) == 4);
+        REQUIRE(worker->enqueue(audioFile) == 3);
 
-        // Catch the worker early in the first analysis (the decode alone takes
-        // a good part of a second for this file), well before it could finish.
+        // Catch the worker early in the first analysis (each one takes about
+        // half a second for this file), before it could finish.
         while (! worker->isBusy())
             Thread::yield();
 
@@ -304,11 +289,10 @@ SCENARIO("AnalysisWorker's destructor abandons the analysis in flight",
 
             THEN("it returns promptly")
             {
-                // A full run of the queue takes a few seconds; the destructor
-                // may only wait for the current Essentia stage.
-                REQUIRE(elapsedMs < 5000.0);
+                // A full run of the queue takes over a second; the destructor
+                // may only wait for the current stage.
+                REQUIRE(elapsedMs < 1000.0);
             }
         }
     }
 }
-#endif // ESSENTIA_ENABLED

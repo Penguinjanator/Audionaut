@@ -18,7 +18,7 @@
 // Runs an auto edit both ways over the same audio and compares where they cut.
 //
 // The two do not agree exactly, and are not meant to: the native path merges
-// BIC boundaries with Degara beats, while gaborgandalf merges BIC with librosa's
+// BIC boundaries with tracked beats, while gaborgandalf merges BIC with librosa's
 // agglomerative segmentation, three beat grids and their decimations. What this
 // pins is that they describe the same music - the cuts land in the same places
 // to within a musically meaningful tolerance - rather than that they are equal.
@@ -27,17 +27,7 @@
 // essentia, librosa and scipy < 1.15, so the scenario skips where those are
 // absent, which includes CI.
 
-#ifndef ESSENTIA_ENABLED
- #if __has_include(<essentia/algorithmfactory.h>) && __has_include(<unsupported/Eigen/CXX11/Tensor>)
-  #define ESSENTIA_ENABLED 1
- #else
-  #define ESSENTIA_ENABLED 0
- #endif
-#endif
-
 using namespace audium;
-
-#if ESSENTIA_ENABLED
 
 namespace {
 
@@ -306,5 +296,3 @@ SCENARIO("Auto edit cuts in the same places whichever implementation picks them"
     DeletedAtShutdown::deleteAll();
     MessageManager::deleteInstance();
 }
-
-#endif // ESSENTIA_ENABLED

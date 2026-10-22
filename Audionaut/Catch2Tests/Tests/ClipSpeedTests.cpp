@@ -76,7 +76,11 @@ Fixture makeFixture(const juce::File& audioFile)
     Fixture fixture;
     fixture.engine = AudiumFactory::createAudiumEngine();
     fixture.inputFile = audioFile;
-    fixture.bounceFile = juce::File(juce::String(CURRENT_SOURCE_DIR) + "/TestFiles/clip-speed-out.wav");
+    // Outside the repository: CI checks that the suite leaves TestFiles alone.
+    fixture.bounceFile = juce::File::getSpecialLocation(juce::File::tempDirectory)
+                             .getChildFile("AudionautTests")
+                             .getChildFile("clip-speed-out.wav");
+    fixture.bounceFile.getParentDirectory().createDirectory();
 
     REQUIRE(audioFile.existsAsFile());
     REQUIRE(fixture.engine->getProjectFileStore()->open(audioFile, nullptr));
@@ -965,7 +969,7 @@ SCENARIO("locking seeds the clip tempo from the beat analysis", "[engine][clipsp
 
         WHEN("the analysis cache knows the source's tempo")
         {
-            provider->getCache()->put(file, AnalysisType::BeatDegara, { 0.5f, 1.0f, 1.5f }, 96.0f);
+            provider->getCache()->put(file, AnalysisType::Beats, { 0.5f, 1.0f, 1.5f }, 96.0f);
             const auto known = ClipTempo::lockToTempo(*item, *provider);
 
             THEN("the clip takes it")

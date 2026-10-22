@@ -111,14 +111,14 @@ Every command takes `--json` to emit exactly one machine-readable result
 envelope on stdout (`{"ok": true, "result": ...}` or `{"ok": false, "error":
 ...}`) with all logging on stderr, plus `--quiet`. Exit codes: `0` success,
 `1` operation failed, `2` usage error, `3` feature unavailable in this build
-(e.g. `analyze` without Essentia). Option values may be given as `--opt value`
+(e.g. `separate` without Demucs). Option values may be given as `--opt value`
 or `--opt=value`.
 
 ```
 audionaut-cli create  song.audium --channels 2
 audionaut-cli import  song.audium take1.wav take2.wav --position 4.5
 audionaut-cli info    song.audium --json
-audionaut-cli analyze song.audium --types sbic,beat_degara
+audionaut-cli analyze song.audium --types segments,beats
 audionaut-cli auto-edit song.audium --track 0 --measures 4
 audionaut-cli assemble  song.audium --duration 60 --mode random
 audionaut-cli split   song.audium --at 23              # bar 23; --unit beats|seconds|clocks
