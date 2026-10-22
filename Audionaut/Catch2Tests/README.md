@@ -15,7 +15,7 @@ run:
 ./build/AudionautTests_artefacts/AudionautTests
 ```
 
-run a single tag/scenario (tests are tagged, e.g. `[engine]`, `[cli]`, `[essentia]`):
+run a single tag/scenario (tests are tagged, e.g. `[engine]`, `[cli]`, `[analysis]`):
 
 ```
 ./build/AudionautTests_artefacts/AudionautTests "[cli]"

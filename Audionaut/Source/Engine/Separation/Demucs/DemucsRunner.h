@@ -12,8 +12,8 @@
 // The demucs.cpp inference library, behind an interface that exposes neither
 // Eigen nor demucs.cpp itself.
 //
-// demucs.cpp needs an Eigen newer than the one Essentia's tree carries, and
-// the two cannot share a translation unit. So this header is deliberately
+// demucs.cpp brings its own Eigen (3.4), which must stay out of the rest of
+// Audionaut. So this header is deliberately
 // plain C++ and the implementation is the only Audionaut source compiled
 // against demucs.cpp's vendored Eigen (see the demucs flag scheme in the
 // .jucer and the audionaut_demucs target in Catch2Tests/CMakeLists.txt). Keep
