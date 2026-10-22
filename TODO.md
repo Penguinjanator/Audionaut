@@ -47,7 +47,8 @@
 
 - [x] **Wire code coverage in properly.** Done — `AUDIONAUT_ENABLE_COVERAGE`
   (default `OFF`) in `Audionaut/Catch2Tests/CMakeLists.txt`, plus a
-  `Code coverage` workflow in `.github/workflows/coverage.yml`.
+  `Code coverage` workflow in `.github/workflows/coverage.yml`, run by hand
+  since 2026-10-22 (the Linux tests on every push/PR are `linux-tests.yml`).
 
   Locally:
 
