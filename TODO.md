@@ -28,7 +28,7 @@
     models are MIT (lower quality); Open-Unmix weights are CC-BY-NC.
     Training our own htdemucs on licensed data is the clean long-term fix.
   - Adds to the LICENSE.md commercial-licensing blockers alongside
-    Essentia (AGPL) and Ableton Link (GPL).
+    Ableton Link (GPL).
 - [x] Mirror the weights on audionaut.app as a fallback download. Done
   2026-09-02: the app tries
   `https://audionaut.app/models/ggml-model-htdemucs-4s-f16.bin` when
@@ -36,9 +36,9 @@
   Space and verified end to end - the hidden `[download-mirror]` test
   fetches it through the app's fallback path with the primary disabled.
   A copy is also staged in the web repo's `docs/models/`.
-- [ ] Windows/Linux pass: verify the `/external:I` / `-isystem` demotion of
-  Essentia's Eigen keeps the demucs translation units on the vendored Eigen
-  (they need >= 3.4), and check MSVC compile time for the transformer units.
+- [ ] Windows/Linux pass: check MSVC compile time for the transformer units.
+  (The Eigen clash this item also covered went with Essentia: the demucs
+  translation units are the only ones that see an Eigen now.)
 - [ ] Long clips: the separator holds the whole clip and all stems in
   memory, so clips are capped at 10 minutes. Stream longer clips through
   the segmenter in windows.
@@ -64,7 +64,7 @@
   recommended config flags inject `-O3` for other build types through
   INTERFACE options that land later on the command line.
 
-  Baseline measured 2026-08-09 (all 62 test cases passing, Essentia enabled):
+  Baseline measured 2026-08-09 (all 62 test cases passing, Essentia still linked then):
   **35.8% lines overall** (4,421/12,358) — Engine **66.8%** (4,209/6,300),
   Interface **3.5%** (212/6,025).
 
