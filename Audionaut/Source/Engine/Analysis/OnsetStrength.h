@@ -32,16 +32,22 @@ public:
         /// without signal do not add noise to the flux. With the signal
         /// peak-normalised, this sits about 80 dB under a loud band.
         float floor = 1.0e-4f;
-        /// Take the flux on the band magnitudes instead of their dB values,
-        /// so loud events count for more than quiet ones. The dB flux is
-        /// librosa's and what the onset detector and the tempo estimator
-        /// want: every rise counts, however quiet. For the beat tracker it
-        /// is the wrong envelope. It weighs a hi-hat's rise like a kick's,
-        /// and since most mel bands lie above 1 kHz a sixteenth-note hi-hat
-        /// pattern outweighs the kick, so the tracker locks a sixteenth off
-        /// the beat. On the magnitudes the loud hits dominate, which is also
-        /// how Essentia's onset function saw the signal.
-        bool linearFlux = false;
+    };
+
+    /**
+     * @brief The two readings of one frame.
+     *
+     * The dB flux is librosa's envelope and what the onset detector and the
+     * tempo estimator want: every rise counts, however quiet. For the beat
+     * tracker it is the wrong envelope. It weighs a hi-hat's rise like a
+     * kick's, and since most mel bands lie above 1 kHz a sixteenth-note
+     * hi-hat pattern outweighs the kick, so the tracker locks a sixteenth
+     * off the beat. The flux of the band magnitudes lets the loud hits
+     * dominate, which is also how Essentia's onset function saw the signal.
+     */
+    struct Flux {
+        float db = 0.0f;
+        float magnitude = 0.0f;
     };
 
     /**
@@ -55,9 +61,15 @@ public:
 
     /**
      * @brief Feeds the next power spectrum.
-     * @return The onset strength of this frame; 0 for the first.
+     * @return The dB flux of this frame; 0 for the first.
      */
     float next(const float* power);
+
+    /**
+     * @brief Feeds the next power spectrum and reads both fluxes off the one
+     *        set of band energies.
+     */
+    Flux nextBoth(const float* power);
 
     /// Forgets the previous frame, for starting over on another signal.
     void reset();
@@ -86,7 +98,7 @@ public:
 private:
     Parameters parameters;
     MelFilterbank filterbank;
-    std::vector<float> bands, previousDb, currentDb;
+    std::vector<float> bands, previousDb, currentDb, previousMagnitude, currentMagnitude;
     bool hasPrevious = false;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (OnsetStrength)

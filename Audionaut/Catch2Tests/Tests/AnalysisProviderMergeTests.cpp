@@ -9,12 +9,7 @@ namespace {
 
 std::shared_ptr<AnalysisProvider> makeProvider(std::shared_ptr<AnalysisCache> cache)
 {
-    // The segmenters do no work until analyze() is called, so constructing them
-    // here costs nothing.
-    return std::make_shared<AnalysisProvider>(std::make_shared<SBicSegmenter>(),
-                                              std::make_shared<OnsetSegmenter>(),
-                                              std::make_shared<BeatSegmenter>(),
-                                              cache);
+    return std::make_shared<AnalysisProvider>(cache);
 }
 
 // Evenly spaced event times, in seconds.

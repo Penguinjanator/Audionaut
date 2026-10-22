@@ -65,6 +65,22 @@ std::optional<MonoAudio> AnalysisAudioLoader::load(const juce::File& audioFile) 
     return load(audioFile, Parameters());
 }
 
+juce::String AnalysisAudioLoader::describeProblem(const juce::File& audioFile)
+{
+    if (! audioFile.existsAsFile())
+        return "file not found";
+
+    juce::AudioFormatManager formats;
+    formats.registerBasicFormats();
+    std::unique_ptr<juce::AudioFormatReader> reader(formats.createReaderFor(audioFile));
+    if (reader == nullptr)
+        return "no decoder for this format on this platform (readable: "
+             + formats.getWildcardForAllFormats().replace("*", "").replace(";", " ") + ")";
+    if (reader->numChannels == 0 || reader->lengthInSamples <= 0 || reader->sampleRate <= 0.0)
+        return "the file holds no audio";
+    return {};
+}
+
 std::optional<MonoAudio> AnalysisAudioLoader::load(const juce::File& audioFile,
                                                    const Parameters& params,
                                                    const std::atomic<bool>* shouldAbort) const

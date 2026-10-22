@@ -16,9 +16,9 @@ namespace audium {
  * @brief Tracks the beats of an audio file and reports their tempo.
  *
  * The chain is AnalysisAudioLoader -> Stft -> OnsetStrength -> TempoEstimator
- * -> BeatTracker, all in this directory. This class turns a file into beat
- * timestamps plus a BPM and is what AnalysisProvider runs for
- * AnalysisType::Beats. The BPM is the tempo the tracked beats actually
+ * -> BeatTracker, run by AnalysisRun, which shares the front end with the
+ * other analyses. This class is the single-type door to it: a file in, beat
+ * timestamps plus a BPM out. The BPM is the tempo the tracked beats actually
  * follow, which is what the grid snapping and the clip tempo consume.
  */
 class BeatSegmenter {
@@ -35,8 +35,8 @@ public:
         int maxTempo = 208;
         int minTempo = 40;
         /// Track the beats on the flux of the band magnitudes rather than
-        /// of their dB values: see OnsetStrength::Parameters::linearFlux.
-        /// The tempo is always estimated on the dB envelope.
+        /// of their dB values: see OnsetStrength::Flux. The tempo is always
+        /// estimated on the dB envelope.
         bool linearBeatFlux = true;
     };
 

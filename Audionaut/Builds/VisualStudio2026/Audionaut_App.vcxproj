@@ -289,6 +289,7 @@
     <ClCompile Include="..\..\Source\Engine\Analysis\AnalysisWorker.cpp"/>
     <ClCompile Include="..\..\Source\Engine\Analysis\EventMerger.cpp"/>
     <ClCompile Include="..\..\Source\Engine\Analysis\AnalysisAudioLoader.cpp"/>
+    <ClCompile Include="..\..\Source\Engine\Analysis\AnalysisRun.cpp"/>
     <ClCompile Include="..\..\Source\Engine\Analysis\Stft.cpp"/>
     <ClCompile Include="..\..\Source\Engine\Analysis\MelFilterbank.cpp"/>
     <ClCompile Include="..\..\Source\Engine\Analysis\Mfcc.cpp"/>
@@ -3502,6 +3503,7 @@
     <ClInclude Include="..\..\Source\Engine\Analysis\AnalysisWorker.h"/>
     <ClInclude Include="..\..\Source\Engine\Analysis\EventMerger.h"/>
     <ClInclude Include="..\..\Source\Engine\Analysis\AnalysisAudioLoader.h"/>
+    <ClInclude Include="..\..\Source\Engine\Analysis\AnalysisRun.h"/>
     <ClInclude Include="..\..\Source\Engine\Analysis\Stft.h"/>
     <ClInclude Include="..\..\Source\Engine\Analysis\MelFilterbank.h"/>
     <ClInclude Include="..\..\Source\Engine\Analysis\Mfcc.h"/>

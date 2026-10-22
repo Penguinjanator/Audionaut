@@ -28,7 +28,9 @@ class AnalysisProvider;
  * background `juce::TimeSliceThread` and a queue of pending (file, analysis
  * type) jobs. Callers `enqueue()` a file - e.g. `AudioResourceContainer` does so
  * whenever a new audio resource is added - and the worker analyses it later,
- * one job per time slice, delegating to `AnalysisProvider::analyzeFile()`.
+ * taking every queued job of one file in a single time slice, so the file is
+ * decoded once for all of them (`AnalysisProvider::analyzeFile()` with the
+ * list of types).
  *
  * Results land in the shared `AnalysisCache` (via the provider), so the UI picks
  * them up through the usual `AnalysisProvider::getSegments()` query once ready.
@@ -154,8 +156,8 @@ public:
     int getRemainingCount() const;
 
     /**
-     * @brief Analyses left for @p audioFile alone: its queued jobs plus one
-     *        if an analysis of it is running right now.
+     * @brief Analyses left for @p audioFile alone: its queued jobs plus the
+     *        ones running right now, if it is the file being analysed.
      *
      * Lets the UI show per-clip progress (the arrangement clip header) rather
      * than only the global status line. Safe to call from the message thread.
@@ -165,8 +167,11 @@ public:
     /** @brief Name of the file being analysed right now, or empty if idle. */
     juce::String getCurrentFileName() const;
 
-    /** @brief Type of the analysis running right now, or std::nullopt if idle. */
+    /** @brief First of the analyses running right now, or std::nullopt if idle. */
     std::optional<AnalysisType> getCurrentAnalysisType() const;
+
+    /** @brief The analyses running right now, in one pass; empty if idle. */
+    std::vector<AnalysisType> getCurrentAnalysisTypes() const;
 
 private:
     int useTimeSlice() override;
@@ -207,7 +212,7 @@ private:
     juce::File currentFile;
 
     // Type of the analysis currently running (nullopt when idle); guarded by mutex.
-    std::optional<AnalysisType> currentAnalysisType;
+    std::vector<AnalysisType> currentAnalysisTypes;
 
     juce::TimeSliceThread thread { "analysis worker" };
 

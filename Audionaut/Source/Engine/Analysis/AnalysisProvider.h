@@ -14,9 +14,7 @@
 
 #include "Engine/Group/AudioTrack.h"
 #include "Engine/Group/AudioTrackContainer.h"
-#include "Engine/Analysis/SBicSegmenter.h"
-#include "Engine/Analysis/OnsetSegmenter.h"
-#include "Engine/Analysis/BeatSegmenter.h"
+#include "Engine/Analysis/AnalysisRun.h"
 #include "Engine/Analysis/AnalysisCache.h"
 #include "Engine/Analysis/EventMerger.h"
 
@@ -35,13 +33,7 @@ class AnalysisProvider : public juce::ChangeBroadcaster {
 
 
 public:
-    AnalysisProvider(std::shared_ptr<SBicSegmenter> sBicSegmenter_,
-                     std::shared_ptr<OnsetSegmenter> onsetSegmenter_,
-                     std::shared_ptr<BeatSegmenter> beatSegmenter_,
-                     std::shared_ptr<AnalysisCache> analysisCache_) :
-        sBicSegmenter(sBicSegmenter_),
-        onsetSegmenter(onsetSegmenter_),
-        beatSegmenter(beatSegmenter_),
+    explicit AnalysisProvider(std::shared_ptr<AnalysisCache> analysisCache_) :
         analysisCache(analysisCache_)
     {}
 
@@ -72,6 +64,22 @@ public:
     std::vector<float> analyzeFile(const juce::File& audioFile,
                                    AnalysisType analysisType,
                                    const std::atomic<bool>* shouldAbort = nullptr);
+
+    /**
+     * @brief Analyses a file for several types in one pass.
+     *
+     * Whatever the cache already holds is returned from there; the rest is
+     * produced by a single AnalysisRun - one decode and one STFT for all of
+     * them - and cached. Same threading terms as the single-type overload.
+     *
+     * @return The results by type, in seconds. A type missing from the map
+     *         failed or was abandoned; a BPM, where there is one, is in the
+     *         cache (getBpm).
+     */
+    std::unordered_map<AnalysisType, std::vector<float>>
+        analyzeFile(const juce::File& audioFile,
+                    const std::vector<AnalysisType>& analysisTypes,
+                    const std::atomic<bool>* shouldAbort = nullptr);
 
     /**
      * @brief Segment boundaries (in seconds) from the most recent analysis of
@@ -259,25 +267,11 @@ private:
     // each file to analyzeFile().
     void analyzeTrack(AudioTrack& audioTrack, AnalysisType analysisType);
 
-    // Result of a single segmenter run: segment boundaries plus (for
-    // beat-tracking types) the overall BPM estimate.
-    struct SegmentResult {
-        std::vector<float> segments;
-        float bpm = 0.0f;
-    };
-
-    // Dispatches to the segmenter matching the analysis type.
-    SegmentResult runSegmenter(AnalysisType analysisType,
-                               const juce::File& audioFile,
-                               const std::atomic<bool>* shouldAbort);
-
-    std::shared_ptr<SBicSegmenter> sBicSegmenter;
-    std::shared_ptr<OnsetSegmenter> onsetSegmenter;
-    std::shared_ptr<BeatSegmenter> beatSegmenter;
+    AnalysisRun analysisRun;
     std::shared_ptr<AnalysisCache> analysisCache;
 
-    // Serialises segmenter access so a background (AnalysisWorker) analysis and
-    // a UI-triggered one never run the same segmenter concurrently.
+    // Serialises the analysis runs so a background (AnalysisWorker) analysis
+    // and a UI-triggered one never analyse the same file twice over.
     std::mutex segmenterMutex;
 
     // Active merge preview (see setMergePreview). Message thread only.

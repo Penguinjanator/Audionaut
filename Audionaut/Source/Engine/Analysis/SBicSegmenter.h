@@ -16,9 +16,9 @@ namespace audium {
  * @brief Segments an audio file into homogeneous regions: a BIC (Bayesian
  *        Information Criterion) segmentation over MFCC features.
  *
- * The chain is AnalysisAudioLoader -> Stft -> Mfcc -> BicSegmenter, all in
- * this directory. This class turns a file into boundary timestamps and is
- * what AnalysisProvider runs for AnalysisType::Segments.
+ * The chain is AnalysisAudioLoader -> Stft -> Mfcc -> BicSegmenter, run by
+ * AnalysisRun, which shares the front end with the other analyses. This
+ * class is the single-type door to it: a file in, boundary timestamps out.
  */
 class SBicSegmenter {
 

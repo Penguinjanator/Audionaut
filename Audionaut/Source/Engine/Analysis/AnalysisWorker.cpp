@@ -125,33 +125,44 @@ void AnalysisWorker::cancelAll()
 
 int AnalysisWorker::useTimeSlice()
 {
-    Job job;
+    juce::File file;
+    std::vector<AnalysisType> types;
     {
-        // Claiming the job and marking it running happen in one critical
+        // Claiming the jobs and marking them running happen in one critical
         // section, so the remaining counts never miss a job that has been
-        // popped but not yet flagged as running.
+        // popped but not yet flagged as running. Every queued job of the
+        // first file goes together: one decode serves all of its analyses.
         std::lock_guard<std::mutex> lock(mutex);
         if (jobs.empty())
             return 500; // idle: poll again in half a second
 
-        job = jobs.front();
-        jobs.pop_front();
+        file = jobs.front().file;
+        for (auto it = jobs.begin(); it != jobs.end();)
+        {
+            if (it->file == file)
+            {
+                types.push_back(it->type);
+                it = jobs.erase(it);
+            }
+            else
+                ++it;
+        }
 
-        currentFileName = job.file.getFileName();
-        currentFile = job.file;
-        currentAnalysisType = job.type;
+        currentFileName = file.getFileName();
+        currentFile = file;
+        currentAnalysisTypes = types;
         busy = true;
     }
 
     if (analysisProvider != nullptr && ! abortRequested.load())
-        analysisProvider->analyzeFile(job.file, job.type, &abortRequested);
+        analysisProvider->analyzeFile(file, types, &abortRequested);
 
     {
         std::lock_guard<std::mutex> lock(mutex);
         busy = false;
         currentFileName = {};
         currentFile = juce::File();
-        currentAnalysisType = std::nullopt;
+        currentAnalysisTypes.clear();
     }
 
     // Come straight back if more work is waiting, otherwise idle.
@@ -168,7 +179,7 @@ int AnalysisWorker::getPendingCount() const
 int AnalysisWorker::getRemainingCount() const
 {
     std::lock_guard<std::mutex> lock(mutex);
-    return static_cast<int>(jobs.size()) + (busy ? 1 : 0);
+    return static_cast<int>(jobs.size() + currentAnalysisTypes.size());
 }
 
 int AnalysisWorker::getRemainingCount(const juce::File& audioFile) const
@@ -179,7 +190,7 @@ int AnalysisWorker::getRemainingCount(const juce::File& audioFile) const
         [&audioFile] (const Job& job) { return job.file == audioFile; }));
 
     if (currentFile == audioFile && currentFile != juce::File())
-        ++count;
+        count += static_cast<int>(currentAnalysisTypes.size());
 
     return count;
 }
@@ -193,7 +204,15 @@ juce::String AnalysisWorker::getCurrentFileName() const
 std::optional<AnalysisType> AnalysisWorker::getCurrentAnalysisType() const
 {
     std::lock_guard<std::mutex> lock(mutex);
-    return currentAnalysisType;
+    if (currentAnalysisTypes.empty())
+        return std::nullopt;
+    return currentAnalysisTypes.front();
+}
+
+std::vector<AnalysisType> AnalysisWorker::getCurrentAnalysisTypes() const
+{
+    std::lock_guard<std::mutex> lock(mutex);
+    return currentAnalysisTypes;
 }
 
 } // namespace audium

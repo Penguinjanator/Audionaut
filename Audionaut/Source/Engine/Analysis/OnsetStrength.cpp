@@ -15,29 +15,43 @@ OnsetStrength::OnsetStrength(const Parameters& params, int numBins, double sampl
       filterbank(params.numBands, numBins, sampleRate),
       bands((size_t) params.numBands),
       previousDb((size_t) params.numBands),
-      currentDb((size_t) params.numBands)
+      currentDb((size_t) params.numBands),
+      previousMagnitude((size_t) params.numBands),
+      currentMagnitude((size_t) params.numBands)
 {
 }
 
 float OnsetStrength::next(const float* power)
 {
+    return nextBoth(power).db;
+}
+
+OnsetStrength::Flux OnsetStrength::nextBoth(const float* power)
+{
     filterbank.apply(power, bands.data());
 
     for (size_t band = 0; band < bands.size(); ++band)
-        currentDb[band] = parameters.linearFlux ? std::sqrt(std::max(bands[band], 0.0f))
-                                                : 10.0f * std::log10(std::max(bands[band], parameters.floor));
+    {
+        currentDb[band] = 10.0f * std::log10(std::max(bands[band], parameters.floor));
+        currentMagnitude[band] = std::sqrt(std::max(bands[band], 0.0f));
+    }
 
-    float strength = 0.0f;
+    Flux flux;
     if (hasPrevious)
     {
         for (size_t band = 0; band < bands.size(); ++band)
-            strength += std::max(0.0f, currentDb[band] - previousDb[band]);
-        strength /= (float) bands.size();
+        {
+            flux.db += std::max(0.0f, currentDb[band] - previousDb[band]);
+            flux.magnitude += std::max(0.0f, currentMagnitude[band] - previousMagnitude[band]);
+        }
+        flux.db /= (float) bands.size();
+        flux.magnitude /= (float) bands.size();
     }
 
     std::swap(previousDb, currentDb);
+    std::swap(previousMagnitude, currentMagnitude);
     hasPrevious = true;
-    return strength;
+    return flux;
 }
 
 void OnsetStrength::reset()

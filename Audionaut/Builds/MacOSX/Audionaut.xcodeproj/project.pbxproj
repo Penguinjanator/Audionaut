@@ -28,6 +28,7 @@
 		167269CB4D148F8798D9FE23 /* RegionTableListBox.cpp */ = {isa = PBXBuildFile; fileRef = 00B0848F45E53B0B0D3D8AFB; };
 		180447DE5C9821AF7DB381D9 /* PlayListComponent.cpp */ = {isa = PBXBuildFile; fileRef = BE87328F6D75995A9B23C9EF; };
 		18AA4B984CE1768A0CC7FF54 /* Mp3AudioFormat.cpp */ = {isa = PBXBuildFile; fileRef = F7E929BBF8CDF62B46C42BF3; };
+		18BDB9640754B8011EBDD661 /* AnalysisRun.cpp */ = {isa = PBXBuildFile; fileRef = 77B61BA9FC647698FC3DC02B; };
 		18CEFF3C2CDABDA21B876C50 /* AgentHost.cpp */ = {isa = PBXBuildFile; fileRef = 8ADA9C9B46F94435B177335A; };
 		1E4356BB3F52839344880951 /* AgentClient.cpp */ = {isa = PBXBuildFile; fileRef = 254AE35A97051B1EF5C010F9; };
 		1F476B005EC98E518396AED8 /* CrashReporter.cpp */ = {isa = PBXBuildFile; fileRef = 3065A0EF51E5048D0437D3F4; };
@@ -426,6 +427,7 @@
 		75F7D1EBD3C1F4A773C400AB /* Voice.h */ /* Voice.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = Voice.h; path = ../../Source/Engine/Playback/Voice.h; sourceTree = SOURCE_ROOT; };
 		76BEBF8CDC5D61CC7760994E /* EventMerger.cpp */ /* EventMerger.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = EventMerger.cpp; path = ../../Source/Engine/Analysis/EventMerger.cpp; sourceTree = SOURCE_ROOT; };
 		76EE544792B2BF0317559C35 /* takehiro.c */ /* takehiro.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; name = takehiro.c; path = ../../../ThirdParty/lame/libmp3lame/takehiro.c; sourceTree = SOURCE_ROOT; };
+		77B61BA9FC647698FC3DC02B /* AnalysisRun.cpp */ /* AnalysisRun.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = AnalysisRun.cpp; path = ../../Source/Engine/Analysis/AnalysisRun.cpp; sourceTree = SOURCE_ROOT; };
 		77F5EEA514A977EB5821D4E6 /* ArrangementModel.cpp */ /* ArrangementModel.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = ArrangementModel.cpp; path = ../../Source/Interface/Models/ArrangementModel.cpp; sourceTree = SOURCE_ROOT; };
 		78220737D71F4A95C1825E8A /* PlayListItem.cpp */ /* PlayListItem.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = PlayListItem.cpp; path = ../../Source/Engine/PlayList/PlayListItem.cpp; sourceTree = SOURCE_ROOT; };
 		78351BCB2FB6EACF595B8143 /* AutoEditPreviewView.h */ /* AutoEditPreviewView.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = AutoEditPreviewView.h; path = ../../Source/Interface/Views/AutoEditPreviewView.h; sourceTree = SOURCE_ROOT; };
@@ -468,6 +470,7 @@
 		8D1EDD187514668E32C8530C /* AnalysisAudioLoader.cpp */ /* AnalysisAudioLoader.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = AnalysisAudioLoader.cpp; path = ../../Source/Engine/Analysis/AnalysisAudioLoader.cpp; sourceTree = SOURCE_ROOT; };
 		8D37E966475206DF93CB732C /* PlayListContainer.h */ /* PlayListContainer.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = PlayListContainer.h; path = ../../Source/Engine/PlayList/PlayListContainer.h; sourceTree = SOURCE_ROOT; };
 		8F48A50BBD8ADFE077D3F66D /* AutoEditOverlayControl.h */ /* AutoEditOverlayControl.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = AutoEditOverlayControl.h; path = ../../Source/Interface/Controls/AutoEditOverlayControl.h; sourceTree = SOURCE_ROOT; };
+		8FA00551D49D29700D4BD205 /* AnalysisRun.h */ /* AnalysisRun.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = AnalysisRun.h; path = ../../Source/Engine/Analysis/AnalysisRun.h; sourceTree = SOURCE_ROOT; };
 		8FC68A13891E2E3079553B60 /* ClipTransportSource.cpp */ /* ClipTransportSource.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = ClipTransportSource.cpp; path = ../../Source/Engine/AudioSources/ClipTransportSource.cpp; sourceTree = SOURCE_ROOT; };
 		9018382E5D713205AFDE2343 /* ChannelsComponent.h */ /* ChannelsComponent.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = ChannelsComponent.h; path = ../../Source/Interface/Components/MiddlePanel/ChannelView/ChannelsComponent.h; sourceTree = SOURCE_ROOT; };
 		908443AF9AB452AA02A7F75C /* ClipOverlayTarget.h */ /* ClipOverlayTarget.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = ClipOverlayTarget.h; path = ../../Source/Engine/Selection/ClipOverlayTarget.h; sourceTree = SOURCE_ROOT; };
@@ -1408,6 +1411,8 @@
 				8202F9C6D60D53659741D59B,
 				8D1EDD187514668E32C8530C,
 				607A88B6F381107A4F90E088,
+				77B61BA9FC647698FC3DC02B,
+				8FA00551D49D29700D4BD205,
 				83DF9D926CC6D186329B20BD,
 				57092A3A5FD46FCCC3D916C9,
 				9B7733A7704745A3F097A08F,
@@ -1802,6 +1807,7 @@
 				774EB253259208BB9A748B4C,
 				09566A34C9588B0ED1B27345,
 				66592FA534DF6B3C3C9312B0,
+				18BDB9640754B8011EBDD661,
 				3A9CC150189CE65DEF524F9D,
 				D0C84F042E032DBFEFDE9085,
 				4BA25AC4F7F78BD50429B85E,

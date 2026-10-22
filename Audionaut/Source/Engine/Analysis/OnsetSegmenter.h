@@ -16,8 +16,8 @@ namespace audium {
  * @brief Detects note and percussive onsets in an audio file.
  *
  * The chain is AnalysisAudioLoader -> Stft -> OnsetStrength -> peak picking,
- * all in this directory. This class turns a file into onset timestamps and
- * is what AnalysisProvider runs for AnalysisType::Onsets.
+ * run by AnalysisRun, which shares the front end with the other analyses.
+ * This class is the single-type door to it: a file in, onset timestamps out.
  */
 class OnsetSegmenter {
 

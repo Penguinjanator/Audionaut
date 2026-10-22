@@ -214,10 +214,7 @@ namespace {
 
 std::shared_ptr<AnalysisProvider> makeRealProvider(std::shared_ptr<AnalysisCache> cache)
 {
-    return std::make_shared<AnalysisProvider>(std::make_shared<SBicSegmenter>(),
-                                              std::make_shared<OnsetSegmenter>(),
-                                              std::make_shared<BeatSegmenter>(),
-                                              cache);
+    return std::make_shared<AnalysisProvider>(cache);
 }
 
 } // namespace

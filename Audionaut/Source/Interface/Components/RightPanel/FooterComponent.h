@@ -87,8 +87,7 @@ public:
             constexpr auto numFrames = sizeof(sweepFrames) / sizeof(sweepFrames[0]);
             const auto frame = sweepFrames[(analysisAnimationTick++ / 4) % numFrames];
 
-            auto analysisType = analysisWorker->getCurrentAnalysisType();
-            auto typeLabel = analysisType.has_value() ? audium::analysisTypeToString(*analysisType) : "";
+            auto typeLabel = audium::analysisTypesToString(analysisWorker->getCurrentAnalysisTypes());
 
             std::string txt = std::string(frame) + " Analysing " + typeLabel + ": "
                              + analysisWorker->getCurrentFileName().toStdString() + " ";

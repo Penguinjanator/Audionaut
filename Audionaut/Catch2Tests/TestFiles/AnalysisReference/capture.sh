@@ -17,9 +17,11 @@
 #
 # Running it
 # ----------
-# Needs a CLI built against Essentia (the CMake test build produces one) and
-# jq. Neither the build nor the test suite runs this - the committed JSON is the
-# contract. Regenerate only to add a recording.
+# Needs a CLI built against Essentia - no build has linked it since the
+# analysis moved to the native segmenters, so this is the record of how the
+# fixtures were made (check out a commit before that removal to run it) - and
+# jq. Neither the build nor the test suite runs this - the committed JSON is
+# the contract.
 #
 #   ./capture.sh ../../../../build/AudionautCli_artefacts/AudionautCli
 #

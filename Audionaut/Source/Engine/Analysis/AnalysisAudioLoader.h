@@ -62,6 +62,15 @@ public:
     /// Loads with the default parameters.
     std::optional<MonoAudio> load(const juce::File& audioFile) const;
 
+    /**
+     * @brief Why load() would return nothing for this file, or an empty
+     *        string when it can be decoded: missing, no reader for its
+     *        format on this platform, or no samples in it. Opens the file
+     *        but decodes nothing, so a caller can report the problem up
+     *        front instead of handing on an empty analysis as a result.
+     */
+    static juce::String describeProblem(const juce::File& audioFile);
+
 private:
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (AnalysisAudioLoader)
 };
