@@ -30,8 +30,11 @@ struct MonoAudio {
  * features downstream are gain-invariant apart from their log floors, which
  * the normalisation makes amplitude-relative.
  *
- * Decoding streams through the file in blocks, so the only buffer held is the
- * mono result (a little over 5 MB per minute at 22050 Hz).
+ * The rate change is a windowed sinc with its cutoff at the lower Nyquist
+ * (SincResampler), so nothing above it aliases into the analysis. Decoding
+ * streams through the file in blocks into one mono buffer at the file's
+ * rate, which the resampled result replaces: at most a few tens of MB for a
+ * long recording, held only while loading.
  */
 class AnalysisAudioLoader {
 

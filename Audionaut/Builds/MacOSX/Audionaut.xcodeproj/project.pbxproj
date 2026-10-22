@@ -31,6 +31,7 @@
 		18BDB9640754B8011EBDD661 /* AnalysisRun.cpp */ = {isa = PBXBuildFile; fileRef = 77B61BA9FC647698FC3DC02B; };
 		18CEFF3C2CDABDA21B876C50 /* AgentHost.cpp */ = {isa = PBXBuildFile; fileRef = 8ADA9C9B46F94435B177335A; };
 		1E4356BB3F52839344880951 /* AgentClient.cpp */ = {isa = PBXBuildFile; fileRef = 254AE35A97051B1EF5C010F9; };
+		1F3A0A164206971DF5F3F3E7 /* SincResampler.cpp */ = {isa = PBXBuildFile; fileRef = 17653CF68AD0D86A52919667; };
 		1F476B005EC98E518396AED8 /* CrashReporter.cpp */ = {isa = PBXBuildFile; fileRef = 3065A0EF51E5048D0437D3F4; };
 		20531CE9B45123B33913B293 /* ClipTransportSource.cpp */ = {isa = PBXBuildFile; fileRef = 8FC68A13891E2E3079553B60; };
 		2479A3C8F72EE68FB46F152D /* AutoEditOverlayControl.cpp */ = {isa = PBXBuildFile; fileRef = A5BE83E812E74DAFE42DAA76; };
@@ -227,6 +228,7 @@
 		00B802315C2CFF208A616E1D /* TransportLoop.h */ /* TransportLoop.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = TransportLoop.h; path = ../../Source/Engine/PlayList/TransportLoop.h; sourceTree = SOURCE_ROOT; };
 		0173C5BE17D7982FC12846BF /* OnsetStrength.h */ /* OnsetStrength.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = OnsetStrength.h; path = ../../Source/Engine/Analysis/OnsetStrength.h; sourceTree = SOURCE_ROOT; };
 		03DF3A11364360FFACBE47A6 /* PlayListComponent.h */ /* PlayListComponent.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = PlayListComponent.h; path = ../../Source/Interface/Components/RightPanel/PlayListComponent.h; sourceTree = SOURCE_ROOT; };
+		04902ADD1ACC777B59C80393 /* SincResampler.h */ /* SincResampler.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = SincResampler.h; path = ../../Source/Engine/Analysis/SincResampler.h; sourceTree = SOURCE_ROOT; };
 		04FFF590ED05D0000D3B5B06 /* SeparateCommand.cpp */ /* SeparateCommand.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = SeparateCommand.cpp; path = ../../Source/Cli/Commands/SeparateCommand.cpp; sourceTree = SOURCE_ROOT; };
 		05B46617E562A6E50F8D63E8 /* ZoomHandler.h */ /* ZoomHandler.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = ZoomHandler.h; path = ../../Source/Interface/Handlers/ZoomHandler.h; sourceTree = SOURCE_ROOT; };
 		068707BEEF91E3C5815141F9 /* AudioResourceFactory.h */ /* AudioResourceFactory.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = AudioResourceFactory.h; path = ../../Source/Engine/Factory/AudioResourceFactory.h; sourceTree = SOURCE_ROOT; };
@@ -261,6 +263,7 @@
 		16AA6E92464D4DF92E417ECA /* AgentProtocol.h */ /* AgentProtocol.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = AgentProtocol.h; path = ../../Source/Cli/AgentProtocol.h; sourceTree = SOURCE_ROOT; };
 		16B66FB90C6D2B7EC813F8B4 /* FakeSeparationBackend.h */ /* FakeSeparationBackend.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = FakeSeparationBackend.h; path = ../../Source/Engine/Separation/FakeSeparationBackend.h; sourceTree = SOURCE_ROOT; };
 		175A9BF7D18C68220BDB66E6 /* quantize_pvt.c */ /* quantize_pvt.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; name = quantize_pvt.c; path = ../../../ThirdParty/lame/libmp3lame/quantize_pvt.c; sourceTree = SOURCE_ROOT; };
+		17653CF68AD0D86A52919667 /* SincResampler.cpp */ /* SincResampler.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = SincResampler.cpp; path = ../../Source/Engine/Analysis/SincResampler.cpp; sourceTree = SOURCE_ROOT; };
 		193E557D0B5F362A035F0D6D /* ResourceGroup.h */ /* ResourceGroup.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = ResourceGroup.h; path = ../../Source/Engine/Group/ResourceGroup.h; sourceTree = SOURCE_ROOT; };
 		1AE0078BCCC81F812D26BB9B /* OnsetSegmenter.h */ /* OnsetSegmenter.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = OnsetSegmenter.h; path = ../../Source/Engine/Analysis/OnsetSegmenter.h; sourceTree = SOURCE_ROOT; };
 		1B61BC72323B5260458C9716 /* VoiceSource.cpp */ /* VoiceSource.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = VoiceSource.cpp; path = ../../Source/Engine/AudioSources/VoiceSource.cpp; sourceTree = SOURCE_ROOT; };
@@ -1415,6 +1418,8 @@
 				607A88B6F381107A4F90E088,
 				77B61BA9FC647698FC3DC02B,
 				8FA00551D49D29700D4BD205,
+				17653CF68AD0D86A52919667,
+				04902ADD1ACC777B59C80393,
 				83DF9D926CC6D186329B20BD,
 				57092A3A5FD46FCCC3D916C9,
 				9B7733A7704745A3F097A08F,
@@ -1810,6 +1815,7 @@
 				09566A34C9588B0ED1B27345,
 				66592FA534DF6B3C3C9312B0,
 				18BDB9640754B8011EBDD661,
+				1F3A0A164206971DF5F3F3E7,
 				3A9CC150189CE65DEF524F9D,
 				D0C84F042E032DBFEFDE9085,
 				4BA25AC4F7F78BD50429B85E,

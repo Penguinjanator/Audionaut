@@ -27,12 +27,14 @@ using namespace audium;
 //    tightly: this is the proof that the native MFCC is Essentia's MFCC.
 //
 //  - "matched": the same configuration on the original 44.1 kHz file, so
-//    the two resamplers are in the comparison. What remains is the loader:
-//    JUCE's ResamplingAudioSource is a second-order Butterworth at the new
-//    Nyquist, which rolls the top mel bands off by up to a decibel and lets
-//    some energy alias into the top band, and the native loader removes DC
-//    and peak-normalises (a constant offset in c0). Reported, and held to a
-//    coarser bar.
+//    the two loaders are in the comparison. What remains is theirs: the two
+//    windowed-sinc resamplers (SincResampler here, libsamplerate there)
+//    shape the transition band below the Nyquist differently, which is the
+//    top mel band; the native loader removes DC, which the Hann window had
+//    spread into the lowest band; and it peak-normalises, a constant offset
+//    in c0. A difference in the lowest and the highest band alone shows as
+//    an offset on the even coefficients and none on the odd ones, which is
+//    the pattern here. Reported, and held to a coarser bar.
 //
 //  - "production": the chain the segmenter ran on Essentia (44100 Hz, hop
 //    1024, Blackman-Harris, HTK mel, dB), reported as a correlation only.
@@ -224,9 +226,9 @@ SCENARIO("The native MFCC is Essentia's MFCC", "[engine][analysis][mfcc][referen
 
         THEN("the frames still describe the same spectra")
         {
-            // What the loader costs: the first coefficients, which carry the
-            // broad spectral shape, track closely; the high ones, which
-            // resolve the top bands the resampler bends, less so.
+            // What the loaders' differences cost: the first coefficients,
+            // which carry the broad spectral shape, track closely; the high
+            // ones, which resolve the edge bands, less so.
             for (size_t k = 0; k < 5; ++k)
             {
                 INFO("coefficient " << k);

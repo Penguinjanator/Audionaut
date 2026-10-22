@@ -32,7 +32,7 @@ public:
      * frames is about 1.16 s.
      *
      * The penalty is calibrated against what Essentia's SBic (which this
-     * replaced) produced for the project's test recordings: 0.65 is where
+     * replaced) produced for the project's test recordings: 0.6 is where
      * the BIC here finds boundaries at the same density, with the
      * reference's boundaries almost all found and few extra. See
      * Catch2Tests/Tests/NativeSegmentationTests.cpp for the sweep.
@@ -49,7 +49,7 @@ public:
         int minimumSegmentLength = 50;
 
         // Complexity penalty weight [0, inf]. Lower yields more boundaries.
-        float complexityPenaltyWeight = 0.65f;
+        float complexityPenaltyWeight = 0.6f;
 
         /// See BicSegmenter::Parameters.
         bool correctSmallSampleBias = true;

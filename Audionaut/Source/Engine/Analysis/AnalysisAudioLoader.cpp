@@ -5,6 +5,7 @@
 
 #include "AnalysisAudioLoader.h"
 #include "AnalysisAbort.h"
+#include "SincResampler.h"
 
 #include <algorithm>
 #include <cmath>
@@ -95,38 +96,40 @@ std::optional<MonoAudio> AnalysisAudioLoader::load(const juce::File& audioFile,
     if (reader == nullptr || reader->numChannels == 0 || reader->lengthInSamples <= 0 || reader->sampleRate <= 0.0)
         return std::nullopt;
 
+    // The whole file as mono at its own rate first, block by block with the
+    // abort flag polled between blocks; then the rate change in one pass.
+    std::vector<float> mono;
+    mono.reserve((size_t) reader->lengthInSamples);
+    {
+        MonoReaderSource source(*reader);
+        source.prepareToPlay(blockSize, reader->sampleRate);
+        juce::AudioBuffer<float> block(1, blockSize);
+        while ((juce::int64) mono.size() < reader->lengthInSamples)
+        {
+            if (isAborted(shouldAbort))
+                return std::nullopt;
+
+            const auto numSamples = (int) std::min<juce::int64>(blockSize, reader->lengthInSamples - (juce::int64) mono.size());
+            juce::AudioSourceChannelInfo info(&block, 0, numSamples);
+            source.getNextAudioBlock(info);
+            const auto* data = block.getReadPointer(0);
+            mono.insert(mono.end(), data, data + numSamples);
+        }
+        source.releaseResources();
+    }
+
     MonoAudio result;
     result.sampleRate = params.targetSampleRate;
 
-    // samples in per sample out; 1 when the file is already at the analysis rate
-    const auto ratio = reader->sampleRate / params.targetSampleRate;
-    const auto expectedLength = (size_t) std::max<juce::int64>(1, (juce::int64) std::floor((double) reader->lengthInSamples / ratio));
-    result.samples.reserve(expectedLength);
-
-    MonoReaderSource mono(*reader);
-    juce::ResamplingAudioSource resampler(&mono, false, 1);
-    const auto resample = std::abs(ratio - 1.0) > 1.0e-9;
-
-    juce::AudioSource& source = resample ? static_cast<juce::AudioSource&>(resampler)
-                                         : static_cast<juce::AudioSource&>(mono);
-    if (resample)
-        resampler.setResamplingRatio(ratio);
-    source.prepareToPlay(blockSize, params.targetSampleRate);
-
-    juce::AudioBuffer<float> block(1, blockSize);
-    while (result.samples.size() < expectedLength)
+    if (std::abs(reader->sampleRate - params.targetSampleRate) > 1.0e-6)
     {
-        if (isAborted(shouldAbort))
+        const SincResampler resampler(reader->sampleRate, params.targetSampleRate);
+        result.samples = resampler.process(mono, shouldAbort);
+        if (result.samples.empty())
             return std::nullopt;
-
-        const auto numSamples = (int) std::min<size_t>((size_t) blockSize, expectedLength - result.samples.size());
-        juce::AudioSourceChannelInfo info(&block, 0, numSamples);
-        source.getNextAudioBlock(info);
-
-        const auto* data = block.getReadPointer(0);
-        result.samples.insert(result.samples.end(), data, data + numSamples);
     }
-    source.releaseResources();
+    else
+        result.samples = std::move(mono);
 
     if (params.removeDcOffset)
     {

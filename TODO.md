@@ -299,21 +299,6 @@ the one-gesture crossfade UX on top:
 
 ## Analysis — follow-ups (found 2026-10-21 in the Essentia removal)
 
-- [ ] **The analysis loader's resampler bends the top of the spectrum.**
-  `AnalysisAudioLoader` brings the audio to 22050 Hz through
-  `juce::ResamplingAudioSource`, whose anti-alias filter is a second-order
-  Butterworth at the new Nyquist. Measured against Essentia's windowed-sinc
-  resampler on the same recording (`MfccReferenceTests`, second part): the
-  top mel bands come out up to 1 dB low and the very top band about 2.5
-  times hot from energy aliasing into it, so the high MFCCs correlate at
-  only about 0.90 with the reference while the MFCC chain itself is exact
-  (first part of the same test: 0.00003 on the same samples). Replace it
-  with an FIR low-pass designed by
-  `juce::dsp::FilterDesign::designFIRLowpassWindowMethod` at about 0.95 of
-  the new Nyquist, followed by `juce::LagrangeInterpolator`; then tighten
-  the test's second part towards the first and re-check the segmentation
-  penalty with the hidden `[bic-sweep]` scenario, since the features feed
-  the BIC. Changes analysis results, so it needs a `dataVersion` bump.
 - [ ] **The Auto Edit merge is chaotic on long material.** The hidden
   `[merge-jitter]` scenario (`MergeSensitivityTests`) moves Essentia's own
   recorded boundaries by 0.1 s and re-merges: on the 173 s recording that

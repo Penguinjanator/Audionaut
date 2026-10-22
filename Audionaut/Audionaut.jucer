@@ -216,6 +216,10 @@
                 file="Source/Engine/Analysis/AnalysisRun.cpp"/>
           <FILE id="anRunH" name="AnalysisRun.h" compile="0" resource="0"
                 file="Source/Engine/Analysis/AnalysisRun.h"/>
+          <FILE id="sincRC" name="SincResampler.cpp" compile="1" resource="0"
+                file="Source/Engine/Analysis/SincResampler.cpp"/>
+          <FILE id="sincRH" name="SincResampler.h" compile="0" resource="0"
+                file="Source/Engine/Analysis/SincResampler.h"/>
           <FILE id="stftCp" name="Stft.cpp" compile="1" resource="0" file="Source/Engine/Analysis/Stft.cpp"/>
           <FILE id="stftHd" name="Stft.h" compile="0" resource="0" file="Source/Engine/Analysis/Stft.h"/>
           <FILE id="melFbC" name="MelFilterbank.cpp" compile="1" resource="0"

@@ -141,6 +141,7 @@ OBJECTS_APP := \
   $(JUCE_OBJDIR)/EventMerger_5b3b38cf.o \
   $(JUCE_OBJDIR)/AnalysisAudioLoader_a9b2ae8.o \
   $(JUCE_OBJDIR)/AnalysisRun_c3f35eea.o \
+  $(JUCE_OBJDIR)/SincResampler_eab50605.o \
   $(JUCE_OBJDIR)/Stft_6cd08f3e.o \
   $(JUCE_OBJDIR)/MelFilterbank_40616583.o \
   $(JUCE_OBJDIR)/Mfcc_12e42b08.o \
@@ -608,6 +609,11 @@ $(JUCE_OBJDIR)/AnalysisAudioLoader_a9b2ae8.o: ../../Source/Engine/Analysis/Analy
 $(JUCE_OBJDIR)/AnalysisRun_c3f35eea.o: ../../Source/Engine/Analysis/AnalysisRun.cpp
 	-$(V_AT)mkdir -p $(@D)
 	@echo "Compiling AnalysisRun.cpp"
+	$(V_AT)$(CXX) $(JUCE_CXXFLAGS) $(JUCE_CPPFLAGS_APP) $(JUCE_CFLAGS_APP) -o "$@" -c "$<"
+
+$(JUCE_OBJDIR)/SincResampler_eab50605.o: ../../Source/Engine/Analysis/SincResampler.cpp
+	-$(V_AT)mkdir -p $(@D)
+	@echo "Compiling SincResampler.cpp"
 	$(V_AT)$(CXX) $(JUCE_CXXFLAGS) $(JUCE_CPPFLAGS_APP) $(JUCE_CFLAGS_APP) -o "$@" -c "$<"
 
 $(JUCE_OBJDIR)/Stft_6cd08f3e.o: ../../Source/Engine/Analysis/Stft.cpp
