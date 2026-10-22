@@ -107,8 +107,9 @@ public:
     /**
      * @brief Queues background analysis of @p audioFile for the given types.
      *
-     * Duplicate (file, type) jobs already pending are ignored, and the file
-     * must exist. Safe to call from the message thread.
+     * Duplicate (file, type) jobs already pending are ignored, so are types
+     * the cache already holds for the file, and the file must exist. Safe to
+     * call from the message thread.
      *
      * @param audioFile The audio file to analyse.
      * @param types     The analyses to run.

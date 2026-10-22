@@ -76,11 +76,19 @@ int AnalysisWorker::enqueue(const juce::File& audioFile,
     if (! audioFile.existsAsFile())
         return 0;
 
+    // A type the cache already holds for this file needs no job: a reopened
+    // project's files are enqueued as they load, and their sidecar usually
+    // has everything, so nothing should be queued - or shown as pending.
+    auto cache = analysisProvider != nullptr ? analysisProvider->getCache() : nullptr;
+
     int queued = 0;
     {
         std::lock_guard<std::mutex> lock(mutex);
         for (auto type : types)
         {
+            if (cache != nullptr && cache->get(audioFile, type).has_value())
+                continue;
+
             Job job { audioFile, type };
             if (std::find(jobs.begin(), jobs.end(), job) == jobs.end())
             {
@@ -90,8 +98,11 @@ int AnalysisWorker::enqueue(const juce::File& audioFile,
         }
     }
 
-    // Wake the thread so it picks up the new work without waiting out its idle poll.
-    thread.notify();
+    // Wake the thread so it picks up the new work now. notify() alone is not
+    // enough: an idle time slice asked to be called again in half a second,
+    // and the thread keeps to that unless the client is moved to the front.
+    if (queued > 0)
+        thread.moveToFrontOfQueue(this);
     return queued;
 }
 
