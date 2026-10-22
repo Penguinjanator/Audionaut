@@ -129,7 +129,11 @@ void VoiceSource::applyChannelMapping(bool withChannelOffset)
     const auto totalChannels = std::max(audioResource.getAudioTrack()->getAudioTrackContainer().getNumAudioTrackChannels(),
                                         audioFileChannels);
 
-    channelRemapping->setNumberOfChannelsToProduce(totalChannels);
+    // the number of channels the remapper asks of the transport below, not
+    // its output width: the file's channels. The whole bus width here made
+    // every voice resample, gain and fade every bus channel - O(voices x
+    // channels) per block, quadratic in the track count
+    channelRemapping->setNumberOfChannelsToProduce(audioFileChannels);
     channelRemapping->clearAllMappings();
 
     const auto& channelMapping = audioResource.getChannelMapping();
@@ -140,6 +144,7 @@ void VoiceSource::applyChannelMapping(bool withChannelOffset)
     jassert(dstChannel + channelOffset < totalChannels);
     channelRemapping->setOutputChannelMapping(srcChannel,
                                               dstChannel + channelOffset);
+    destinationChannel.store(dstChannel + channelOffset);
 }
 
 

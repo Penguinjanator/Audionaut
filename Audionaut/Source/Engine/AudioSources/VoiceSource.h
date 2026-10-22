@@ -182,6 +182,9 @@ public:
 
     void applyChannelMapping(bool withChannelOffset = true);
 
+    /// The one output channel the voice renders into (set by applyChannelMapping).
+    int getDestinationChannel() const noexcept { return destinationChannel.load(); }
+
     /// < configure gain, fade-in, fade-out
     void configureDynamics(std::shared_ptr<PlayListItem> item);
     
@@ -195,6 +198,7 @@ private:
     std::atomic<int> scheduledStartSample   = 0; ///< The sample position for a scheduled position change.
     std::atomic<double> scheduledPosition   = 0.0; ///< The scheduled playback position in seconds.
     std::atomic<bool> reScheduled           = false; /// Helper to indicate if position is re-scheduled (loop)
+    std::atomic<int> destinationChannel     = 0; ///< Output channel of the channel mapping, read by Playback on the audio thread.
     audium::SampleTimer durationTimer; ///< Timer for managing playback duration.
     DspClipData scheduledClipData; ///< What scheduleClip last applied (audio thread).
     double pendingRestartAt = -1.0; ///< Timeline seconds of a deferred restart, < 0 when none (audio thread).

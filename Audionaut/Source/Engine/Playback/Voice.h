@@ -36,8 +36,10 @@ public:
     /**
      * @brief Processes an audio block.
      * @param bufferToFill The `juce::AudioSourceChannelInfo` containing the buffer to process.
+     * @return The one channel of the buffer the voice rendered into, -1 if it
+     *         rendered nothing. All other channels are left silent.
      */
-    void processAudioBlock(const juce::AudioSourceChannelInfo& bufferToFill);
+    int processAudioBlock(const juce::AudioSourceChannelInfo& bufferToFill);
 
     /**
      * @brief Starts playback using the specified transport source.

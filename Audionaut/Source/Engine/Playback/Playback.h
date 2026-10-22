@@ -90,13 +90,16 @@ public:
         // voice clears the block before it renders into it.
         processingBuffer.setSize(numChannels, numSamples, false, false, true);
         
-        juce::dsp::AudioBlock<float> processingBlock(processingBuffer);
-        
+        // a voice renders into one channel only: add that one, not the
+        // whole bus width (O(voices x channels) per block)
         for (auto i = 0; i < MAX_VOICES; ++i) {
             if (voices[i].processing.load()) {
                 juce::AudioSourceChannelInfo info (&processingBuffer, 0, numSamples);
-                voices[i].processAudioBlock(info);
-                outputBlock.add ( processingBlock );
+                const auto channel = voices[i].processAudioBlock(info);
+                if (channel >= 0 && channel < numChannels)
+                    juce::FloatVectorOperations::add (outputBlock.getChannelPointer(static_cast<size_t>(channel)),
+                                                      processingBuffer.getReadPointer(channel),
+                                                      numSamples);
             }
         }
     }

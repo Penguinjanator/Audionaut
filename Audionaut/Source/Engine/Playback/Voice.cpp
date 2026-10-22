@@ -12,19 +12,22 @@
 namespace audium
 {
 
-void Voice::processAudioBlock (const juce::AudioSourceChannelInfo& info)
+int Voice::processAudioBlock (const juce::AudioSourceChannelInfo& info)
 {
     auto* source = voiceSource.load();
     if (processing.load() && source != nullptr) {
-        
+
         info.clearActiveBufferRegion();
         source->getNextAudioBlock(info);
-        
+        const auto channel = source->getDestinationChannel();
+
         if (source->isStopped()) {
             processing.store(false);
             voiceSource.store(nullptr);
         }
+        return channel;
     }
+    return -1;
 }
 
 void Voice::start(VoiceSource* voiceSource_)

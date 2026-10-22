@@ -277,10 +277,28 @@ the one-gesture crossfade UX on top:
   with charts and tables is drafted in the website repo
   (`Audionaut-Web/docs/performance.md`, uncommitted) but should go live
   only after at least one round of work on the two findings:
-  - the plain-track cost grows superlinearly (8 → 32 tracks ≈ 10× the
-    load for 4× the tracks) - profile the callback with 32 and 64 tracks
-    to see what scales worse than the voice count (per-block container
-    walks, cache misses in the clip chain, the bus mixing);
+  - [x] the plain-track cost grows superlinearly (8 → 32 tracks ≈ 10× the
+    load for 4× the tracks). Fixed 2026-10-22 (perf/voice-channel-width):
+    every voice processed the whole bus width, so a block cost
+    voices × bus channels - quadratic in the track count.
+    `VoiceSource::applyChannelMapping` gave the project's channel count to
+    `ChannelRemappingAudioSource::setNumberOfChannelsToProduce`, which sizes
+    the buffer the remapper asks of the source *below* it: every voice
+    resampled, gained and faded all 2N channels (and reallocated that
+    buffer on the audio thread when the project grew). `Playback::process`
+    then added all 2N channels per voice into the bus. Now the remapper
+    asks for the file's channels and `Playback` adds only the voice's
+    destination channel. Also `MAX_VOICES` was 64, so a 64-stereo-track
+    project played only half its voices (`getAvailableVoice` returns
+    nullptr, jassert only) - now `MAX_AUDIO_CHANNELS * 2`.
+    Bench, 128 samples, mean % before → after: 8 tracks 0.8 → 0.7,
+    16 → 2.4 → 1.5, 32 → 8.8 → 3.3, 64 → 18.3 (64 voices) → 8.3 (all 128).
+    Left, all linear: each voice still clears a bus-wide buffer twice per
+    block (`Voice::processAudioBlock`, the remapper's output clear) - a
+    one-channel render buffer would end that; each mono voice decodes and
+    resamples every channel of its file and keeps one (O(ch²) for
+    multichannel recordings); `ClipResamplingSource` interpolates even at
+    ratio 1.0; gain and fade-in still multiply once steady;
   - stretched clips: render ahead on a worker thread (the clip positions
     are known) so the hops stop landing in the callback, or find a
     cheaper per-track configuration of the stretcher.
