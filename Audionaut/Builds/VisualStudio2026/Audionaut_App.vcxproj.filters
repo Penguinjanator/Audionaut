@@ -4896,6 +4896,9 @@
     <ClInclude Include="..\..\Source\Engine\Analysis\EventMerger.h">
       <Filter>Audionaut\Source\Engine\Analysis</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\Source\Engine\Analysis\AnalysisAbort.h">
+      <Filter>Audionaut\Source\Engine\Analysis</Filter>
+    </ClInclude>
     <ClInclude Include="..\..\Source\Engine\Analysis\AnalysisAudioLoader.h">
       <Filter>Audionaut\Source\Engine\Analysis</Filter>
     </ClInclude>

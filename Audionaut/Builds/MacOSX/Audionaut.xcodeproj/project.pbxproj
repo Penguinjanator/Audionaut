@@ -273,6 +273,7 @@
 		1EFE69740FBE22B839195ABD /* AudioTrackBaseComponent.h */ /* AudioTrackBaseComponent.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = AudioTrackBaseComponent.h; path = ../../Source/Interface/Components/MiddlePanel/AudioTrackBaseComponent.h; sourceTree = SOURCE_ROOT; };
 		1F0C9C9EB51C196202A6C76A /* DraggingHandle.cpp */ /* DraggingHandle.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = DraggingHandle.cpp; path = ../../Source/Interface/Controls/DraggingHandle.cpp; sourceTree = SOURCE_ROOT; };
 		1F44340B66A109B0DEE52DF7 /* Metal.framework */ /* Metal.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Metal.framework; path = System/Library/Frameworks/Metal.framework; sourceTree = SDKROOT; };
+		2015F92C1A2B77E0B9815740 /* AnalysisAbort.h */ /* AnalysisAbort.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = AnalysisAbort.h; path = ../../Source/Engine/Analysis/AnalysisAbort.h; sourceTree = SOURCE_ROOT; };
 		20337587A016A2258CC20537 /* AutoEditCommand.cpp */ /* AutoEditCommand.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = AutoEditCommand.cpp; path = ../../Source/Cli/Commands/AutoEditCommand.cpp; sourceTree = SOURCE_ROOT; };
 		2133E7BD10D0BFDBA72C207E /* DragZoomControl.h */ /* DragZoomControl.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = DragZoomControl.h; path = ../../Source/Interface/Controls/DragZoomControl.h; sourceTree = SOURCE_ROOT; };
 		21E8218C5578FAF32AEE977E /* LevelMeter.h */ /* LevelMeter.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = LevelMeter.h; path = ../../Source/Interface/Controls/LevelMeter.h; sourceTree = SOURCE_ROOT; };
@@ -1409,6 +1410,7 @@
 				C45FE6DBE93443F26B7AC698,
 				76BEBF8CDC5D61CC7760994E,
 				8202F9C6D60D53659741D59B,
+				2015F92C1A2B77E0B9815740,
 				8D1EDD187514668E32C8530C,
 				607A88B6F381107A4F90E088,
 				77B61BA9FC647698FC3DC02B,

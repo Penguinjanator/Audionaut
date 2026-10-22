@@ -4,6 +4,7 @@
 //    Audionaut uses a GPL/commercial licence - see LICENCE.md for details.
 
 #include "AnalysisAudioLoader.h"
+#include "AnalysisAbort.h"
 
 #include <algorithm>
 #include <cmath>
@@ -85,11 +86,6 @@ std::optional<MonoAudio> AnalysisAudioLoader::load(const juce::File& audioFile,
                                                    const Parameters& params,
                                                    const std::atomic<bool>* shouldAbort) const
 {
-    const auto aborted = [shouldAbort]
-    {
-        return shouldAbort != nullptr && shouldAbort->load(std::memory_order_relaxed);
-    };
-
     if (! audioFile.existsAsFile() || params.targetSampleRate <= 0.0)
         return std::nullopt;
 
@@ -120,7 +116,7 @@ std::optional<MonoAudio> AnalysisAudioLoader::load(const juce::File& audioFile,
     juce::AudioBuffer<float> block(1, blockSize);
     while (result.samples.size() < expectedLength)
     {
-        if (aborted())
+        if (isAborted(shouldAbort))
             return std::nullopt;
 
         const auto numSamples = (int) std::min<size_t>((size_t) blockSize, expectedLength - result.samples.size());

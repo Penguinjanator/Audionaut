@@ -4,6 +4,7 @@
 //    Audionaut uses a GPL/commercial licence - see LICENCE.md for details.
 
 #include "AnalysisRun.h"
+#include "AnalysisAbort.h"
 
 #include "AnalysisAudioLoader.h"
 #include "Stft.h"
@@ -109,7 +110,7 @@ AnalysisRun::Result AnalysisRun::analyze(const juce::File& audioFile,
 
         const BicSegmenter segmenter;
         const auto boundaries = segmenter.segment(features, bicParams, shouldAbort);
-        if (shouldAbort != nullptr && shouldAbort->load(std::memory_order_relaxed))
+        if (isAborted(shouldAbort))
             return {};
 
         std::vector<float> segments;
@@ -139,7 +140,7 @@ AnalysisRun::Result AnalysisRun::analyze(const juce::File& audioFile,
             const BeatTracker tracker;
             const auto tracked = tracker.track(params.beats.linearBeatFlux ? magnitudeFlux : dbFlux,
                                                framesPerSecond, tempo, BeatTracker::Parameters(), shouldAbort);
-            if (shouldAbort != nullptr && shouldAbort->load(std::memory_order_relaxed))
+            if (isAborted(shouldAbort))
                 return {};
 
             beats.beats.reserve(tracked.beatFrames.size());

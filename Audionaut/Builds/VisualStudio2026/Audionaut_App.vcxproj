@@ -3502,6 +3502,7 @@
     <ClInclude Include="..\..\Source\Engine\Analysis\BeatSegmenter.h"/>
     <ClInclude Include="..\..\Source\Engine\Analysis\AnalysisWorker.h"/>
     <ClInclude Include="..\..\Source\Engine\Analysis\EventMerger.h"/>
+    <ClInclude Include="..\..\Source\Engine\Analysis\AnalysisAbort.h"/>
     <ClInclude Include="..\..\Source\Engine\Analysis\AnalysisAudioLoader.h"/>
     <ClInclude Include="..\..\Source\Engine\Analysis\AnalysisRun.h"/>
     <ClInclude Include="..\..\Source\Engine\Analysis\Stft.h"/>

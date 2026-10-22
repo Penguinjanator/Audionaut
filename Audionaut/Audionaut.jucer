@@ -206,6 +206,8 @@
                 file="Source/Engine/Analysis/AnalysisWorker.h"/>
           <FILE id="evMrgC" name="EventMerger.cpp" compile="1" resource="0" file="Source/Engine/Analysis/EventMerger.cpp"/>
           <FILE id="evMrgH" name="EventMerger.h" compile="0" resource="0" file="Source/Engine/Analysis/EventMerger.h"/>
+          <FILE id="anAbtH" name="AnalysisAbort.h" compile="0" resource="0"
+                file="Source/Engine/Analysis/AnalysisAbort.h"/>
           <FILE id="anLdrC" name="AnalysisAudioLoader.cpp" compile="1" resource="0"
                 file="Source/Engine/Analysis/AnalysisAudioLoader.cpp"/>
           <FILE id="anLdrH" name="AnalysisAudioLoader.h" compile="0" resource="0"

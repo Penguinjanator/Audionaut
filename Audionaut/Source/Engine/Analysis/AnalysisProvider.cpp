@@ -9,6 +9,7 @@
 */
 
 #include "AnalysisProvider.h"
+#include "Engine/Analysis/AnalysisAbort.h"
 #include "Engine/Resource/AudioResource.h"
 #include "Engine/Provider/TempoProvider.h"
 
@@ -104,7 +105,7 @@ std::unordered_map<AnalysisType, std::vector<float>>
 
     // An abandoned analysis (see AnalysisWorker's destructor) has no result
     // worth caching or announcing.
-    if (shouldAbort != nullptr && shouldAbort->load())
+    if (isAborted(shouldAbort))
     {
         std::cout << "AnalysisProvider::analyzeFile() - abandoned analysis of "
                   << audioFile.getFileName() << std::endl;

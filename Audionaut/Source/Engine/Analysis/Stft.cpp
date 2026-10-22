@@ -4,6 +4,7 @@
 //    Audionaut uses a GPL/commercial licence - see LICENCE.md for details.
 
 #include "Stft.h"
+#include "AnalysisAbort.h"
 
 #include <algorithm>
 #include <cmath>
@@ -54,11 +55,6 @@ bool Stft::forEachPowerFrame(const std::vector<float>& signal,
                              const std::function<void(int, const float*)>& frameFn,
                              const std::atomic<bool>* shouldAbort) const
 {
-    const auto aborted = [shouldAbort]
-    {
-        return shouldAbort != nullptr && shouldAbort->load(std::memory_order_relaxed);
-    };
-
     const auto frameSize = parameters.frameSize;
     const auto half = frameSize / 2;
     const auto numSamples = (int) signal.size();
@@ -70,7 +66,7 @@ bool Stft::forEachPowerFrame(const std::vector<float>& signal,
 
     for (int t = 0; t < frames; ++t)
     {
-        if ((t & 63) == 0 && aborted())
+        if ((t & 63) == 0 && isAborted(shouldAbort))
             return false;
 
         const auto start = t * parameters.hopSize - half;

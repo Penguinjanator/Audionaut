@@ -4,6 +4,7 @@
 //    Audionaut uses a GPL/commercial licence - see LICENCE.md for details.
 
 #include "BicSegmenter.h"
+#include "AnalysisAbort.h"
 
 #include <algorithm>
 #include <cmath>
@@ -189,11 +190,6 @@ std::vector<int> BicSegmenter::segment(const std::vector<std::vector<float>>& fe
                                        const Parameters& params,
                                        const std::atomic<bool>* shouldAbort) const
 {
-    const auto aborted = [shouldAbort]
-    {
-        return shouldAbort != nullptr && shouldAbort->load(std::memory_order_relaxed);
-    };
-
     if (features.empty() || features.front().empty())
         return {};
 
@@ -237,7 +233,7 @@ std::vector<int> BicSegmenter::segment(const std::vector<std::vector<float>>& fe
 
     while (true)
     {
-        if (aborted())
+        if (isAborted(shouldAbort))
             return {};
 
         // a is the last boundary, or where the window was slid to; either way

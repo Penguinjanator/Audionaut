@@ -4,6 +4,7 @@
 //    Audionaut uses a GPL/commercial licence - see LICENCE.md for details.
 
 #include "BeatTracker.h"
+#include "AnalysisAbort.h"
 
 #include <algorithm>
 #include <cmath>
@@ -56,11 +57,6 @@ BeatTracker::Result BeatTracker::track(const std::vector<float>& envelope,
                                        const Parameters& params,
                                        const std::atomic<bool>* shouldAbort) const
 {
-    const auto aborted = [shouldAbort]
-    {
-        return shouldAbort != nullptr && shouldAbort->load(std::memory_order_relaxed);
-    };
-
     const auto n = (int) envelope.size();
     if (n == 0 || tempo <= 0.0f || framesPerSecond <= 0.0)
         return {};
@@ -119,7 +115,7 @@ BeatTracker::Result BeatTracker::track(const std::vector<float>& envelope,
 
     for (int i = 0; i < n; ++i)
     {
-        if ((i & 1023) == 0 && aborted())
+        if ((i & 1023) == 0 && isAborted(shouldAbort))
             return {};
 
         auto best = -std::numeric_limits<double>::infinity();
