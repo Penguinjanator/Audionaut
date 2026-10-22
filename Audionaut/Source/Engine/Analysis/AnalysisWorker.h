@@ -149,6 +149,15 @@ public:
     /** @brief Number of queued analyses not yet started (excludes any running). */
     int getPendingCount() const;
 
+    /**
+     * @brief Files with analyses still queued, not counting the one running.
+     *
+     * One pass serves all of a file's analyses, so this is the count that
+     * steps down as the worker gets through its queue; the job count does
+     * not move while a pass runs.
+     */
+    int getPendingFileCount() const;
+
     /** @brief True while an analysis is actively running on the worker thread. */
     bool isBusy() const { return busy.load(); }
 

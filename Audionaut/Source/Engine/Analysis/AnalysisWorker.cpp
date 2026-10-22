@@ -179,6 +179,16 @@ int AnalysisWorker::getPendingCount() const
     return static_cast<int>(jobs.size());
 }
 
+int AnalysisWorker::getPendingFileCount() const
+{
+    std::lock_guard<std::mutex> lock(mutex);
+    std::vector<juce::File> files;
+    for (const auto& job : jobs)
+        if (job.file != currentFile && std::find(files.begin(), files.end(), job.file) == files.end())
+            files.push_back(job.file);
+    return static_cast<int>(files.size());
+}
+
 int AnalysisWorker::getRemainingCount() const
 {
     std::lock_guard<std::mutex> lock(mutex);
