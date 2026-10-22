@@ -151,15 +151,18 @@ int AnalysisWorker::useTimeSlice()
         currentFileName = file.getFileName();
         currentFile = file;
         currentAnalysisTypes = types;
+        currentProgress = 0.0f;
         busy = true;
     }
 
     if (analysisProvider != nullptr && ! abortRequested.load())
-        analysisProvider->analyzeFile(file, types, &abortRequested);
+        analysisProvider->analyzeFile(file, types, &abortRequested,
+                                      [this](double fraction) { currentProgress = (float) fraction; });
 
     {
         std::lock_guard<std::mutex> lock(mutex);
         busy = false;
+        currentProgress = 0.0f;
         currentFileName = {};
         currentFile = juce::File();
         currentAnalysisTypes.clear();
@@ -199,6 +202,12 @@ juce::String AnalysisWorker::getCurrentFileName() const
 {
     std::lock_guard<std::mutex> lock(mutex);
     return currentFileName;
+}
+
+juce::File AnalysisWorker::getCurrentFile() const
+{
+    std::lock_guard<std::mutex> lock(mutex);
+    return currentFile;
 }
 
 std::optional<AnalysisType> AnalysisWorker::getCurrentAnalysisType() const

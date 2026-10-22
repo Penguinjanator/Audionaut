@@ -72,6 +72,8 @@ public:
      * produced by a single AnalysisRun - one decode and one STFT for all of
      * them - and cached. Same threading terms as the single-type overload.
      *
+     * @param progress Optional callback told how far the pass has got, 0 to
+     *        1, from the calling thread; not called on a full cache hit.
      * @return The results by type, in seconds. A type missing from the map
      *         failed or was abandoned; a BPM, where there is one, is in the
      *         cache (getBpm).
@@ -79,7 +81,8 @@ public:
     std::unordered_map<AnalysisType, std::vector<float>>
         analyzeFile(const juce::File& audioFile,
                     const std::vector<AnalysisType>& analysisTypes,
-                    const std::atomic<bool>* shouldAbort = nullptr);
+                    const std::atomic<bool>* shouldAbort = nullptr,
+                    const AnalysisRun::ProgressFn& progress = {});
 
     /**
      * @brief Segment boundaries (in seconds) from the most recent analysis of

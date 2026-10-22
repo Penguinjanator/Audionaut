@@ -6,6 +6,7 @@
 #include "Engine/Analysis/AnalysisWorker.h"
 #include "Engine/Analysis/AnalysisAudioLoader.h"
 
+#include <algorithm>
 #include <atomic>
 #include <chrono>
 
@@ -63,6 +64,21 @@ SCENARIO("AnalysisRun produces every analysis from one pass", "[engine][analysis
             CHECK(together.beats->beats == beats.beats);
             CHECK(together.beats->bpm == Catch::Approx(beats.bpm));
             CHECK(*together.onsets == onsets);
+        }
+    }
+
+    GIVEN("a progress callback")
+    {
+        std::vector<double> fractions;
+        run.analyze(audioFile, AnalysisWorker::canonicalAnalysisTypes(), nullptr,
+                    [&fractions](double fraction) { fractions.push_back(fraction); });
+
+        THEN("it is told the pass's progress from 0 to 1, never going back")
+        {
+            REQUIRE(fractions.size() >= 5);
+            CHECK(fractions.front() == 0.0);
+            CHECK(fractions.back() == 1.0);
+            CHECK(std::is_sorted(fractions.begin(), fractions.end()));
         }
     }
 

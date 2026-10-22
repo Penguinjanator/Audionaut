@@ -13,6 +13,8 @@
 #include "Engine/Analysis/AnalysisProvider.h"
 #include "Engine/Analysis/AnalysisWorker.h"
 
+#include <cmath>
+
 
 const juce::String PlayListItemDraggerControl::getLabelSuffix() const
 {
@@ -68,18 +70,30 @@ int PlayListItemDraggerControl::getAnalysisRemainingCount() const
 
 juce::String PlayListItemDraggerControl::getAnalysisProgressSuffix() const
 {
-    const auto remaining = getAnalysisRemainingCount();
-    if (remaining == 0)
+    if (getAnalysisRemainingCount() == 0)
         return {};
 
     // The footer status line's sweep animation, advanced one frame per
-    // timerCallback(); the count ticks down as the clip's analyses finish.
+    // timerCallback(). One pass serves all of a file's analyses, so while
+    // this clip's file is the one running, the pass's own progress is shown;
+    // until then the clip is waiting its turn.
     static constexpr const char* sweepFrames[] = { "[=   ]", "[ =  ]", "[  = ]", "[   =]",
                                                    "[  = ]", "[ =  ]" };
     constexpr auto numFrames = (int) (sizeof(sweepFrames) / sizeof(sweepFrames[0]));
     const auto* frame = sweepFrames[analysisAnimationTick % numFrames];
 
-    return juce::String(frame) + " Analysing (" + juce::String(remaining) + ")";
+    auto resourceContainer = audiumEngine->getAudioResourceContainer();
+    auto analysisWorker = (resourceContainer != nullptr) ? resourceContainer->getAnalysisWorker() : nullptr;
+    if (analysisWorker != nullptr)
+    {
+        const auto current = analysisWorker->getCurrentFile();
+        for (const auto& resource : playListItem->getRegion()->getAudioResources())
+            if (resource != nullptr && current != juce::File() && resource->getLocalFile() == current)
+                return juce::String(frame) + " Analysing "
+                     + juce::String((int) std::lround(100.0f * analysisWorker->getCurrentProgress())) + "%";
+    }
+
+    return juce::String(frame) + " Analysing (queued)";
 }
 
 void PlayListItemDraggerControl::timerCallback()

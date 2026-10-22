@@ -6,6 +6,7 @@
 #pragma once
 
 #include <atomic>
+#include <functional>
 #include <optional>
 #include <vector>
 #include <JuceHeader.h>
@@ -50,6 +51,10 @@ public:
         std::optional<std::vector<float>> onsets;
     };
 
+    /// Told how far the pass has got, 0 to 1, from the thread running it:
+    /// after the decode, along the STFT, and after each analysis.
+    using ProgressFn = std::function<void(double fraction)>;
+
     AnalysisRun() = default;
 
     /**
@@ -59,18 +64,21 @@ public:
      * @param params Parameters of each analysis.
      * @param shouldAbort Optional flag polled between stages. Once set, the
      *        pass gives up and the result holds nothing.
+     * @param progress Optional progress callback.
      * @return The analyses asked for. All empty when the file cannot be
      *         decoded or the pass was abandoned.
      */
     Result analyze(const juce::File& audioFile,
                    const std::vector<AnalysisType>& types,
                    const Parameters& params,
-                   const std::atomic<bool>* shouldAbort = nullptr) const;
+                   const std::atomic<bool>* shouldAbort = nullptr,
+                   const ProgressFn& progress = {}) const;
 
     /// Runs with the default parameters.
     Result analyze(const juce::File& audioFile,
                    const std::vector<AnalysisType>& types,
-                   const std::atomic<bool>* shouldAbort = nullptr) const;
+                   const std::atomic<bool>* shouldAbort = nullptr,
+                   const ProgressFn& progress = {}) const;
 
 private:
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (AnalysisRun)

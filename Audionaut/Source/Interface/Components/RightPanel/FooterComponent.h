@@ -90,7 +90,8 @@ public:
             auto typeLabel = audium::analysisTypesToString(analysisWorker->getCurrentAnalysisTypes());
 
             std::string txt = std::string(frame) + " Analysing " + typeLabel + ": "
-                             + analysisWorker->getCurrentFileName().toStdString() + " ";
+                             + analysisWorker->getCurrentFileName().toStdString() + " "
+                             + std::to_string((int) std::lround(100.0f * analysisWorker->getCurrentProgress())) + "% ";
             txt += "(" + std::to_string(analysisWorker->getRemainingCount()) + " remaining)";
             analysisStatusLabel->setText(txt, juce::dontSendNotification);
         }

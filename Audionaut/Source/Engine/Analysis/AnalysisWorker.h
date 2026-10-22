@@ -167,6 +167,17 @@ public:
     /** @brief Name of the file being analysed right now, or empty if idle. */
     juce::String getCurrentFileName() const;
 
+    /** @brief The file being analysed right now, or an invalid File if idle. */
+    juce::File getCurrentFile() const;
+
+    /**
+     * @brief How far the running pass has got, 0 to 1; 0 when idle.
+     *
+     * One pass serves every queued analysis of a file, so a count of its
+     * jobs does not move while it runs; this does.
+     */
+    float getCurrentProgress() const { return currentProgress.load(); }
+
     /** @brief First of the analyses running right now, or std::nullopt if idle. */
     std::optional<AnalysisType> getCurrentAnalysisType() const;
 
@@ -198,6 +209,9 @@ private:
 
     // True only while useTimeSlice() is running an analysis; read by the UI.
     std::atomic<bool> busy { false };
+
+    // Progress of the running pass, written by the analysis thread.
+    std::atomic<float> currentProgress { 0.0f };
 
     // Set by the destructor; the running analysis polls it between its stages
     // and gives up once it is set.

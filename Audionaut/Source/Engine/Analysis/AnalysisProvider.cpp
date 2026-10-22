@@ -64,7 +64,8 @@ std::vector<float> AnalysisProvider::analyzeFile(const juce::File& audioFile,
 std::unordered_map<AnalysisType, std::vector<float>>
     AnalysisProvider::analyzeFile(const juce::File& audioFile,
                                   const std::vector<AnalysisType>& analysisTypes,
-                                  const std::atomic<bool>* shouldAbort)
+                                  const std::atomic<bool>* shouldAbort,
+                                  const AnalysisRun::ProgressFn& progress)
 {
     std::unordered_map<AnalysisType, std::vector<float>> results;
 
@@ -100,7 +101,7 @@ std::unordered_map<AnalysisType, std::vector<float>>
         std::lock_guard<std::mutex> lock(segmenterMutex);
         missing = collectMissing();
         if (! missing.empty())
-            run = analysisRun.analyze(audioFile, missing, shouldAbort);
+            run = analysisRun.analyze(audioFile, missing, shouldAbort, progress);
     }
 
     // An abandoned analysis (see AnalysisWorker's destructor) has no result

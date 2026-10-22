@@ -20,15 +20,17 @@ namespace audium {
 
 AnalysisRun::Result AnalysisRun::analyze(const juce::File& audioFile,
                                          const std::vector<AnalysisType>& types,
-                                         const std::atomic<bool>* shouldAbort) const
+                                         const std::atomic<bool>* shouldAbort,
+                                         const ProgressFn& progress) const
 {
-    return analyze(audioFile, types, Parameters(), shouldAbort);
+    return analyze(audioFile, types, Parameters(), shouldAbort, progress);
 }
 
 AnalysisRun::Result AnalysisRun::analyze(const juce::File& audioFile,
                                          const std::vector<AnalysisType>& types,
                                          const Parameters& params,
-                                         const std::atomic<bool>* shouldAbort) const
+                                         const std::atomic<bool>* shouldAbort,
+                                         const ProgressFn& progress) const
 {
     const auto wants = [&types](AnalysisType type)
     {
@@ -42,6 +44,23 @@ AnalysisRun::Result AnalysisRun::analyze(const juce::File& audioFile,
     if (! wantSegments && ! wantBeats && ! wantOnsets)
         return result;
 
+    // Rough shares of the pass: the decode and the STFT are the bulk of it,
+    // the analyses split what is left.
+    constexpr auto decodeShare = 0.3, stftShare = 0.4;
+    const auto numAnalyses = (int) wantSegments + (int) wantBeats + (int) wantOnsets;
+    auto analysesDone = 0;
+    const auto report = [&](double fraction)
+    {
+        if (progress)
+            progress(std::clamp(fraction, 0.0, 1.0));
+    };
+    const auto analysisDone = [&]
+    {
+        ++analysesDone;
+        report(decodeShare + stftShare + (1.0 - decodeShare - stftShare) * analysesDone / numAnalyses);
+    };
+    report(0.0);
+
     jassert(! wantBeats || params.beats.sampleRate == params.segmentation.sampleRate);
     jassert(! wantOnsets || params.onsets.sampleRate == params.segmentation.sampleRate);
 
@@ -51,6 +70,7 @@ AnalysisRun::Result AnalysisRun::analyze(const juce::File& audioFile,
     const auto audio = loader.load(audioFile, loaderParams, shouldAbort);
     if (! audio)
         return result;
+    report(decodeShare);
 
     Stft::Parameters stftParams;
     stftParams.frameSize = params.segmentation.frameSize;
@@ -78,9 +98,12 @@ AnalysisRun::Result AnalysisRun::analyze(const juce::File& audioFile,
             magnitudeFlux.reserve(numFrames);
     }
 
+    const auto reportEvery = std::max<size_t>(1, numFrames / 50);
     const auto completed = stft.forEachPowerFrame(audio->samples,
                                                   [&](int frame, const float* power)
                                                   {
+                                                      if ((size_t) frame % reportEvery == 0)
+                                                          report(decodeShare + stftShare * (double) frame / (double) std::max<size_t>(1, numFrames));
                                                       if (mfcc)
                                                           mfcc->compute(power, features[(size_t) frame].data());
                                                       if (onsetStrength)
@@ -118,6 +141,7 @@ AnalysisRun::Result AnalysisRun::analyze(const juce::File& audioFile,
         for (auto boundary : boundaries)
             segments.push_back(toSeconds(boundary));
         result.segments = std::move(segments);
+        analysisDone();
     }
 
     if (wantBeats)
@@ -149,6 +173,7 @@ AnalysisRun::Result AnalysisRun::analyze(const juce::File& audioFile,
             beats.bpm = tracked.bpm > 0.0f ? tracked.bpm : tempo;
         }
         result.beats = std::move(beats);
+        analysisDone();
     }
 
     if (wantOnsets)
@@ -157,8 +182,10 @@ AnalysisRun::Result AnalysisRun::analyze(const juce::File& audioFile,
         for (auto frame : OnsetStrength::pickPeaks(dbFlux, framesPerSecond))
             onsets.push_back(toSeconds(frame));
         result.onsets = std::move(onsets);
+        analysisDone();
     }
 
+    report(1.0);
     return result;
 }
 

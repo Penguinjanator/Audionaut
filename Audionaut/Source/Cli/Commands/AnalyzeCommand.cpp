@@ -95,16 +95,20 @@ int runAnalyze (const juce::ArgumentList& args, CliContext& context)
 
     auto provider = session->getAudioTrackContainer()->getAnalysisProvider();
 
-    // One pass per file produces every requested type, so progress counts
-    // finished files - coarse for one long file, but never silent between.
+    // One pass per file produces every requested type; the pass reports
+    // its own progress, which is scaled into the file's share of the whole.
     ProgressSteps steps (context);
     const auto totalFiles = static_cast<double> (audioFiles.size());
     auto finishedFiles = 0;
 
     auto files = nlohmann::json::array();
     for (auto& file : audioFiles) {
-        steps (finishedFiles / totalFiles, "Analyzing " + file.getFileName());
-        auto results = provider->analyzeFile (file, types);
+        const auto message = "Analyzing " + file.getFileName();
+        steps (finishedFiles / totalFiles, message);
+        auto results = provider->analyzeFile (file, types, nullptr, [&] (double fraction)
+        {
+            steps ((finishedFiles + fraction) / totalFiles, message);
+        });
         ++finishedFiles;
 
         nlohmann::json analyses;
