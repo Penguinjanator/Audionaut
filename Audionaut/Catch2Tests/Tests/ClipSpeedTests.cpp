@@ -76,7 +76,11 @@ Fixture makeFixture(const juce::File& audioFile)
     Fixture fixture;
     fixture.engine = AudiumFactory::createAudiumEngine();
     fixture.inputFile = audioFile;
-    fixture.bounceFile = juce::File(juce::String(CURRENT_SOURCE_DIR) + "/TestFiles/clip-speed-out.wav");
+    // Outside the repository: CI checks that the suite leaves TestFiles alone.
+    fixture.bounceFile = juce::File::getSpecialLocation(juce::File::tempDirectory)
+                             .getChildFile("AudionautTests")
+                             .getChildFile("clip-speed-out.wav");
+    fixture.bounceFile.getParentDirectory().createDirectory();
 
     REQUIRE(audioFile.existsAsFile());
     REQUIRE(fixture.engine->getProjectFileStore()->open(audioFile, nullptr));
