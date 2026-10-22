@@ -299,6 +299,18 @@ the one-gesture crossfade UX on top:
 
 ## Analysis — follow-ups (found 2026-10-21 in the Essentia removal)
 
+- [ ] **Show Analysis shows nothing for a type that is off in Settings.**
+  The auto-analysis defaults (Settings > Analysis) are Segments and Beats;
+  Onsets is off. Ticking *Onsets* in a track's Show Analysis menu only
+  toggles the overlay's visibility (`toggleAnalysisVisibility` in
+  `ChannelGroupHeaderComponent`), and with nothing in the cache for that
+  type the overlay stays empty, without a word. Asking to see an analysis
+  is asking for it: the toggle should enqueue the type for the track's
+  files when the cache lacks it (`AnalysisWorker::enqueue` with an explicit
+  type list runs even while auto-analysis is off) and show the clip
+  header's progress meanwhile. Worth a hint that the type is off by
+  default and where to turn it on, so the next file gets it without the
+  detour.
 - [ ] **The Auto Edit merge is chaotic on long material.** The hidden
   `[merge-jitter]` scenario (`MergeSensitivityTests`) moves Essentia's own
   recorded boundaries by 0.1 s and re-merges: on the 173 s recording that
