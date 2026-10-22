@@ -67,7 +67,8 @@ AnalysisRun::Result AnalysisRun::analyze(const juce::File& audioFile,
     AnalysisAudioLoader loader;
     AnalysisAudioLoader::Parameters loaderParams;
     loaderParams.targetSampleRate = params.segmentation.sampleRate;
-    const auto audio = loader.load(audioFile, loaderParams, shouldAbort);
+    const auto audio = loader.load(audioFile, loaderParams, shouldAbort,
+                                   [&](double fraction) { report(decodeShare * fraction); });
     if (! audio)
         return result;
     report(decodeShare);

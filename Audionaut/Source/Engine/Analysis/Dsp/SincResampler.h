@@ -6,6 +6,7 @@
 #pragma once
 
 #include <atomic>
+#include <functional>
 #include <vector>
 #include <JuceHeader.h>
 
@@ -60,11 +61,14 @@ public:
      * @param input The signal at the input rate.
      * @param shouldAbort Optional flag polled every few thousand output
      *        samples; once set, the result is empty.
+     * @param progress Optional callback told how far along the output the
+     *        pass is, 0 to 1, at the same points.
      * @return The signal at the output rate, outputLength(input.size())
      *         samples long. The input is treated as zero outside its ends.
      */
     std::vector<float> process(const std::vector<float>& input,
-                               const std::atomic<bool>* shouldAbort = nullptr) const;
+                               const std::atomic<bool>* shouldAbort = nullptr,
+                               const std::function<void(double)>& progress = {}) const;
 
 private:
     double inputRate = 0.0, outputRate = 0.0;

@@ -84,7 +84,8 @@ size_t SincResampler::outputLength(size_t inputLength) const
 }
 
 std::vector<float> SincResampler::process(const std::vector<float>& input,
-                                          const std::atomic<bool>* shouldAbort) const
+                                          const std::atomic<bool>* shouldAbort,
+                                          const std::function<void(double)>& progress) const
 {
     const auto n = (long) input.size();
     std::vector<float> output(outputLength(input.size()));
@@ -92,8 +93,13 @@ std::vector<float> SincResampler::process(const std::vector<float>& input,
 
     for (size_t m = 0; m < output.size(); ++m)
     {
-        if ((m & 4095) == 0 && isAborted(shouldAbort))
-            return {};
+        if ((m & 4095) == 0)
+        {
+            if (isAborted(shouldAbort))
+                return {};
+            if (progress)
+                progress((double) m / (double) output.size());
+        }
 
         // the output sample's position in input samples, split into the
         // integer part and the nearest tabulated phase

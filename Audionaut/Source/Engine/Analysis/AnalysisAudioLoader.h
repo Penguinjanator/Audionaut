@@ -6,6 +6,7 @@
 #pragma once
 
 #include <atomic>
+#include <functional>
 #include <optional>
 #include <vector>
 #include <JuceHeader.h>
@@ -55,12 +56,15 @@ public:
      * @param params Loading parameters.
      * @param shouldAbort Optional flag polled once per decoded block. Once
      *        set, loading gives up and returns nothing.
+     * @param progress Optional callback told how far the load has got, 0 to
+     *        1, once per decoded block and along the resampling.
      * @return The mono signal, or nothing when the file is missing, cannot
      *         be read, holds no samples, or the load was abandoned.
      */
     std::optional<MonoAudio> load(const juce::File& audioFile,
                                   const Parameters& params,
-                                  const std::atomic<bool>* shouldAbort = nullptr) const;
+                                  const std::atomic<bool>* shouldAbort = nullptr,
+                                  const std::function<void(double)>& progress = {}) const;
 
     /// Loads with the default parameters.
     std::optional<MonoAudio> load(const juce::File& audioFile) const;

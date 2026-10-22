@@ -85,7 +85,8 @@ juce::String AnalysisAudioLoader::describeProblem(const juce::File& audioFile)
 
 std::optional<MonoAudio> AnalysisAudioLoader::load(const juce::File& audioFile,
                                                    const Parameters& params,
-                                                   const std::atomic<bool>* shouldAbort) const
+                                                   const std::atomic<bool>* shouldAbort,
+                                                   const std::function<void(double)>& progress) const
 {
     if (! audioFile.existsAsFile() || params.targetSampleRate <= 0.0)
         return std::nullopt;
@@ -98,6 +99,16 @@ std::optional<MonoAudio> AnalysisAudioLoader::load(const juce::File& audioFile,
 
     // The whole file as mono at its own rate first, block by block with the
     // abort flag polled between blocks; then the rate change in one pass.
+    // The decode is the first part of the progress, the resampling the rest;
+    // without one the decode is all of it.
+    const auto resample = std::abs(reader->sampleRate - params.targetSampleRate) > 1.0e-6;
+    const auto decodeShare = resample ? 0.4 : 1.0;
+    const auto report = [&progress](double fraction)
+    {
+        if (progress)
+            progress(std::clamp(fraction, 0.0, 1.0));
+    };
+
     std::vector<float> mono;
     mono.reserve((size_t) reader->lengthInSamples);
     {
@@ -114,6 +125,7 @@ std::optional<MonoAudio> AnalysisAudioLoader::load(const juce::File& audioFile,
             source.getNextAudioBlock(info);
             const auto* data = block.getReadPointer(0);
             mono.insert(mono.end(), data, data + numSamples);
+            report(decodeShare * (double) mono.size() / (double) reader->lengthInSamples);
         }
         source.releaseResources();
     }
@@ -121,15 +133,19 @@ std::optional<MonoAudio> AnalysisAudioLoader::load(const juce::File& audioFile,
     MonoAudio result;
     result.sampleRate = params.targetSampleRate;
 
-    if (std::abs(reader->sampleRate - params.targetSampleRate) > 1.0e-6)
+    if (resample)
     {
         const SincResampler resampler(reader->sampleRate, params.targetSampleRate);
-        result.samples = resampler.process(mono, shouldAbort);
+        result.samples = resampler.process(mono, shouldAbort, [&](double fraction)
+        {
+            report(decodeShare + (1.0 - decodeShare) * fraction);
+        });
         if (result.samples.empty())
             return std::nullopt;
     }
     else
         result.samples = std::move(mono);
+    report(1.0);
 
     if (params.removeDcOffset)
     {
