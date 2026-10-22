@@ -26,8 +26,7 @@
 #                  Defaults to "-" (ad-hoc), which builds an image that runs
 #                  locally but that Gatekeeper rejects on other machines.
 #
-# Requires: Xcode command line tools; the Essentia static libraries built
-# with ../../Builds/build_essentia.sh.
+# Requires: Xcode command line tools.
 
 set -eu
 
@@ -77,8 +76,8 @@ if [ ! -d "$APP" ]; then
     exit 1
 fi
 
-# The bundle has no nested code (JUCE, Essentia, Rubber Band and demucs are
-# all linked statically), so signing the bundle itself is the whole job.
+# The bundle has no nested code (JUCE, Rubber Band, LAME and demucs are all
+# linked statically), so signing the bundle itself is the whole job.
 echo "Signing $APP"
 codesign --force --options runtime --timestamp \
     --entitlements Audionaut.entitlements \

@@ -13,9 +13,6 @@
 [submodule "Submodules/farbot"]
 	path = Submodules/farbot
 	url = https://github.com/hogliux/farbot.git
-[submodule "Submodules/essentia"]
-	path = Submodules/essentia
-	url = https://github.com/MTG/essentia.git
 [submodule "Submodules/demucs.cpp"]
 	path = Submodules/demucs.cpp
 	url = https://github.com/sevagh/demucs.cpp

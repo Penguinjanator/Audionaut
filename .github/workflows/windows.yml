@@ -27,21 +27,10 @@ env:
 
   # No toolset pin: the windows-2025 image ships Visual Studio 2026, so the
   # v145 the .vcxproj asks for is what MSBuild picks natively - and what the
-  # CMake-driven Essentia and test builds pick as their default. Everything
-  # must stay on ONE toolset: an earlier v143 pin on the app alone left
-  # v145-built essentia.lib referencing vectorized STL helpers
-  # (__std_max_element_f_ and friends) that v143's support libraries do not
-  # have, which is a wall of LNK2001s at app link time.
-
-  # Essentia's Windows dependencies. The triplet must stay
-  # x64-windows-static-md - static libraries against the dynamic CRT, which
-  # is what both the .vcxproj and the JUCE CMake test target use. The vcpkg
-  # root is the runner image's preinstalled clone.
-  VCPKG_TRIPLET: x64-windows-static-md
-  VCPKG_ROOT_DIR: C:/vcpkg
-  # Read by the .vcxproj, which expands $(AUDIONAUT_VCPKG_PREFIX) in its
-  # include and library paths, and passed to the test configure.
-  AUDIONAUT_VCPKG_PREFIX: C:/vcpkg/installed/x64-windows-static-md
+  # CMake-driven test build picks as its default. Keep it to ONE toolset:
+  # static libraries built with v145 reference vectorized STL helpers
+  # (__std_max_element_f_ and friends) that v143's support libraries lack,
+  # which is a wall of LNK2001s at link time.
 
 jobs:
   build:
@@ -56,20 +45,10 @@ jobs:
 
     # Some test wavs (see .gitattributes) live in Git LFS; without this the
     # tests get pointer stubs and fail loading them. A separate step rather
-    # than `lfs: true` on the checkout: that option also smudges LFS pointers
-    # inside the essentia submodule, whose upstream has LFS disabled, and the
-    # resulting download error fails the whole checkout.
+    # than `lfs: true` on the checkout, which would also smudge whatever LFS
+    # pointers the submodules carry.
     - name: Fetch Git LFS test files
       run: git lfs pull
-
-    # Essentia. build_essentia.sh cannot be used - it is a bash + waf script
-    # targeting macOS/Linux - so this runs the CMake + vcpkg port instead
-    # (cached; see the action for the cache design). It has to come before
-    # the app build: the .vcxproj lists essentia.lib in AdditionalDependencies
-    # unconditionally, so a missing library is a hard linker error rather
-    # than a graceful degradation.
-    - name: Build Essentia
-      uses: ./.github/actions/build-essentia-windows
 
     - name: Add MSBuild to PATH
       uses: microsoft/setup-msbuild@v2
@@ -144,9 +123,7 @@ jobs:
       # configuration is chosen at build time with --config instead.
       # No toolset pin either - CMake generates its own project files and picks
       # the runner's installed toolset; only the checked-in .vcxproj hardcodes one.
-      run: >
-        cmake -B build -S Audionaut/Catch2Tests
-        -DAUDIONAUT_VCPKG_PREFIX=${{ env.AUDIONAUT_VCPKG_PREFIX }}
+      run: cmake -B build -S Audionaut/Catch2Tests
 
     - name: Build tests
       run: cmake --build build --config ${{ env.BUILD_TYPE }} --parallel

@@ -2,14 +2,13 @@
 
 Flatpak packaging for Audionaut, aimed at Flathub. Verified end to end:
 builds, installs and runs in the sandbox (audio via PipeWire, home access,
-Essentia analysis, file import).
+analysis, file import).
 
 ## Files
 
-- `app.audionaut.Audionaut.yml` — flatpak-builder manifest. Builds Essentia
-  (with its 3rd-party tarballs pre-seeded for Flathub's offline builds),
-  then the app via the LinuxMakefile, and installs the desktop entry, icon,
-  MIME definition and metainfo renamed to the app id.
+- `app.audionaut.Audionaut.yml` — flatpak-builder manifest. Builds the app
+  via the LinuxMakefile and installs the desktop entry, icon, MIME
+  definition and metainfo renamed to the app id.
 - `app.audionaut.Audionaut.metainfo.xml` — AppStream metadata, required by
   Flathub. Also suitable for the .deb (`/usr/share/metainfo`).
 - `sync-pins.py` — rewrites the manifest's git pins (app tag/commit and
@@ -41,8 +40,9 @@ temporarily (`url: ../../..` style paths work with flatpak-builder).
   `AnalyticsCredentials.h` (the GA4 API secret) is absent and the Flatpak
   ships with analytics disabled. That is probably the right default for
   Flathub anyway — a reviewer may ask about phone-home behaviour.
-- **x86_64 only**: Essentia's fftw build config passes x86 SSE2 flags;
-  aarch64 needs the arm patches from `build_essentia.sh` extended to Linux.
+- **x86_64 only**: nothing forces this any more - the restriction came from
+  Essentia's fftw build, which is gone - but an aarch64 build has not been
+  tried yet.
 - **Release automation**: handled for the GitHub-release bundle —
   `release-linux.yml` runs `sync-pins.py` and attaches
   `Audionaut-<version>-x86_64.flatpak` to the release. Installing a bundle

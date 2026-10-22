@@ -43,23 +43,9 @@ or once cloned do:
 git submodule update --init --recursive
 ```
 
-### Essentia (audio analysis)
+### Audio analysis
 
-The analysis features (BIC segmentation, onset detection, beat tracking) link against a static build of the [Essentia](https://essentia.upf.edu) submodule. Build it once after checking out the submodules:
-
-```
-./Audionaut/Builds/build_essentia.sh
-```
-
-The script builds Essentia's 3rd-party dependencies statically (slow, skipped on re-runs; force with `FORCE_3RDPARTY=1`), then configures and builds Essentia itself with its waf build system into `Submodules/essentia/build`. It patches Essentia's Linux-oriented 3rd-party build scripts in the working tree as needed for macOS/Apple Silicon, so the essentia submodule will show as dirty afterwards — don't commit those changes.
-
-Prerequisites:
-
-- **Python ≤ 3.11** — Essentia's bundled waf needs `distutils`, removed in Python 3.12. The script picks a suitable interpreter automatically; override with `PYTHON=... ./Audionaut/Builds/build_essentia.sh`.
-- **pkg-config** (e.g. `brew install pkg-config`)
-- **CMake 3.x recommended** — some 3rd-party deps ship very old CMakeLists that CMake 4.x refuses (e.g. `pip install "cmake~=3.31.0"`).
-
-Building Essentia is optional: without it, `ESSENTIA_ENABLED` auto-detects off and the app and tests compile with the analysis features disabled.
+The analysis features (segment boundaries, beat tracking with tempo, onset detection) are part of the source tree, in `Audionaut/Source/Engine/Analysis`, built on JUCE's DSP module. There is nothing to build or install for them.
 
 ### demucs.cpp (stem separation)
 

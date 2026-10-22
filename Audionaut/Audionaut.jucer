@@ -805,19 +805,19 @@
   </MAINGROUP>
   <JUCEOPTIONS JUCE_STRICT_REFCOUNTEDPOINTER="1"/>
   <EXPORTFORMATS>
-    <XCODE_MAC targetFolder="Builds/MacOSX" extraCompilerFlags="-isystem $(SRCROOT)/../../../Submodules/essentia/packaging/debian_3rdparty/include/eigen3" rubberband="-O3 -w" lame="-O3 -w -include $(SRCROOT)/../../../ThirdParty/lame/audionaut/lame_config.h -I$(SRCROOT)/../../../ThirdParty/lame/libmp3lame" demucs="-O3 -w -I$(SRCROOT)/../../../Submodules/demucs.cpp/vendor/eigen -I$(SRCROOT)/../../../Submodules/demucs.cpp/src" applicationCategory="public.app-category.music"
+    <XCODE_MAC targetFolder="Builds/MacOSX" rubberband="-O3 -w" lame="-O3 -w -include $(SRCROOT)/../../../ThirdParty/lame/audionaut/lame_config.h -I$(SRCROOT)/../../../ThirdParty/lame/libmp3lame" demucs="-O3 -w -I$(SRCROOT)/../../../Submodules/demucs.cpp/vendor/eigen -I$(SRCROOT)/../../../Submodules/demucs.cpp/src" applicationCategory="public.app-category.music"
                extraDefs="LINK_PLATFORM_MACOSX=1" appSandbox="1" useLegacyBuildSystem="0"
                smallIcon="qhU3Rr" bigIcon="gdiYPG" appSandboxInheritance="1"
                appSandboxOptions="com.apple.security.assets.music.read-write,com.apple.security.device.microphone,com.apple.security.files.user-selected.read-write,com.apple.security.network.client,com.apple.security.network.server"
                customPList="&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;&#10;&lt;plist&gt;&#10;  &lt;dict&gt;&#10;&lt;key&gt;ITSAppUsesNonExemptEncryption&lt;/key&gt;&#10;&#9;&lt;false/&gt;&#10;&lt;key&gt;LSMinimumSystemVersion&lt;/key&gt;&#10;&#9;&lt;string&gt;13.0&lt;/string&gt;&#10;  &lt;/dict&gt;&#10;&lt;/plist&gt;"
                xcodeValidArchs="arm64,arm64e" documentExtensions="audium" documentTypeIsPackage="1"
                iosDevelopmentTeamID="Q89CZBX79G" buildNumber="29" microphonePermissionNeeded="1"
-               localNetworkPermissionNeeded="1" extraLinkerFlags="$(SRCROOT)/../../../Submodules/essentia/build/src/libessentia.a $(SRCROOT)/../../../Submodules/essentia/packaging/debian_3rdparty/lib/libavcodec.a $(SRCROOT)/../../../Submodules/essentia/packaging/debian_3rdparty/lib/libchromaprint.a $(SRCROOT)/../../../Submodules/essentia/packaging/debian_3rdparty/lib/libavformat.a $(SRCROOT)/../../../Submodules/essentia/packaging/debian_3rdparty/lib/libfftw3f.a $(SRCROOT)/../../../Submodules/essentia/packaging/debian_3rdparty/lib/libswresample.a $(SRCROOT)/../../../Submodules/essentia/packaging/debian_3rdparty/lib/libz.a $(SRCROOT)/../../../Submodules/essentia/packaging/debian_3rdparty/lib/libavutil.a $(SRCROOT)/../../../Submodules/essentia/packaging/debian_3rdparty/lib/libsamplerate.a $(SRCROOT)/../../../Submodules/essentia/packaging/debian_3rdparty/lib/libyaml.a -liconv">
+               localNetworkPermissionNeeded="1">
       <CONFIGURATIONS>
-        <CONFIGURATION isDebug="1" name="Debug" targetName="Audionaut" headerPath="$(SRCROOT)/../../Source&#10;$(SRCROOT)/../../../Submodules/essentia/src"
+        <CONFIGURATION isDebug="1" name="Debug" targetName="Audionaut" headerPath="$(SRCROOT)/../../Source"
                        customXcodeFlags="INSTALL_PATH=/Applications" defines="JUCE_ENABLE_REPAINT_DEBUGGING=0"
                        macOSDeploymentTarget="13.0"/>
-        <CONFIGURATION isDebug="0" name="Release" targetName="Audionaut" headerPath="$(SRCROOT)/../../Source&#10;$(SRCROOT)/../../../Submodules/essentia/src"
+        <CONFIGURATION isDebug="0" name="Release" targetName="Audionaut" headerPath="$(SRCROOT)/../../Source"
                        customXcodeFlags="INSTALL_PATH=/Applications, GCC_GENERATE_DEBUGGING_SYMBOLS=YES, DEBUG_INFORMATION_FORMAT=dwarf-with-dsym"
                        macOSDeploymentTarget="13.0"/>
       </CONFIGURATIONS>
@@ -840,12 +840,12 @@
       </MODULEPATHS>
     </XCODE_MAC>
     <LINUX_MAKE targetFolder="Builds/LinuxMakefile" rubberband="-O3 -w" lame="-O3 -w -include ../../../ThirdParty/lame/audionaut/lame_config.h -I../../../ThirdParty/lame/libmp3lame" demucs="-O3 -w -I../../../Submodules/demucs.cpp/vendor/eigen -I../../../Submodules/demucs.cpp/src" smallIcon="qhU3Rr" bigIcon="gdiYPG"
-                extraDefs="LINK_PLATFORM_LINUX=1" extraLinkerFlags="../../../Submodules/essentia/build/src/libessentia.a ../../../Submodules/essentia/packaging/debian_3rdparty/lib/libchromaprint.a ../../../Submodules/essentia/packaging/debian_3rdparty/lib/libavformat.a ../../../Submodules/essentia/packaging/debian_3rdparty/lib/libavcodec.a ../../../Submodules/essentia/packaging/debian_3rdparty/lib/libswresample.a ../../../Submodules/essentia/packaging/debian_3rdparty/lib/libavutil.a ../../../Submodules/essentia/packaging/debian_3rdparty/lib/libfftw3f.a ../../../Submodules/essentia/packaging/debian_3rdparty/lib/libz.a ../../../Submodules/essentia/packaging/debian_3rdparty/lib/libsamplerate.a ../../../Submodules/essentia/packaging/debian_3rdparty/lib/libyaml.a -ldrm">
+                extraDefs="LINK_PLATFORM_LINUX=1">
       <CONFIGURATIONS>
-        <CONFIGURATION isDebug="1" name="Debug" headerPath="../../Source&#10;../../../Submodules/essentia/src"
-                       extraCompilerFlags="-Wno-multichar -isystem ../../../Submodules/essentia/packaging/debian_3rdparty/include/eigen3" targetName="audionaut"/>
-        <CONFIGURATION isDebug="0" name="Release" headerPath="../../Source&#10;../../../Submodules/essentia/src"
-                       extraCompilerFlags="-Wno-multichar -isystem ../../../Submodules/essentia/packaging/debian_3rdparty/include/eigen3" targetName="audionaut"/>
+        <CONFIGURATION isDebug="1" name="Debug" headerPath="../../Source"
+                       extraCompilerFlags="-Wno-multichar" targetName="audionaut"/>
+        <CONFIGURATION isDebug="0" name="Release" headerPath="../../Source"
+                       extraCompilerFlags="-Wno-multichar" targetName="audionaut"/>
       </CONFIGURATIONS>
       <MODULEPATHS>
         <MODULEPATH id="juce_analytics" path="../Submodules/JUCE/modules"/>
@@ -865,15 +865,11 @@
         <MODULEPATH id="juce_audio_processors_headless" path="../Submodules/JUCE/modules"/>
       </MODULEPATHS>
     </LINUX_MAKE>
-    <VS2026 targetFolder="Builds/VisualStudio2026" rubberband="/w" lame="/w /D_CRT_SECURE_NO_WARNINGS /I..\..\..\ThirdParty\lame\audionaut /I..\..\..\ThirdParty\lame\libmp3lame /FIlame_config.h" demucs="/bigobj /w /I..\..\..\Submodules\demucs.cpp\vendor\eigen /I..\..\..\Submodules\demucs.cpp\src" extraDefs="LINK_PLATFORM_WINDOWS=1&#10;_WIN32_WINNT=0x0A00&#10;NOMINMAX&#10;WIN32_LEAN_AND_MEAN&#10;YAML_DECLARE_STATIC"
-            smallIcon="qhU3Rr" bigIcon="gdiYPG" externalLibraries="essentia.lib&#10;fftw3f.lib&#10;samplerate.lib&#10;yaml.lib&#10;avformat.lib&#10;avcodec.lib&#10;avutil.lib&#10;swresample.lib&#10;ws2_32.lib&#10;secur32.lib&#10;crypt32.lib&#10;ncrypt.lib&#10;bcrypt.lib&#10;mfplat.lib&#10;mfuuid.lib&#10;strmiids.lib">
+    <VS2026 targetFolder="Builds/VisualStudio2026" rubberband="/w" lame="/w /D_CRT_SECURE_NO_WARNINGS /I..\..\..\ThirdParty\lame\audionaut /I..\..\..\ThirdParty\lame\libmp3lame /FIlame_config.h" demucs="/bigobj /w /I..\..\..\Submodules\demucs.cpp\vendor\eigen /I..\..\..\Submodules\demucs.cpp\src" extraDefs="LINK_PLATFORM_WINDOWS=1&#10;_WIN32_WINNT=0x0A00&#10;NOMINMAX&#10;WIN32_LEAN_AND_MEAN"
+            smallIcon="qhU3Rr" bigIcon="gdiYPG" externalLibraries="ws2_32.lib">
       <CONFIGURATIONS>
-        <CONFIGURATION isDebug="1" name="Debug" headerPath="../../Source&#10;../../../Submodules/essentia/src&#10;../../../Submodules/essentia/build-msvc/generated&#10;$(AUDIONAUT_VCPKG_PREFIX)/include&#10;../../../../vcpkg/installed/x64-windows-static-md/include"
-                       extraCompilerFlags="/external:I $(AUDIONAUT_VCPKG_PREFIX)/include/eigen3 /external:I ../../../../vcpkg/installed/x64-windows-static-md/include/eigen3"
-                       libraryPath="../../../Submodules/essentia/build-msvc/lib/Debug&#10;$(AUDIONAUT_VCPKG_PREFIX)/debug/lib&#10;../../../../vcpkg/installed/x64-windows-static-md/debug/lib"/>
-        <CONFIGURATION isDebug="0" name="Release" headerPath="../../Source&#10;../../../Submodules/essentia/src&#10;../../../Submodules/essentia/build-msvc/generated&#10;$(AUDIONAUT_VCPKG_PREFIX)/include&#10;../../../../vcpkg/installed/x64-windows-static-md/include"
-                       extraCompilerFlags="/external:I $(AUDIONAUT_VCPKG_PREFIX)/include/eigen3 /external:I ../../../../vcpkg/installed/x64-windows-static-md/include/eigen3"
-                       libraryPath="../../../Submodules/essentia/build-msvc/lib/Release&#10;$(AUDIONAUT_VCPKG_PREFIX)/lib&#10;../../../../vcpkg/installed/x64-windows-static-md/lib"/>
+        <CONFIGURATION isDebug="1" name="Debug" headerPath="../../Source"/>
+        <CONFIGURATION isDebug="0" name="Release" headerPath="../../Source"/>
       </CONFIGURATIONS>
       <MODULEPATHS>
         <MODULEPATH id="juce_analytics" path="../Submodules/JUCE/modules"/>
