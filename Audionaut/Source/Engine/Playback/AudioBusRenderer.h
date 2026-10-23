@@ -166,7 +166,6 @@ public:
     void setPan(const int channelNumber, const SampleType newPan)
     {
         if (channelNumber >= 0 && channelNumber < MAX_AUDIO_CHANNELS) {
-            // std::cout << "setPan " << channelNumber << " " << newPan << std::endl;
             panners[channelNumber].setPan(newPan);
         }
     }
@@ -174,7 +173,6 @@ public:
     void setGain(const int channelNumber, const SampleType newGain)
     {
         if (channelNumber >= 0 && channelNumber < MAX_AUDIO_CHANNELS) {
-            // std::cout << "setGain " << channelNumber << " " << newGain << std::endl;
             if (audioChannelData[channelNumber].solo)
                 gains[channelNumber].setGainLinear(newGain);
             else if (!audioChannelData[channelNumber].mute)
@@ -187,7 +185,6 @@ public:
     void setMute(const int channelNumber, const bool bMute)
     {
         if (channelNumber >= 0 && channelNumber < MAX_AUDIO_CHANNELS) {
-            //std::cout << "setMute " << channelNumber << " " << bMute << std::endl;
             audioChannelData[channelNumber].mute = bMute;
             if (!audioChannelData[channelNumber].solo)
                 gains[channelNumber].setGainLinear(bMute ? 0.f : audioChannelData[channelNumber].gain);
@@ -197,7 +194,6 @@ public:
     void setSolo(const int channelNumber, const bool bSolo)
     {
         if (channelNumber >= 0 && channelNumber < MAX_AUDIO_CHANNELS) {
-            //std::cout << "setSolo " << channelNumber << " " << bSolo << std::endl;
             audioChannelData[channelNumber].solo = bSolo;
             applyMuteAndSoloGains();
         }

@@ -40,7 +40,6 @@ struct UndoableContainerAction final : public juce::UndoableAction
      */
     ~UndoableContainerAction() override
     {
-        //std::cout << "~UndoableContainerAction" << std::endl;
     }
     
     /**

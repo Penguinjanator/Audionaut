@@ -8,13 +8,6 @@
 
 void LevelComponent::paint(Graphics& g)
 {
-    /* background
-    g.setOpacity(0.3f);
-    g.drawImageAt(mImage, 0, 0);
-    g.setOpacity(1.f);
-    */
-    
-    
     LevelMeter* parent = dynamic_cast<LevelMeter*>(getParentComponent());
     jassert(parent);
     if (parent == nullptr) return;
@@ -25,16 +18,6 @@ void LevelComponent::paint(Graphics& g)
     
     const int h = roundToInt(static_cast<float>(getHeight()) * level);
     const int w = roundToInt(static_cast<float>(getWidth()) * level);
-    
-	/*
-    const float db0 = parent->getDecibelScaled(0.f);
-    if(level >= db0)
-    {
-        g.setColour(RedLevel);
-        g.fillRect(0, getHeight() - h, getWidth(), h);
-        return;
-    }
-    */
     
     // get clipped image area, also see: drawLevels
     Rectangle<int> area = mImage.getBounds();
@@ -229,7 +212,6 @@ LevelMeter::~LevelMeter()
 const float LevelMeter::getDecibelScaled(const float db)
 {
     return powf(reverse_linear(db, m_fMindB, m_fMaxdB), 2.f);
-    //return reverse_linear(db, m_fMindB, m_fMaxdB);
 }
 
 void LevelMeter::resized()
@@ -274,7 +256,7 @@ float LevelMeter::getDisplayPeak()
 
 void LevelMeter::setLevel(float level)
 {
-    if (level < decebelToGain(m_fMindB))
+    if (level < juce::Decibels::decibelsToGain(m_fMindB))
     {
         m_fLeveldB = m_fMindB;
     }
@@ -282,8 +264,6 @@ void LevelMeter::setLevel(float level)
     {
         m_fLeveldB = gainToDecebel(level);
     }
-    
-    //printf("lvl %f\n", m_fLeveldB);
     
     if (m_fLeveldB > m_fPeakLeveldB)
     {
@@ -300,12 +280,6 @@ void LevelMeter::setLevel(float level)
     }
     
     repaint();
-}
-
-void LevelMeter::setPeakLevel(float level)
-{
-    m_fPeakLeveldB = gainToDecebel(level);
-    m_iPeakHold = m_iPeakHoldDuration;
 }
 
 void LevelMeter::setInverted(bool bInverted)
@@ -351,13 +325,6 @@ StereoMeter::StereoMeter() :
 StereoMeter::~StereoMeter()
 {
 }
-
-/*
-void StereoMeter::paint(Graphics& g)
-{
-    g.fillAll (Colours::black);
-}
-*/
 
 void StereoMeter::resized()
 {

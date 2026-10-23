@@ -228,7 +228,6 @@ void AudiumApplication::handleAsyncUpdate()
 
 #if JUCE_MAC
     rebuildAppleMenu();
-    appleMenuRebuildListener = std::make_unique<AppleMenuRebuildListener>();
 #endif
     mainWindow.reset (new AudiumMainWindow (getApplicationName(), audiumEngine));
 
@@ -756,7 +755,6 @@ PopupMenu AudiumApplication::createFileMenu()
     {
         PopupMenu recentFilesMenu;
         recentFiles.createPopupMenuItems (recentFilesMenu, recentProjectsBaseID, true, true);
-        // std::cout << "recentFiles.createPopupMenuItems" << std::endl;
         if (recentFilesMenu.getNumItems() > 0) {
             recentFilesMenu.addSeparator();
             recentFilesMenu.addCommandItem (commandManager.get(), CommandIDs::clearRecentFiles);
@@ -818,9 +816,6 @@ PopupMenu AudiumApplication::createEditMenu()
     menu.addSeparator();
     menu.addCommandItem(commandManager.get(), CommandIDs::separateStems);
     menu.addCommandItem(commandManager.get(), CommandIDs::stretchClip);
-
-    //menu.addSeparator();
-    //menu.addCommandItem(commandManager.get(), CommandIDs::loopPlayList);
     return menu;
 }
 
@@ -1221,7 +1216,6 @@ void AudiumApplication::openFileInternal(juce::File file, juce::File autosaveToO
     if (success) {
 
         initialOpenDirectory = file.getParentDirectory();
-        std::cout << "initialOpenDirectory = " << initialOpenDirectory.getFullPathName() << std::endl;
         RecentlyOpenedFilesList::registerRecentFileNatively (file);
         recentFiles.addFile (file);
         if (isProjectFile)
@@ -1355,9 +1349,8 @@ bool AudiumApplication::saveProjectToFile(juce::File file)
     if (success) {
         // foo.audium/Project.json -> ../../
         initialSaveDirectory = file.getParentDirectory().getParentDirectory();
-        std::cout << "file saved: " << file.getFullPathName() << std::endl;
+        DBG("file saved: " << file.getFullPathName());
         fileStore->deleteObsoleteAudioFiles();
-        std::cout << "initialSaveDirectory: " << initialSaveDirectory.getFullPathName() << std::endl;
         
         if (file.getFileName() == audium::ProjectFileStore::projectFileName)
             file = file.getParentDirectory();

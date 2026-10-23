@@ -18,12 +18,10 @@ class DragZoomControl  : public juce::Component, public juce::ChangeBroadcaster
 public:
     DragZoomControl(std::shared_ptr<AudioTrackListBox> audioTrackListBox,
                     std::shared_ptr<audium::AudiumEngine> audiumEngine,
-                    std::shared_ptr<ZoomHandler> zoomHandler,
-                    bool arrangementMode) :
+                    std::shared_ptr<ZoomHandler> zoomHandler) :
         audioTrackListBox(audioTrackListBox),
         audiumEngine(audiumEngine),
-        zoomHandler(zoomHandler),
-        arrangementMode(arrangementMode)
+        zoomHandler(zoomHandler)
     {
         updateFromEngine();
         
@@ -106,7 +104,6 @@ public:
             }
             
             newFactor = mouseDownFactor * f;
-            //std::cout << "y:" << y << " f: " << f << " " << newFactor << std::endl;
         }
 
         // deliberately NOT applied here: the factor takes effect in the
@@ -149,7 +146,6 @@ private:
     std::shared_ptr<AudioTrackListBox>          audioTrackListBox;
     std::shared_ptr<audium::AudiumEngine>               audiumEngine;
     std::shared_ptr<ZoomHandler>                zoomHandler;
-    bool                                        arrangementMode;
     
     double mouseDownFactor = 1.0;
     double targetZoomFactor = 1.0;

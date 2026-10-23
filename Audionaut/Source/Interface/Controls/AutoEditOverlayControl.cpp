@@ -136,8 +136,6 @@ void AutoEditOverlayControl::stepMeasures(bool longer)
 
     measures = stepped;
 
-    std::cout << "AutoEdit measures: " << measures << std::endl;
-
     updateStepButtons();
     updatePreview();
 }

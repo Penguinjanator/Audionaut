@@ -117,10 +117,6 @@ void AudiumLookAndFeel::setupColours()
     // Slider
     setColour(Slider::backgroundColourId, Colours::transparentBlack);
     
-    // FileBrowserComponent
-//    setColour(FileBrowserComponent::currentPathBoxArrowColourId, Colours::green);
-    //setColour(FileBrowserComponent::filenameBoxBackgroundColourId, Colours::red);
-    
     // Label
     setColour(Label::backgroundColourId, findColour(secondaryBackgroundColourId));
     setColour(Label::textColourId, findColour(audium::defaultTextColourId));
@@ -170,7 +166,6 @@ void AudiumLookAndFeel::drawButtonBackground (Graphics& g,
     {
         g.fillRoundedRectangle (bounds, cornerSize);
 
-        //g.setColour (button.findColour (ComboBox::outlineColourId));
         g.setColour (Colours::white.withAlpha(0.4f));
         g.drawRoundedRectangle (bounds, cornerSize, 1.0f);
     }

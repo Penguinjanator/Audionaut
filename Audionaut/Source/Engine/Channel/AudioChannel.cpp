@@ -67,20 +67,10 @@ void AudioChannel::setInputChannel(const int newInputChannel)
     commitChannelData();
 }
 
-int AudioChannel::getInputChannel() const noexcept
-{
-    return data.inputChannel;
-}
-
 void AudioChannel::setOutputChannel(const int newOutputChannel)
 {
     data.outputChannel = newOutputChannel;
     commitChannelData();
-}
-
-int AudioChannel::getOutputChannel() const noexcept
-{
-    return data.outputChannel;
 }
 
 void AudioChannel::setRecordEnabled(bool bEnabled)

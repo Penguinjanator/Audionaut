@@ -56,9 +56,6 @@ void SelectionManager::copySelectedToClipboard() {
         
     json jout, json_lola;
     
-//        if (ResourceGroup* subgroup = dynamic_cast<ResourceGroup*>(object.get())) {
-//        if (AudioChannel* channel = dynamic_cast<AudioChannel*>(object.get())) {
-    
     switch (auto context = getSelectionContext()) {
         case play_list_item:
             for (auto object : selectedObjects) {

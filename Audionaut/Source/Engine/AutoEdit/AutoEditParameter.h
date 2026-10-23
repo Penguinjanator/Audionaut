@@ -35,9 +35,6 @@ public:
     /** @brief Whether the parameter takes part in deriving anything at all. */
     bool isActive() const { return measures > 0.0; }
 
-    /** @brief The abstract value: target segment length, in measures. */
-    double getMeasures() const { return measures; }
-
     /**
      * @brief Seconds one measure spans at the given tempo.
      * @return The measure length, or 0 when @p bpm is not positive.

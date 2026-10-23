@@ -24,7 +24,6 @@ public:
 
     static void resetWaveFormColour();
     static juce::Colour getNewWaveFormColour();
-    static juce::Colour getCurrentWaveFormColour();
     static juce::Colour getComplementaryColour(juce::Colour c);
 };
 

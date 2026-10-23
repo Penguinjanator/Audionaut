@@ -182,35 +182,7 @@ private:
     void updateSettings();
 
    #if JUCE_MAC
-    class AppleMenuRebuildListener  : private MenuBarModel::Listener
-    {
-    public:
-        AppleMenuRebuildListener()
-        {
-            if (auto* model = AudiumApplication::getApp().getMenuModel())
-                model->addListener (this);
-        }
-
-        ~AppleMenuRebuildListener() override
-        {
-            if (auto* model = AudiumApplication::getApp().getMenuModel())
-                model->removeListener (this);
-        }
-
-    private:
-        void menuBarItemsChanged (MenuBarModel*) override  {}
-
-        void menuCommandInvoked (MenuBarModel*,
-                                 const ApplicationCommandTarget::InvocationInfo& info) override
-        {
-            if (info.commandID == CommandIDs::enableNewVersionCheck)
-                Timer::callAfterDelay (50, [] { AudiumApplication::getApp().rebuildAppleMenu(); });
-        }
-    };
-
     void rebuildAppleMenu();
-
-    std::unique_ptr<AppleMenuRebuildListener> appleMenuRebuildListener;
    #endif
     
 };

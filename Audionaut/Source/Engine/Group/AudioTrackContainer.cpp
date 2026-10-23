@@ -206,7 +206,6 @@ bool AudioTrackContainer::writeToJson (json& output)
 
 bool AudioTrackContainer::readFromJson (json& input, bool rebuild)
 {
-    // std::cout << "AudioTrackContainer::readFromJson " << input.dump(2) << std::endl;
     json jsonTracks;
     if (input.contains("audio_tracks")) {
         jsonTracks = input["audio_tracks"];

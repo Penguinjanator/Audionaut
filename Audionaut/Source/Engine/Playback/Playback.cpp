@@ -59,7 +59,6 @@ bool Playback::stopVoice(VoiceSource* source,
 
 void Playback::stopAllVoices()
 {
-    // std::cout << "stopAllVoices" << std::endl;
     for(auto i = 0; i < MAX_VOICES; ++i) {
         voices[i].stop(true);
     }
@@ -109,16 +108,6 @@ bool Playback::isVoiceSourceActive(const VoiceSource* source) const noexcept
             return true;
     }
     return false;
-}
-
-int Playback::getNumberOfVoices() const
-{
-    auto counter = 0;
-    for (auto i = 0; i < MAX_VOICES; ++i) {
-        if (voices[i].processing.load())
-            counter++;
-    }
-    return counter;
 }
 
 

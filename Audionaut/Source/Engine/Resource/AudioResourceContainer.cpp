@@ -124,7 +124,6 @@ bool AudioResourceContainer::copyAudioFiles(const juce::File sourceDirectory,
                                             const juce::File destinationDirectory,
                                             juce::Array<juce::File>& copiedFiles)
 {
-    juce::String debugString;
     if (sourceDirectory != destinationDirectory) {
 
         if (!destinationDirectory.exists()) {
@@ -149,18 +148,9 @@ bool AudioResourceContainer::copyAudioFiles(const juce::File sourceDirectory,
                     return false;
                 }
                 copiedFiles.add(destinationFile);
-                debugString += "copied to: " + destinationFile.getFileName() + "\n";
             }
         }
     }
-#if _DEBUG
-    if (debugString.isNotEmpty()) {
-
-        auto messageString = "Destination: " + destinationDirectory.getFullPathName() + "\n\n";
-        messageString += debugString;
-        userPrompter->showMessage("copyAudioFiles", messageString);
-    }
-#endif
     return true;
 }
 
@@ -245,7 +235,6 @@ std::shared_ptr<AudioResource> AudioResourceContainer::findResourceWithUrl(juce:
 {
     for (auto it = audioResources.begin(); it != audioResources.end(); ++it) {
         if ((*it).second->getUrl() == url) {
-            //            std::cout << "found url: " << url.getFileName() << std::endl;
             if ((*it).second->audioFormatReader != nullptr)
                 return (*it).second;
         }
@@ -380,7 +369,6 @@ std::vector<juce::File> AudioResourceContainer::findObsoleteAudioFiles(const jso
     std::vector<std::string> jsonPaths;
     
     if (!json.empty()) {
-        // std::cout << std::setw(2) << json << std::endl;
         
         if (json.contains("audium")) {
             for (auto track : json["audium"]["audio_tracks"]) {
@@ -478,23 +466,6 @@ std::vector<std::shared_ptr<AudioResource>> AudioResourceContainer::getAudioReso
             result.push_back(itr->second);
         }
     }
-    return result;
-}
-
-std::vector<std::shared_ptr<AudioResource>> AudioResourceContainer::getAudioResourcesForChannel(const AudioChannel *channel) const
-{
-    std::vector<std::shared_ptr<AudioResource>> result;
-    for (const auto &itr : audioResources) {
-        
-        if (itr.first.get() == &channel->getAudioTrack()) {
-            auto resource = itr.second;
-            auto destChannel = resource->getChannelMapping().getDestinationChannel();
-            if (destChannel == channel->getChannelNumber()) {
-                result.push_back(resource);
-            }
-        }
-    }
-    
     return result;
 }
 

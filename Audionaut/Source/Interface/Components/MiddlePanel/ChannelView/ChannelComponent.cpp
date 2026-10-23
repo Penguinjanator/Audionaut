@@ -525,21 +525,9 @@ void ChannelComponent::mouseUp (const juce::MouseEvent& e)
     getParentComponent()->mouseUp(e);
 }
 
-bool ChannelComponent::keyPressed (const juce::KeyPress& key)
-{
-    return false;  // Return true if your handler uses this key event, or false to allow it to be passed-on.
-}
-
 bool ChannelComponent::isInterestedInDragSource (const juce::DragAndDropTarget::SourceDetails &dragSourceDetails)
 {
-    if (auto item = dynamic_cast<ChannelComponent*>(dragSourceDetails.sourceComponent.get())) {
-        //if (item->getPlayListModel() == playListModel)
-        {
-            // return true if source details match this model
-            return true;
-        }
-    }
-    return false;
+    return dynamic_cast<ChannelComponent*>(dragSourceDetails.sourceComponent.get()) != nullptr;
 }
 
 void ChannelComponent::updateInsertLines(const juce::DragAndDropTarget::SourceDetails &dragSourceDetails)
@@ -588,8 +576,6 @@ void ChannelComponent::itemDropped (const SourceDetails &dragSourceDetails)
         
         if (getAudioTrack() == channelComponent->getAudioTrack()) {
         
-            std::cout << "MoveItemBefore -> currentIndex: " << channelComponent->rowNumber << " indexOfItemToPlaceBefore " << insertIndex << std::endl;
-            
             // remember old channel mapping
             std::vector<int> channelNumbers;
             for (auto channel : getAudioTrack()->audioChannelContainer->objects)

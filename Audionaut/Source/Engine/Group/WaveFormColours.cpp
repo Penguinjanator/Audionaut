@@ -30,11 +30,6 @@ juce::Colour WaveFormColours::getNewWaveFormColour()
     return result;
 }
 
-juce::Colour WaveFormColours::getCurrentWaveFormColour()
-{
-    return juce::Colour(waveFormColours[currentWaveFormColour]);
-}
-
 juce::Colour WaveFormColours::getComplementaryColour(juce::Colour c)
 {
     float c_r = c.getFloatRed();

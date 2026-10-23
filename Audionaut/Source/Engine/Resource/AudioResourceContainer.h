@@ -246,13 +246,6 @@ public:
     std::vector<std::shared_ptr<AudioResource>> getAudioResourcesForResourceGroup(const ResourceGroup *resourceGroup) const;
 
     /**
-     * @brief Retrieves audio resources for the specified channel.
-     * @param channel A pointer to the `AudioChannel`.
-     * @return A vector of shared pointers to `AudioResource` objects.
-     */
-    std::vector<std::shared_ptr<AudioResource>> getAudioResourcesForChannel(const AudioChannel *channel) const;
-
-    /**
      * @brief Retrieves the audio track associated with the specified resource.
      * @param resource A shared pointer to the `AudioResource`.
      * @return A shared pointer to the `AudioTrack`.

@@ -140,7 +140,6 @@ juce::Rectangle<double> WaveFormViewBase::getClippedDrawingArea() const
     jassert(parentComponent);
     const auto parentOffset = static_cast<double>(parentComponent->getBounds().getX());
     const auto scrollOffset = zoomHandler->getVisibleRange().getStart();
-    //std::cout << parentComponent.getName().toStdString() << " offset: " << parentOffset << " " << scrollOffset << std::endl;
     // whole pixels: paint() derives the drawn time range from this x and
     // hands drawChannel the rounded rect - computed from a fractional x the
     // two disagree by up to a pixel and the waveform jitters while zooming
@@ -150,7 +149,6 @@ juce::Rectangle<double> WaveFormViewBase::getClippedDrawingArea() const
 
     thumbArea.setX(startX);
     thumbArea.setWidth(lengthX);
-    //std::cout << thumbArea.getX() << " " << thumbArea.getWidth() << std::endl;
     return thumbArea;
 }
 

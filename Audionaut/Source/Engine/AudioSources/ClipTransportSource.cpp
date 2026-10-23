@@ -117,14 +117,6 @@ void ClipTransportSource::setSource (juce::PositionableAudioSource* const newSou
         }
         else
             newMasterSource = newPositionableSource;
-
-        if (isPrepared)
-        {
-            if (newResamplerSource != nullptr && sourceSampleRateToCorrectFor > 0 && sampleRate > 0)
-                newResamplerSource->setResamplingRatio (sourceSampleRateToCorrectFor / sampleRate);
-
-            newMasterSource->prepareToPlay (blockSize, sampleRate);
-        }
     }
 
     {
@@ -271,14 +263,6 @@ double ClipTransportSource::getCurrentPosition() const
     jassert(isPrepared);
     if (sampleRate > 0.0)
         return (double) getNextReadPosition() / sampleRate;
-
-    return 0.0;
-}
-
-double ClipTransportSource::getLengthInSeconds() const
-{
-    if (sampleRate > 0.0)
-        return (double) getTotalLength() / sampleRate;
 
     return 0.0;
 }

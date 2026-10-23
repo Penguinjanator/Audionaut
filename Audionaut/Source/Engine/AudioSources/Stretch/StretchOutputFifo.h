@@ -36,7 +36,6 @@ public:
 
     int getNumStored() const noexcept    { return stored; }
     int getFreeSpace() const noexcept    { return buffer.getNumSamples() - stored; }
-    int getCapacity() const noexcept     { return buffer.getNumSamples(); }
     int getUnderruns() const noexcept    { return underruns; }
     int getOverflows() const noexcept    { return overflows; }
 

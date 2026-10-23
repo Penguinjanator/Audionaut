@@ -104,9 +104,6 @@
     <Filter Include="Audionaut\Source\Engine">
       <UniqueIdentifier>{34AD0A31-F181-518D-26C9-55F68C1CA49E}</UniqueIdentifier>
     </Filter>
-    <Filter Include="Audionaut\Source\Interface\DragAndDrop">
-      <UniqueIdentifier>{C77D11C0-F298-E3CA-CA04-8E42C07E9002}</UniqueIdentifier>
-    </Filter>
     <Filter Include="Audionaut\Source\Interface\LookAndFeel">
       <UniqueIdentifier>{8EAE4790-6AEC-4244-A624-4D8F81039677}</UniqueIdentifier>
     </Filter>
@@ -1403,9 +1400,6 @@
       <Filter>Audionaut\Source\Engine</Filter>
     </ClCompile>
     <ClCompile Include="..\..\Source\Interface\LookAndFeel\AudiumLookAndFeel.cpp">
-      <Filter>Audionaut\Source\Interface\LookAndFeel</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\Source\Interface\LookAndFeel\TrackColourLookAndFeel.cpp">
       <Filter>Audionaut\Source\Interface\LookAndFeel</Filter>
     </ClCompile>
     <ClCompile Include="..\..\Source\Interface\Widgets\audium_ListBox.cpp">
@@ -5163,9 +5157,6 @@
     <ClInclude Include="..\..\Source\Engine\Resource\audium_AudioThumbnail.h">
       <Filter>Audionaut\Source\Engine\Resource</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\Source\Engine\Resource\AudioResourceData.h">
-      <Filter>Audionaut\Source\Engine\Resource</Filter>
-    </ClInclude>
     <ClInclude Include="..\..\Source\Engine\Resource\ChannelMapping.h">
       <Filter>Audionaut\Source\Engine\Resource</Filter>
     </ClInclude>
@@ -5226,13 +5217,7 @@
     <ClInclude Include="..\..\Source\Engine\ActionMessages.h">
       <Filter>Audionaut\Source\Engine</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\Source\Interface\DragAndDrop\DragAndDropContainer.h">
-      <Filter>Audionaut\Source\Interface\DragAndDrop</Filter>
-    </ClInclude>
     <ClInclude Include="..\..\Source\Interface\LookAndFeel\AudiumLookAndFeel.h">
-      <Filter>Audionaut\Source\Interface\LookAndFeel</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\Source\Interface\LookAndFeel\TrackColourLookAndFeel.h">
       <Filter>Audionaut\Source\Interface\LookAndFeel</Filter>
     </ClInclude>
     <ClInclude Include="..\..\Source\Interface\UIContext.h">
@@ -5365,9 +5350,6 @@
       <Filter>Audionaut\Source\Interface\Models</Filter>
     </ClInclude>
     <ClInclude Include="..\..\Source\Interface\Models\AudioTrackListBoxModel.h">
-      <Filter>Audionaut\Source\Interface\Models</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\Source\Interface\Models\SubGroupListBoxModel.h">
       <Filter>Audionaut\Source\Interface\Models</Filter>
     </ClInclude>
     <ClInclude Include="..\..\Source\Interface\Models\PlayListTableListBoxItem.h">

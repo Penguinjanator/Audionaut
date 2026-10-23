@@ -105,9 +105,6 @@ void RecordingActionHandler::onRecordingFinished()
                     auto newPos = loopRange.getStart() + (fraction * loopRange.getLength());
                     item->setAbsolutePosition(newPos, context);
                 }
-                
-//                auto pos = item->getAbsolutePosition(context);
-//                std::cout << "pos " << pos << " start " << regionData.getStart() << " length " << regionData.getLength() << std::endl;
             }
         }
     }
@@ -241,7 +238,6 @@ void RecordingActionHandler::onPlayListItemUpdate()
                         }
                         
                         auto currPos = transportLoop->getCurrentPosition(context);
-                        // std::cout << "loop " << loopRange.getStart() << " " << currPos << " " << loopRange.getEnd() << std::endl;
                         
                         auto currLength = currPos - loopRange.getStart();
                         if (currLength < 0.0) {
@@ -252,7 +248,6 @@ void RecordingActionHandler::onPlayListItemUpdate()
                             itemRange.setLength(currLength);
                         }
                         else if (item->isSecondPartInLoop) {
-                            // std::cout << "currPos " << currPos << std::endl;
                             item->setAbsoluteStartPosition(currPos, context);
                             // continue to skip length update
                             continue;

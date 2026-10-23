@@ -16,7 +16,7 @@ public:
     typedef ArrangementEditBaseComponent tBase;
     
     ArrangementComponent(std::shared_ptr<audium::AudiumEngine> audiumEngine, std::shared_ptr<ZoomHandler> zoomHandler) :
-        tBase(audiumEngine, zoomHandler, true)
+        tBase(audiumEngine, zoomHandler)
     {
     }
 

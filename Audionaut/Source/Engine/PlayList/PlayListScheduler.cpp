@@ -69,13 +69,11 @@ bool PlayListScheduler::scheduleClip(const audium::DspClip &dspClip,
                                      int sampleOffset,
                                      int numSamples)
 {
-    auto context = audium::seconds;
-
     const auto spec = ClipFadeSpec::fromDspClip(dspClip, *tempoProvider);
 
     // the voice covers the audible span: the region window widened by the
     // fade extensions (head clamped at the file start)
-    auto voiceAbsStart = dspClip.getAbsolutePosition(context) - dspClip.getHeadExtension(context);
+    auto voiceAbsStart = dspClip.getAbsolutePosition(audium::seconds) - dspClip.getHeadExtension(audium::seconds);
     auto offset = voiceAbsStart - transportPosition;
     auto position = 0.0;
     auto startSample = 0;
@@ -110,7 +108,6 @@ bool PlayListScheduler::scheduleClip(const audium::DspClip &dspClip,
     jassert(duration >= 0.0);
 
     const auto secondsThisBuffer = static_cast<double>(numSamples) / externalSampleRate;
-    jassert(context == audium::seconds);
     if (duration / speedRatio < secondsThisBuffer) {
         DBG("PlayListScheduler: duration samples " << int(duration / speedRatio * externalSampleRate) << " too small");
         return false;
@@ -241,7 +238,7 @@ void PlayListScheduler::process(double transportPositionClocks,
                                      transportPosition,
                                      0,
                                      numSamples)) {
-                    continue;;
+                    continue;
                 }
                 
                 // TODO: why? please investigate
@@ -842,7 +839,6 @@ void PlayListScheduler::commitPlayListData()
         totalLength = juce::jmax(totalLength, track->getTotalLength(audium::clocks));
     }
     totalLengthClocks = totalLength;
-    //std::cout << "PlayListScheduler::commitPlayListData -> totalLengthClocks: " << totalLengthClocks << std::endl;
 }
 
 bool PlayListScheduler::anyTrackRecordEnabled() const
@@ -894,16 +890,6 @@ void PlayListScheduler::stopRecording(const int channelNumber)
     // tigger async message to load recorded audio files and create transport sources
     audioTrackContainer->sendActionMessage(audium::recordingFinishedAction);
 
-}
-
-double PlayListScheduler::getRecordingLength(audium::TimeContextType context) const
-{
-    auto length = data.transportPositionClocks - data.recordingStartPositionClocks;
-    
-    if (context == audium::seconds)
-        length = tempoProvider->clocksToSeconds(length);
-    
-    return length;
 }
 
 bool PlayListScheduler::isRecording() const noexcept

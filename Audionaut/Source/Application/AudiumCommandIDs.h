@@ -23,18 +23,13 @@ namespace CommandIDs
 
         showAboutWindow         = 0x300024,
         checkForNewVersion      = 0x300025,
-        enableNewVersionCheck   = 0x300026,
         
     
         showSettingsWindow      = 0x300030,
 
-        closeWindow             = 0x300040,
-
-        deleteSelectedItem      = 0x300046,
         clearRecentFiles        = 0x300049,
         
         playStop                = 0x300050,
-        loopPlayList            = 0x300051,
         loopSelection           = 0x300052,
         
         createRegion            = 0x300060,
@@ -50,8 +45,6 @@ namespace CommandIDs
         enableSnapToGrid        = 0x300070,
         zoomIn                  = 0x300071,
         zoomOut                 = 0x300072,
-        zoomNormal              = 0x300073,
-        spaceBarDrag            = 0x300074,
         followTransport         = 0x300075,
         showFileBrowser         = 0x300076,
         toggleFullScreen        = 0x300077,

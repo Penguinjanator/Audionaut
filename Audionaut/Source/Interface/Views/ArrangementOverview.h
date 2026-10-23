@@ -14,10 +14,8 @@
 class ArrangementOverview  : public juce::Component
 {
 public:
-    ArrangementOverview(std::shared_ptr<audium::AudiumEngine> audiumEngine,
-                        bool arrangementMode) :
-        audiumEngine(audiumEngine),
-        arrangementMode(arrangementMode)
+    ArrangementOverview(std::shared_ptr<audium::AudiumEngine> audiumEngine) :
+        audiumEngine(audiumEngine)
     {
         updateFromEngine();
     }
@@ -87,8 +85,6 @@ private:
     std::vector<ItemRectangle> itemRectangles;
     
     std::shared_ptr<audium::AudiumEngine> audiumEngine;
-    
-    bool arrangementMode;
     
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (ArrangementOverview)
 };

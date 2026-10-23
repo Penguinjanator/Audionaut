@@ -111,7 +111,6 @@ bool AudioTrack::writeToJson (json& output)
     
     playListContainer->writeToJson(output);
     
-    //std::cout << output.dump(4) << std::endl;
     
     return true;
 }
@@ -131,7 +130,6 @@ bool AudioTrack::writeChannelToJson (json& output, AudioChannel* audioChannel)
 
     playListContainer->writeChannelToJson(output, audioChannel);
 
-    //std::cout << output.dump(4) << std::endl;
 
     return true;
 }
@@ -180,14 +178,12 @@ bool AudioTrack::writeToStream (juce::OutputStream& outputStream)
 
 bool AudioTrack::readFromJson (json& input, bool rebuild)
 {
-    //std::cout << input.dump(4) << std::endl;
     lastReadRebuiltChannels = false;
 
     json output;
     writeToJson(output);
     if (input == output)
     {
-        //std::cout << "skip AudioTrack::readFromJson" << std::endl;
         return true;
     }
 
