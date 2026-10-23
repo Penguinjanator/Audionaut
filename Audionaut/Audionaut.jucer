@@ -4,7 +4,7 @@
               addUsingNamespaceToJuceHeader="0" jucerFormatVersion="1" headerPath="../../../Submodules/json/include/&#10;../../../Submodules/link/include/&#10;../../../Submodules/link/modules/asio-standalone/asio/include&#10;../../../Submodules/farbot/include/&#10;../../../Submodules/rubberband/&#10;../../../ThirdParty/lame/include"
               bundleIdentifier="com.voltmer-systems.audionaut" version="1.6.7"
               companyName="voltmer-systems" companyWebsite="audionaut.app"
-              cppLanguageStandard="20" compilerFlagSchemes="demucs,rubberband,lame" defines="JUCE_MODAL_LOOPS_PERMITTED=1&#10;AUTO_EDIT_ENABLED=0&#10;DEMUCS_ENABLED=1&#10;GA4_MEASUREMENT_ID=&quot;G-Q6904SZWWY&quot;">
+              cppLanguageStandard="20" compilerFlagSchemes="demucs,rubberband,lame" defines="JUCE_MODAL_LOOPS_PERMITTED=1&#10;DEMUCS_ENABLED=1&#10;GA4_MEASUREMENT_ID=&quot;G-Q6904SZWWY&quot;">
   <MAINGROUP id="HQG80L" name="Audionaut">
     <GROUP id="{D3A1C5E7-2B4F-4A6C-9E1D-5F7B9C0A2E4D}" name="Submodules">
       <GROUP id="{E4B2D6F8-3C5A-4B7D-8F2E-6A8C0D1B3F5E}" name="demucs.cpp">
@@ -803,7 +803,7 @@
                localNetworkPermissionNeeded="1">
       <CONFIGURATIONS>
         <CONFIGURATION isDebug="1" name="Debug" targetName="Audionaut" headerPath="$(SRCROOT)/../../Source"
-                       customXcodeFlags="INSTALL_PATH=/Applications" defines="JUCE_ENABLE_REPAINT_DEBUGGING=0"
+                       customXcodeFlags="INSTALL_PATH=/Applications"
                        macOSDeploymentTarget="13.0"/>
         <CONFIGURATION isDebug="0" name="Release" targetName="Audionaut" headerPath="$(SRCROOT)/../../Source"
                        customXcodeFlags="INSTALL_PATH=/Applications, GCC_GENERATE_DEBUGGING_SYMBOLS=YES, DEBUG_INFORMATION_FORMAT=dwarf-with-dsym"

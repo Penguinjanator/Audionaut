@@ -178,7 +178,7 @@ SCENARIO("fade out on a playlist item survives a bounce", "[engine][dsp][fade]")
     auto inputFile = generateDcOffsetAudioFile(2.0);
 
     auto bounceConfig = std::make_shared<audium::ExportAudioConfig>();
-    bounceConfig->fileName = File(String(CURRENT_SOURCE_DIR) + String("/TestFiles/fade-out.wav"));
+    bounceConfig->fileName = testOutputDirectory().getChildFile("fade-out.wav");
     bounceConfig->sampleRate = sr;
     bounceConfig->blockSize = 512;
     bounceConfig->numChannels = 1;
@@ -251,7 +251,7 @@ SCENARIO("channel levels stay finite when a clip fades out", "[engine][dsp][fade
     auto inputFile = generateDcOffsetAudioFile(2.0);
 
     auto bounceConfig = std::make_shared<audium::ExportAudioConfig>();
-    bounceConfig->fileName = File(String(CURRENT_SOURCE_DIR) + String("/TestFiles/fade-out-levels.wav"));
+    bounceConfig->fileName = testOutputDirectory().getChildFile("fade-out-levels.wav");
     bounceConfig->sampleRate = sr;
     bounceConfig->blockSize = 512;
     bounceConfig->numChannels = 2; // stereo: exercises panners, master gain and master level
@@ -335,7 +335,7 @@ SCENARIO("channel levels stay finite when a clip fades out", "[engine][dsp][fade
 // can hold two distinct DC files
 static const File generateNamedDcOffsetAudioFile(const String& name, double lengthInSeconds)
 {
-    auto targetFile = File(String(CURRENT_SOURCE_DIR) + String("/TestFiles/") + name);
+    auto targetFile = testOutputDirectory().getChildFile(name);
     TemporaryFile tempFile (targetFile);
 
     std::unique_ptr<OutputStream> stream (tempFile.getFile().createOutputStream());
@@ -370,7 +370,7 @@ SCENARIO("two overlapping clips, one fades out", "[engine][dsp][fade][level]")
     auto inputFileB = generateNamedDcOffsetAudioFile("dc-offset-b.wav", 4.0);
 
     auto bounceConfig = std::make_shared<audium::ExportAudioConfig>();
-    bounceConfig->fileName = File(String(CURRENT_SOURCE_DIR) + String("/TestFiles/fade-out-overlap.wav"));
+    bounceConfig->fileName = testOutputDirectory().getChildFile("fade-out-overlap.wav");
     bounceConfig->sampleRate = sr;
     bounceConfig->blockSize = 512;
     bounceConfig->numChannels = 2;
@@ -475,7 +475,7 @@ SCENARIO("the mix continues after a faded clip ends", "[engine][dsp][fade][level
     auto inputFile = generateDcOffsetAudioFile(2.0);
 
     auto bounceConfig = std::make_shared<audium::ExportAudioConfig>();
-    bounceConfig->fileName = File(String(CURRENT_SOURCE_DIR) + String("/TestFiles/fade-out-mix.wav"));
+    bounceConfig->fileName = testOutputDirectory().getChildFile("fade-out-mix.wav");
     bounceConfig->sampleRate = sr;
     bounceConfig->blockSize = 512;
     bounceConfig->numChannels = 2;
@@ -907,7 +907,7 @@ SCENARIO("fade out applied while the clip is playing", "[engine][dsp][fade]")
     auto inputFile = generateDcOffsetAudioFile(2.0);
 
     auto bounceConfig = std::make_shared<audium::ExportAudioConfig>();
-    bounceConfig->fileName = File(String(CURRENT_SOURCE_DIR) + String("/TestFiles/fade-out-live.wav"));
+    bounceConfig->fileName = testOutputDirectory().getChildFile("fade-out-live.wav");
     bounceConfig->sampleRate = sr;
     bounceConfig->blockSize = 512;
     bounceConfig->numChannels = 1;
@@ -992,7 +992,7 @@ SCENARIO("fade out on a clip that does not start at zero", "[engine][dsp][fade]"
     auto inputFile = generateDcOffsetAudioFile(2.0);
 
     auto bounceConfig = std::make_shared<audium::ExportAudioConfig>();
-    bounceConfig->fileName = File(String(CURRENT_SOURCE_DIR) + String("/TestFiles/fade-out-offset.wav"));
+    bounceConfig->fileName = testOutputDirectory().getChildFile("fade-out-offset.wav");
     bounceConfig->sampleRate = sr;
     bounceConfig->blockSize = 512;
     bounceConfig->numChannels = 1;
@@ -1227,7 +1227,7 @@ SCENARIO("fade extensions extend the audible clip", "[engine][dsp][fade]")
     auto inputFile = generateDcOffsetAudioFile(2.0);
 
     auto bounceConfig = std::make_shared<audium::ExportAudioConfig>();
-    bounceConfig->fileName = File(String(CURRENT_SOURCE_DIR) + String("/TestFiles/fade-extension.wav"));
+    bounceConfig->fileName = testOutputDirectory().getChildFile("fade-extension.wav");
     bounceConfig->sampleRate = sr;
     bounceConfig->blockSize = 512;
     bounceConfig->numChannels = 1;
@@ -1408,7 +1408,7 @@ SCENARIO("a tail extension past the end of the source file is silent", "[engine]
     auto inputFile = generateDcOffsetAudioFile(2.0);
 
     auto bounceConfig = std::make_shared<audium::ExportAudioConfig>();
-    bounceConfig->fileName = File(String(CURRENT_SOURCE_DIR) + String("/TestFiles/fade-extension-eof.wav"));
+    bounceConfig->fileName = testOutputDirectory().getChildFile("fade-extension-eof.wav");
     bounceConfig->sampleRate = sr;
     bounceConfig->blockSize = 512;
     bounceConfig->numChannels = 1;
@@ -1471,7 +1471,7 @@ SCENARIO("two clips crossfade over a cut at constant gain", "[engine][dsp][fade]
     REQUIRE(inputFile.existsAsFile());
 
     auto bounceConfig = std::make_shared<audium::ExportAudioConfig>();
-    bounceConfig->fileName = File(String(CURRENT_SOURCE_DIR) + String("/TestFiles/xfade-noise.wav"));
+    bounceConfig->fileName = testOutputDirectory().getChildFile("xfade-noise.wav");
     bounceConfig->sampleRate = sr;
     bounceConfig->blockSize = 512;
     bounceConfig->numChannels = 1;
@@ -1565,7 +1565,7 @@ SCENARIO("uncorrelated clips crossfade at constant power", "[engine][dsp][fade][
     REQUIRE(inputFile.existsAsFile());
 
     auto bounceConfig = std::make_shared<audium::ExportAudioConfig>();
-    bounceConfig->fileName = File(String(CURRENT_SOURCE_DIR) + String("/TestFiles/xfade-noise-power.wav"));
+    bounceConfig->fileName = testOutputDirectory().getChildFile("xfade-noise-power.wav");
     bounceConfig->sampleRate = sr;
     bounceConfig->blockSize = 512;
     bounceConfig->numChannels = 1;

@@ -43,13 +43,6 @@ jobs:
     - name: Checkout submodules
       uses: ./.github/actions/checkout-submodules
 
-    # Some test wavs (see .gitattributes) live in Git LFS; without this the
-    # tests get pointer stubs and fail loading them. A separate step rather
-    # than `lfs: true` on the checkout, which would also smudge whatever LFS
-    # pointers the submodules carry.
-    - name: Fetch Git LFS test files
-      run: git lfs pull
-
     - name: Add MSBuild to PATH
       uses: microsoft/setup-msbuild@v2
       with:
@@ -117,33 +110,12 @@ jobs:
         Write-Output $verdict
         if (-not $verdict.StartsWith("PASS")) { exit 1 }
 
-    - name: Configure tests
-      # No -DCMAKE_BUILD_TYPE: the Visual Studio generator is multi-config and
-      # ignores it (CMake warns that the variable went unused). The
-      # configuration is chosen at build time with --config instead.
-      # No toolset pin either - CMake generates its own project files and picks
-      # the runner's installed toolset; only the checked-in .vcxproj hardcodes one.
-      run: cmake -B build -S Audionaut/Catch2Tests
-
-    - name: Build tests
-      run: cmake --build build --config ${{ env.BUILD_TYPE }} --parallel
-
-    - name: Run tests
-      working-directory: build
-      # --no-tests=error: ctest's default is to pass when it finds no tests at
-      # all, which is how a missing enable_testing() once made this step "pass"
-      # in a second without running an assertion. Fail loudly instead.
-      run: ctest -C ${{ env.BUILD_TYPE }} --output-on-failure --no-tests=error
-
-    - name: Check that the suite left the fixtures alone
-      # A test that opens a checked-in session in place would leave what it
-      # imports or records in the repository (see FixtureSessionCopy in
-      # Catch2Tests/Tests/TestEngine.h); the per-engine ProjectDirectories
-      # keep one test's project directory from leaking into the next.
-      shell: bash
-      run: |
-        if [ -n "$(git status --porcelain -- Audionaut/Catch2Tests/TestFiles)" ]; then
-          echo "the test run left files under Audionaut/Catch2Tests/TestFiles:"
-          git status --short -- Audionaut/Catch2Tests/TestFiles
-          exit 1
-        fi
+    - name: Build and run the tests
+      # No build-type: the Visual Studio generator is multi-config and
+      # ignores CMAKE_BUILD_TYPE; the configuration is chosen at build time
+      # instead. No toolset pin either - CMake generates its own project files
+      # and picks the runner's installed toolset; only the checked-in .vcxproj
+      # hardcodes one.
+      uses: ./.github/actions/run-catch2-tests
+      with:
+        config: ${{ env.BUILD_TYPE }}

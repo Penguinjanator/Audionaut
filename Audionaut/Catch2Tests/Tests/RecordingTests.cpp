@@ -20,6 +20,7 @@
 #include "Engine/Recording/RecordingActionHandler.h"
 #include "Engine/Channel/AudioChannel.h"
 
+#include "TestEngine.h"
 #include "TestUtils.h"
 
 using namespace audium;
@@ -28,8 +29,6 @@ using namespace juce;
 
 SCENARIO("recording scenario", "[engine][recording]")
 {
-    MessageManager::getInstance();
-    MessageManagerLock mmLock(Thread::getCurrentThread());
     
     auto sr = 44100.0;
     // create a slow saw (5 seconds)
@@ -38,7 +37,7 @@ SCENARIO("recording scenario", "[engine][recording]")
     // remove second at end
     
     auto bounceConfig = std::make_shared<audium::ExportAudioConfig>();
-    bounceConfig->fileName = File(String(CURRENT_SOURCE_DIR) + String("/TestFiles/rec-out.wav"));
+    bounceConfig->fileName = testOutputDirectory().getChildFile("rec-out.wav");
     bounceConfig->sampleRate = sr;
     bounceConfig->blockSize = 1024 * 4;
     bounceConfig->lengthSeconds = (double)inBuffer.getNumSamples() / bounceConfig->sampleRate;
@@ -48,7 +47,7 @@ SCENARIO("recording scenario", "[engine][recording]")
 
     GIVEN("generated audio file with loop")
     {
-        auto engine = AudiumFactory::createAudiumEngine();
+        TestEngine engine;
         
         engine->getProjectSerializer()->createNewProject(1);
         auto loop = engine->getPlayListScheduler()->getTransportLoop();
@@ -113,8 +112,6 @@ SCENARIO("recording scenario", "[engine][recording]")
                 }
             }
         }
-        
-        engine = nullptr;
     }
 
     if (bounceConfig->fileName.existsAsFile())
@@ -122,10 +119,6 @@ SCENARIO("recording scenario", "[engine][recording]")
     
     if (inputFile.existsAsFile())
         inputFile.deleteFile();
-
-    
-    juce::DeletedAtShutdown::deleteAll();
-    juce::MessageManager::deleteInstance();
 }
 
 
@@ -134,15 +127,13 @@ SCENARIO("recording scenario", "[engine][recording]")
 // where an import would: the session's temp package.
 SCENARIO("a take in a project without a package goes to the temp directory", "[engine][recording][legacy]")
 {
-    MessageManager::getInstance();
-    MessageManagerLock mmLock(Thread::getCurrentThread());
 
     auto inputFile = createSlowSawAudioFile(1, false, false);
     auto inBuffer = audioFileToAudioBuffer(inputFile);
 
     GIVEN("a project whose directory is a plain folder, as a legacy open leaves it")
     {
-        auto engine = AudiumFactory::createAudiumEngine();
+        TestEngine engine;
         engine->getProjectSerializer()->createNewProject(1);
         auto store = engine->getProjectFileStore();
 
@@ -174,15 +165,11 @@ SCENARIO("a take in a project without a package goes to the temp directory", "[e
             }
         }
 
-        engine = nullptr;
         plainFolder.deleteRecursively();
     }
 
     if (inputFile.existsAsFile())
         inputFile.deleteFile();
-
-    juce::DeletedAtShutdown::deleteAll();
-    juce::MessageManager::deleteInstance();
 }
 
 // isRecordEnabled/isRecording took channel 0 for "any channel" while
@@ -190,12 +177,10 @@ SCENARIO("a take in a project without a package goes to the temp directory", "[e
 // 0 answered for the whole track.
 SCENARIO("record-enable is queried per channel, channel 0 included", "[engine][recording]")
 {
-    MessageManager::getInstance();
-    MessageManagerLock mmLock(Thread::getCurrentThread());
 
     GIVEN("a stereo track with only its second channel armed")
     {
-        auto engine = AudiumFactory::createAudiumEngine();
+        TestEngine engine;
         engine->getProjectSerializer()->createNewProject(2);
         auto track = engine->getAudioTrackContainer()->getAudioTrack(0);
         REQUIRE(track != nullptr);
@@ -216,14 +201,7 @@ SCENARIO("record-enable is queried per channel, channel 0 included", "[engine][r
             REQUIRE_FALSE(track->isRecording(0));
             REQUIRE_FALSE(track->isRecording());
         }
-
-        // the track must not outlive its engine
-        track = nullptr;
-        engine = nullptr;
     }
-
-    DeletedAtShutdown::deleteAll();
-    MessageManager::deleteInstance();
 }
 
 // Arming used to hand a freshly made AudioRecorder to the audio thread, which
@@ -357,12 +335,10 @@ SCENARIO("recorders are never built or torn down inside a processed block", "[en
 // that state instead, and the tempo lookup skips such resources.
 SCENARIO("a recording resource has no local file yet", "[engine][recording][analysis]")
 {
-    MessageManager::getInstance();
-    MessageManagerLock mmLock(Thread::getCurrentThread());
 
     GIVEN("a clip whose resource is still being recorded")
     {
-        auto engine = AudiumFactory::createAudiumEngine();
+        TestEngine engine;
         engine->getProjectSerializer()->createNewProject(1);
         auto track = engine->getAudioTrackContainer()->getAudioTrack(0);
         REQUIRE(track != nullptr);
@@ -384,14 +360,5 @@ SCENARIO("a recording resource has no local file yet", "[engine][recording][anal
         {
             REQUIRE(ClipTempo::sourceFile(*item) == juce::File());
         }
-
-        item = nullptr;
-        resource = nullptr;
-        resourceGroup = nullptr;
-        track = nullptr;
-        engine = nullptr;
     }
-
-    DeletedAtShutdown::deleteAll();
-    MessageManager::deleteInstance();
 }

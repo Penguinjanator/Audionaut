@@ -17,6 +17,7 @@
 #include "Engine/PlayList/PlayListScheduler.h"
 #include "Engine/Project/ProjectFileStore.h"
 
+#include "TestEngine.h"
 #include "TestUtils.h"
 
 // Clip boundaries must land on the exact output sample whatever rate the
@@ -40,13 +41,19 @@ int sampleAt(double seconds, double sampleRate)
 }
 
 struct Fixture {
-    std::shared_ptr<AudiumEngine> engine;
-    juce::File bounceFile;
+    TestEngine engine;
+    juce::File bounceFile = testOutputDirectory().getChildFile("clip-timing-out.wav");
+
+    explicit Fixture(const juce::File& audioFile)
+    {
+        REQUIRE(audioFile.existsAsFile());
+        REQUIRE(engine.open(audioFile));
+        REQUIRE(item() != nullptr);
+    }
 
     std::shared_ptr<PlayListItem> item(int index = 0) const
     {
-        return engine->getAudioTrackContainer()->getAudioTrack(0)
-            ->getPlayListContainer()->getPlayListItem(index);
+        return engine.track(0)->getPlayListContainer()->getPlayListItem(index);
     }
 
     void commit() const { engine->getPlayListScheduler()->commitPlayListData(); }
@@ -67,26 +74,7 @@ struct Fixture {
         AudioExporter(*engine, config).bounce();
         return audioFileToAudioBuffer(bounceFile);
     }
-
-    ~Fixture()
-    {
-        engine = nullptr;
-        bounceFile.deleteFile();
-    }
 };
-
-Fixture makeFixture(const juce::File& audioFile)
-{
-    Fixture fixture;
-    fixture.engine = AudiumFactory::createAudiumEngine();
-    fixture.bounceFile = juce::File(juce::String(CURRENT_SOURCE_DIR) + "/TestFiles/clip-timing-out.wav");
-
-    REQUIRE(audioFile.existsAsFile());
-    REQUIRE(fixture.engine->getProjectFileStore()->open(audioFile, nullptr));
-    REQUIRE(fixture.item() != nullptr);
-
-    return fixture;
-}
 
 int firstSampleAbove(const juce::AudioBuffer<float>& buffer, float threshold)
 {
@@ -137,9 +125,6 @@ void requireDcEdges(const juce::AudioBuffer<float>& buffer, double sampleRate,
 
 SCENARIO("a clip starts and ends on the exact sample at every processing rate", "[engine][timing][samplerate]")
 {
-    MessageManager::getInstance();
-    MessageManagerLock mmLock(Thread::getCurrentThread());
-
     for (const auto rate : processingRates)
     {
         DYNAMIC_SECTION("processing at " << static_cast<int>(rate) << " Hz")
@@ -151,7 +136,7 @@ SCENARIO("a clip starts and ends on the exact sample at every processing rate", 
             {
                 DYNAMIC_SECTION("a one-second DC clip placed at " << position << " s")
                 {
-                    auto fixture = makeFixture(generateDcOffsetAudioFile(1.0, rate));
+                    Fixture fixture(generateDcOffsetAudioFile(1.0, rate));
                     fixture.item()->setAbsolutePosition(position, audium::seconds);
                     fixture.commit();
 
@@ -180,16 +165,10 @@ SCENARIO("a clip starts and ends on the exact sample at every processing rate", 
             }
         }
     }
-
-    DeletedAtShutdown::deleteAll();
-    MessageManager::deleteInstance();
 }
 
 SCENARIO("a trimmed clip plays exactly its source window at every processing rate", "[engine][timing][samplerate]")
 {
-    MessageManager::getInstance();
-    MessageManagerLock mmLock(Thread::getCurrentThread());
-
     for (const auto rate : processingRates)
     {
         DYNAMIC_SECTION("processing at " << static_cast<int>(rate) << " Hz")
@@ -197,7 +176,7 @@ SCENARIO("a trimmed clip plays exactly its source window at every processing rat
             // a two-second ramp: sample s carries genSaw(s, n), so the
             // bounce tells which source sample landed on which output sample
             const auto numSourceSamples = static_cast<int>(2.0 * rate);
-            auto fixture = makeFixture(createRampAudioFile(2.0, rate));
+            Fixture fixture(createRampAudioFile(2.0, rate));
             auto item = fixture.item();
 
             // 0.3 * 44100 is 13229.999... in floating point: a truncating
@@ -232,22 +211,16 @@ SCENARIO("a trimmed clip plays exactly its source window at every processing rat
             }
         }
     }
-
-    DeletedAtShutdown::deleteAll();
-    MessageManager::deleteInstance();
 }
 
 SCENARIO("a bounce that starts inside a clip picks up on the exact sample", "[engine][timing][samplerate]")
 {
-    MessageManager::getInstance();
-    MessageManagerLock mmLock(Thread::getCurrentThread());
-
     for (const auto rate : processingRates)
     {
         DYNAMIC_SECTION("processing at " << static_cast<int>(rate) << " Hz")
         {
             const auto numSourceSamples = static_cast<int>(1.0 * rate);
-            auto fixture = makeFixture(createRampAudioFile(1.0, rate));
+            Fixture fixture(createRampAudioFile(1.0, rate));
             fixture.commit();
 
             WHEN("the bounce window starts 0.3 s into the clip and runs past its end")
@@ -271,22 +244,16 @@ SCENARIO("a bounce that starts inside a clip picks up on the exact sample", "[en
             }
         }
     }
-
-    DeletedAtShutdown::deleteAll();
-    MessageManager::deleteInstance();
 }
 
 SCENARIO("exporting a single trimmed clip yields exactly its samples at every processing rate", "[engine][timing][samplerate][export]")
 {
-    MessageManager::getInstance();
-    MessageManagerLock mmLock(Thread::getCurrentThread());
-
     for (const auto rate : processingRates)
     {
         DYNAMIC_SECTION("processing at " << static_cast<int>(rate) << " Hz")
         {
             const auto numSourceSamples = static_cast<int>(2.0 * rate);
-            auto fixture = makeFixture(createRampAudioFile(2.0, rate));
+            Fixture fixture(createRampAudioFile(2.0, rate));
             auto item = fixture.item();
 
             const auto regionStart = 0.3;
@@ -313,21 +280,15 @@ SCENARIO("exporting a single trimmed clip yields exactly its samples at every pr
             }
         }
     }
-
-    DeletedAtShutdown::deleteAll();
-    MessageManager::deleteInstance();
 }
 
 SCENARIO("clips split at an arbitrary position join without a gap or an overlap", "[engine][timing][samplerate]")
 {
-    MessageManager::getInstance();
-    MessageManagerLock mmLock(Thread::getCurrentThread());
-
     for (const auto rate : processingRates)
     {
         DYNAMIC_SECTION("processing at " << static_cast<int>(rate) << " Hz")
         {
-            auto fixture = makeFixture(generateDcOffsetAudioFile(2.0, rate));
+            Fixture fixture(generateDcOffsetAudioFile(2.0, rate));
             auto& adapter = fixture.engine->getAudioTrackContainer()->getAudioRegionAdapter();
 
             // neither a block nor a sample boundary
@@ -370,16 +331,10 @@ SCENARIO("clips split at an arbitrary position join without a gap or an overlap"
             }
         }
     }
-
-    DeletedAtShutdown::deleteAll();
-    MessageManager::deleteInstance();
 }
 
 SCENARIO("a 44.1 kHz clip keeps its timeline edges when rendered at another rate", "[engine][timing][samplerate][resample]")
 {
-    MessageManager::getInstance();
-    MessageManagerLock mmLock(Thread::getCurrentThread());
-
     for (const auto rate : { 48000.0, 88200.0, 96000.0 })
     {
         DYNAMIC_SECTION("processing at " << static_cast<int>(rate) << " Hz")
@@ -388,7 +343,7 @@ SCENARIO("a 44.1 kHz clip keeps its timeline edges when rendered at another rate
             {
                 DYNAMIC_SECTION("a one-second 44.1 kHz DC clip placed at " << position << " s")
                 {
-                    auto fixture = makeFixture(generateDcOffsetAudioFile(1.0, 44100.0));
+                    Fixture fixture(generateDcOffsetAudioFile(1.0, 44100.0));
                     fixture.item()->setAbsolutePosition(position, audium::seconds);
                     fixture.commit();
 
@@ -414,7 +369,4 @@ SCENARIO("a 44.1 kHz clip keeps its timeline edges when rendered at another rate
             }
         }
     }
-
-    DeletedAtShutdown::deleteAll();
-    MessageManager::deleteInstance();
 }

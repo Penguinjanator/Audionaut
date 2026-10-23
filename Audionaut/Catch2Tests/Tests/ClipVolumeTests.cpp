@@ -29,7 +29,7 @@ SCENARIO("recording scenario", "[engine][clip][volume]")
     //auto inBuffer = audioFileToAudioBuffer(inputFile);
     
     auto bounceConfig = std::make_shared<audium::ExportAudioConfig>();
-    bounceConfig->fileName = File(String(CURRENT_SOURCE_DIR) + String("/TestFiles/rec-out.wav"));
+    bounceConfig->fileName = testOutputDirectory().getChildFile("rec-out.wav");
     bounceConfig->sampleRate = sr;
     bounceConfig->blockSize = 1024 * 4;
     bounceConfig->numChannels = 1;

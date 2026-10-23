@@ -13,6 +13,7 @@
 #include "Engine/PlayList/TransportLoop.h"
 #include "Engine/Provider/TempoProvider.h"
 
+#include "TestEngine.h"
 #include "TestUtils.h"
 
 #include <algorithm>
@@ -243,17 +244,14 @@ static void examineBouncedAudioFile(std::shared_ptr<audium::ExportAudioConfig> b
 
 SCENARIO("bounce loop scenario", "[engine][bounce][transport][loop]")
 {
-    MessageManager::getInstance();
-    MessageManagerLock mmLock(Thread::getCurrentThread());
-    
     auto testFile = createSlowSawAudioFile();
     jassert(testFile.existsAsFile());
     std::cout << "Testfile: " << testFile.getFullPathName() << std::endl;
     
     GIVEN("generated audio file with loop")
     {
-        auto engine = AudiumFactory::createAudiumEngine();
-    auto store = engine->getProjectFileStore();
+        TestEngine engine;
+        auto store = engine->getProjectFileStore();
         auto ok = store->open(testFile, nullptr);
         REQUIRE(ok);
         engine->getPlayListScheduler()->commitPlayListData();
@@ -262,7 +260,7 @@ SCENARIO("bounce loop scenario", "[engine][bounce][transport][loop]")
         loop->setLoopPositionRange(nullptr, {1.0, 2.0}, audium::seconds);
  
         auto bounceConfig = std::make_shared<audium::ExportAudioConfig>();
-        bounceConfig->fileName = File(String(CURRENT_SOURCE_DIR) + String("/TestFiles/slow-saw-out.wav"));
+        bounceConfig->fileName = testOutputDirectory().getChildFile("slow-saw-out.wav");
         bounceConfig->sampleRate = 44100.0;
         bounceConfig->blockSize = 64;
         bounceConfig->lengthSeconds = 60.0;
@@ -309,17 +307,11 @@ SCENARIO("bounce loop scenario", "[engine][bounce][transport][loop]")
         
         if (bounceConfig->fileName.existsAsFile())
             bounceConfig->fileName.deleteFile();
-        
-        engine = nullptr;
     }
     
     
     if (testFile.existsAsFile())
         testFile.deleteFile();
-
-    
-    juce::DeletedAtShutdown::deleteAll();
-    juce::MessageManager::deleteInstance();
 }
 
 
