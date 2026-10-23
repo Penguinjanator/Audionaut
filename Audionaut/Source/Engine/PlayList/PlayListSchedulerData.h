@@ -14,9 +14,6 @@ namespace audium {
 
 struct PlayListSchedulerData
 {
-    // edit or arrangement mode
-    bool editMode                   = false;
-    
     // user interface follows transport
     bool followTransport            = true;
     
@@ -38,7 +35,6 @@ struct PlayListSchedulerData
 };
 
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(PlayListSchedulerData,
-                                                editMode,
                                                 followTransport,
                                                 transportPositionClocks,
                                                 startPositionClocks);

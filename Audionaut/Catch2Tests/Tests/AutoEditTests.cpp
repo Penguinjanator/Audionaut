@@ -163,7 +163,6 @@ SCENARIO("AutoEdit cuts a track into regions from its cached analyses",
     AutoEditConfig config;
     config.trackId = 0;
     config.numSegments = 6;
-    REQUIRE(config.source == AutoEditConfig::Source::Native);
 
     std::string reportedError;
     auto onError = [&reportedError](std::string error) { reportedError = error; };

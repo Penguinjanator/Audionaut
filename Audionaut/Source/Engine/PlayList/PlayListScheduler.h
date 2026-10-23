@@ -109,14 +109,6 @@ public:
     void setFollowTransport(bool enable) { data.followTransport = enable; }
     bool getFollowTransport() const { return data.followTransport; }
     
-    // The region edit view is gone; these remain only so MiddlePanelComponent
-    // can tell users that a project saved in it now opens in the arrangement.
-    [[deprecated]]
-    void setEditMode(bool bEditMode) { data.editMode = bEditMode; }
-    
-    [[deprecated]]
-    bool isEditMode() const { return data.editMode; }
-    
     void setCurrentPositionAtPlayListItemIndex(std::shared_ptr<AudioTrack> track, int playListItemIndex);
     int getPlayListItemIndexAtCurrentPosition(std::shared_ptr<AudioTrack> track);
     double getPlayListItemProgress(std::shared_ptr<AudioTrack> track, int playListItemIndex) const;
