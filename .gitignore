@@ -93,3 +93,4 @@ Audionaut/Source/Application/AnalyticsCredentials.h
 # macOS packaging output (package.sh stages the payload and emits the dmg)
 Audionaut/Installers/macOS/staging/
 Audionaut/Installers/macOS/*.dmg
+build-release
