@@ -9,6 +9,8 @@
 #include "Engine/PlayList/PlayListItem.h"
 #include "Engine/Resource/AudioResourceContainer.h"
 
+#include "TestEngine.h"
+
 // File > Import...: AudioTrackContainer::importAudioFiles lays several files
 // out in one of three ways and registers the whole import as one undo step.
 
@@ -37,9 +39,7 @@ std::vector<std::shared_ptr<AudioTrack>> tracksAfter(AudioTrackContainer& tracks
 
 SCENARIO("importing audio files lays them out as chosen", "[engine][import]")
 {
-    MessageManager::getInstance();
-    MessageManagerLock mmLock(Thread::getCurrentThread());
-    auto engine = AudiumFactory::createAudiumEngine();
+    TestEngine engine;
     engine->getProjectSerializer()->createNewProject();
 
     auto first = File(importTestFilesDirectory + "120-funk-1-sec.wav");
@@ -110,18 +110,11 @@ SCENARIO("importing audio files lays them out as chosen", "[engine][import]")
             REQUIRE(String(reported).contains("does-not-exist.wav"));
         }
     }
-
-    tracks = nullptr;
-    engine = nullptr;
-    DeletedAtShutdown::deleteAll();
-    MessageManager::deleteInstance();
 }
 
 SCENARIO("importing audio files into an existing track", "[engine][import][track]")
 {
-    MessageManager::getInstance();
-    MessageManagerLock mmLock(Thread::getCurrentThread());
-    auto engine = AudiumFactory::createAudiumEngine();
+    TestEngine engine;
     engine->getProjectSerializer()->createNewProject();
 
     auto first = File(importTestFilesDirectory + "120-funk-1-sec.wav");
@@ -187,19 +180,11 @@ SCENARIO("importing audio files into an existing track", "[engine][import][track
             REQUIRE(targetNow()->getPlayListContainer()->getPlayListItems().size() == 1);
         }
     }
-
-    target = nullptr;
-    tracks = nullptr;
-    engine = nullptr;
-    DeletedAtShutdown::deleteAll();
-    MessageManager::deleteInstance();
 }
 
 SCENARIO("undoing an import removes every track it added", "[engine][import][undo]")
 {
-    MessageManager::getInstance();
-    MessageManagerLock mmLock(Thread::getCurrentThread());
-    auto engine = AudiumFactory::createAudiumEngine();
+    TestEngine engine;
     engine->getProjectSerializer()->createNewProject();
 
     auto first = File(importTestFilesDirectory + "120-funk-1-sec.wav");
@@ -232,8 +217,4 @@ SCENARIO("undoing an import removes every track it added", "[engine][import][und
             REQUIRE(numTracks() == baseline);
         }
     }
-
-    engine = nullptr;
-    DeletedAtShutdown::deleteAll();
-    MessageManager::deleteInstance();
 }

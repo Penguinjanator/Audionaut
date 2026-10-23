@@ -25,6 +25,7 @@
 #include "Engine/Provider/TempoProvider.h"
 #include "Engine/Region/AudioRegion.h"
 
+#include "TestEngine.h"
 #include "TestUtils.h"
 
 // Per-clip re-pitch (varispeed): a speed ratio s plays the source s times
@@ -36,14 +37,20 @@ using namespace audium;
 namespace {
 
 struct Fixture {
-    std::shared_ptr<AudiumEngine> engine;
+    TestEngine engine;
     juce::File inputFile;
-    juce::File bounceFile;
+    juce::File bounceFile = testOutputDirectory().getChildFile("clip-speed-out.wav");
+
+    explicit Fixture(const juce::File& audioFile) : inputFile(audioFile)
+    {
+        REQUIRE(audioFile.existsAsFile());
+        REQUIRE(engine.open(audioFile));
+        REQUIRE(item() != nullptr);
+    }
 
     std::shared_ptr<PlayListItem> item() const
     {
-        return engine->getAudioTrackContainer()->getAudioTrack(0)
-            ->getPlayListContainer()->getPlayListItem(0);
+        return engine.track(0)->getPlayListContainer()->getPlayListItem(0);
     }
 
     void commit() const { engine->getPlayListScheduler()->commitPlayListData(); }
@@ -63,31 +70,7 @@ struct Fixture {
         AudioExporter(*engine, config).bounce();
         return audioFileToAudioBuffer(bounceFile);
     }
-
-    ~Fixture()
-    {
-        engine = nullptr;
-        bounceFile.deleteFile();
-    }
 };
-
-Fixture makeFixture(const juce::File& audioFile)
-{
-    Fixture fixture;
-    fixture.engine = AudiumFactory::createAudiumEngine();
-    fixture.inputFile = audioFile;
-    // Outside the repository: CI checks that the suite leaves TestFiles alone.
-    fixture.bounceFile = juce::File::getSpecialLocation(juce::File::tempDirectory)
-                             .getChildFile("AudionautTests")
-                             .getChildFile("clip-speed-out.wav");
-    fixture.bounceFile.getParentDirectory().createDirectory();
-
-    REQUIRE(audioFile.existsAsFile());
-    REQUIRE(fixture.engine->getProjectFileStore()->open(audioFile, nullptr));
-    REQUIRE(fixture.item() != nullptr);
-
-    return fixture;
-}
 
 /// Dominant frequency via positive-going zero crossings over a probe
 /// window - robust against the stretcher's amplitude ripple, sensitive to
@@ -124,534 +107,446 @@ double rampSlope(const juce::AudioBuffer<float>& buffer, double fromSeconds, dou
 
 SCENARIO("clip speed scales the timeline model", "[engine][clipspeed]")
 {
-    MessageManager::getInstance();
-    MessageManagerLock mmLock(Thread::getCurrentThread());
+    Fixture fixture(createSlowSawTwoSecondsAudioFile());
+    auto item = fixture.item();
+    const auto sourceLength = item->getRegionData(audium::seconds).getLength();
+    REQUIRE(sourceLength == Catch::Approx(2.0));
 
+    WHEN("the clip runs at half speed")
     {
-        auto fixture = makeFixture(createSlowSawTwoSecondsAudioFile());
-        auto item = fixture.item();
-        const auto sourceLength = item->getRegionData(audium::seconds).getLength();
-        REQUIRE(sourceLength == Catch::Approx(2.0));
+        item->setSpeedRatio(0.5);
+        fixture.commit();
 
-        WHEN("the clip runs at half speed")
+        THEN("its timeline extent doubles while the source window is untouched")
         {
-            item->setSpeedRatio(0.5);
-            fixture.commit();
-
-            THEN("its timeline extent doubles while the source window is untouched")
-            {
-                REQUIRE(item->getDurationTime(audium::seconds) == Catch::Approx(4.0));
-                REQUIRE(item->getAbsolutePositionRange(audium::seconds).getLength() == Catch::Approx(4.0));
-                REQUIRE(item->getRegionData(audium::seconds).getLength() == Catch::Approx(2.0));
-                REQUIRE(fixture.engine->getPlayListScheduler()->getTotalLength(audium::seconds)
-                        == Catch::Approx(4.0));
-            }
-
-            THEN("timeline positions map to source positions at the speed ratio")
-            {
-                // 1 timeline second into the clip = 0.5 source seconds
-                REQUIRE(item->absoluteToLocalPosition(1.0, audium::seconds) == Catch::Approx(0.5));
-            }
+            REQUIRE(item->getDurationTime(audium::seconds) == Catch::Approx(4.0));
+            REQUIRE(item->getAbsolutePositionRange(audium::seconds).getLength() == Catch::Approx(4.0));
+            REQUIRE(item->getRegionData(audium::seconds).getLength() == Catch::Approx(2.0));
+            REQUIRE(fixture.engine->getPlayListScheduler()->getTotalLength(audium::seconds)
+                    == Catch::Approx(4.0));
         }
 
-        WHEN("the ratio is set outside the supported range")
+        THEN("timeline positions map to source positions at the speed ratio")
         {
-            item->setSpeedRatio(10.0);
-            REQUIRE(item->getSpeedRatio() == Catch::Approx(PlayListItem::maxSpeedRatio));
-
-            item->setSpeedRatio(0.01);
-            REQUIRE(item->getSpeedRatio() == Catch::Approx(PlayListItem::minSpeedRatio));
+            // 1 timeline second into the clip = 0.5 source seconds
+            REQUIRE(item->absoluteToLocalPosition(1.0, audium::seconds) == Catch::Approx(0.5));
         }
     }
 
-    DeletedAtShutdown::deleteAll();
-    MessageManager::deleteInstance();
+    WHEN("the ratio is set outside the supported range")
+    {
+        item->setSpeedRatio(10.0);
+        REQUIRE(item->getSpeedRatio() == Catch::Approx(PlayListItem::maxSpeedRatio));
+
+        item->setSpeedRatio(0.01);
+        REQUIRE(item->getSpeedRatio() == Catch::Approx(PlayListItem::minSpeedRatio));
+    }
 }
 
 SCENARIO("a half-speed clip plays twice as long at half the rate", "[engine][clipspeed]")
 {
-    MessageManager::getInstance();
-    MessageManagerLock mmLock(Thread::getCurrentThread());
+    // two saw cycles, no padding: a steadily rising ramp with one
+    // discontinuity per source second
+    Fixture fixture(createSlowSawAudioFile(2, false, false));
 
+    // reference at 1.0x: within the first cycle
+    const auto referenceSlope = [&fixture] {
+        fixture.commit();
+        return rampSlope(fixture.bounce(), 0.1, 0.8);
+    }();
+    REQUIRE(referenceSlope > 0.0);
+
+    WHEN("the clip is bounced at half speed")
     {
-        // two saw cycles, no padding: a steadily rising ramp with one
-        // discontinuity per source second
-        auto fixture = makeFixture(createSlowSawAudioFile(2, false, false));
+        fixture.item()->setSpeedRatio(0.5);
+        fixture.commit();
+        auto buffer = fixture.bounce();
 
-        // reference at 1.0x: within the first cycle
-        const auto referenceSlope = [&fixture] {
-            fixture.commit();
-            return rampSlope(fixture.bounce(), 0.1, 0.8);
-        }();
-        REQUIRE(referenceSlope > 0.0);
-
-        WHEN("the clip is bounced at half speed")
+        THEN("the bounce is twice as long")
         {
-            fixture.item()->setSpeedRatio(0.5);
-            fixture.commit();
-            auto buffer = fixture.bounce();
-
-            THEN("the bounce is twice as long")
-            {
-                REQUIRE(buffer.getNumSamples() == Catch::Approx(4.0 * 44100.0).margin(512));
-            }
-
-            THEN("the ramp rises at half the rate - an octave down")
-            {
-                // first stretched cycle spans 0..2 s
-                REQUIRE(rampSlope(buffer, 0.2, 1.6) == Catch::Approx(referenceSlope * 0.5).epsilon(0.02));
-            }
+            REQUIRE(buffer.getNumSamples() == Catch::Approx(4.0 * 44100.0).margin(512));
         }
 
-        WHEN("the clip is bounced at double speed")
+        THEN("the ramp rises at half the rate - an octave down")
         {
-            fixture.item()->setSpeedRatio(2.0);
-            fixture.commit();
-            auto buffer = fixture.bounce();
-
-            THEN("the bounce is half as long and rises twice as fast")
-            {
-                REQUIRE(buffer.getNumSamples() == Catch::Approx(1.0 * 44100.0).margin(512));
-                // first compressed cycle spans 0..0.5 s
-                REQUIRE(rampSlope(buffer, 0.05, 0.4) == Catch::Approx(referenceSlope * 2.0).epsilon(0.02));
-            }
+            // first stretched cycle spans 0..2 s
+            REQUIRE(rampSlope(buffer, 0.2, 1.6) == Catch::Approx(referenceSlope * 0.5).epsilon(0.02));
         }
     }
 
-    DeletedAtShutdown::deleteAll();
-    MessageManager::deleteInstance();
+    WHEN("the clip is bounced at double speed")
+    {
+        fixture.item()->setSpeedRatio(2.0);
+        fixture.commit();
+        auto buffer = fixture.bounce();
+
+        THEN("the bounce is half as long and rises twice as fast")
+        {
+            REQUIRE(buffer.getNumSamples() == Catch::Approx(1.0 * 44100.0).margin(512));
+            // first compressed cycle spans 0..0.5 s
+            REQUIRE(rampSlope(buffer, 0.05, 0.4) == Catch::Approx(referenceSlope * 2.0).epsilon(0.02));
+        }
+    }
 }
 
 SCENARIO("clip speed changes duration but not amplitude", "[engine][clipspeed]")
 {
-    MessageManager::getInstance();
-    MessageManagerLock mmLock(Thread::getCurrentThread());
+    Fixture fixture(generateDcOffsetAudioFile(1.0));
+    fixture.item()->setSpeedRatio(0.5);
+    fixture.commit();
 
+    auto buffer = fixture.bounce();
+    const auto warmUp = 256;
+
+    THEN("two timeline seconds of unity DC come out of one source second")
     {
-        auto fixture = makeFixture(generateDcOffsetAudioFile(1.0));
-        fixture.item()->setSpeedRatio(0.5);
-        fixture.commit();
+        REQUIRE(buffer.getNumSamples() == Catch::Approx(2.0 * 44100.0).margin(512));
 
-        auto buffer = fixture.bounce();
-        const auto warmUp = 256;
-
-        THEN("two timeline seconds of unity DC come out of one source second")
-        {
-            REQUIRE(buffer.getNumSamples() == Catch::Approx(2.0 * 44100.0).margin(512));
-
-            for (auto i = warmUp; i < buffer.getNumSamples() - warmUp; i += 483)
-                REQUIRE(buffer.getSample(0, i) == Catch::Approx(1.0).margin(0.01));
-        }
+        for (auto i = warmUp; i < buffer.getNumSamples() - warmUp; i += 483)
+            REQUIRE(buffer.getSample(0, i) == Catch::Approx(1.0).margin(0.01));
     }
-
-    DeletedAtShutdown::deleteAll();
-    MessageManager::deleteInstance();
 }
 
 SCENARIO("starting playback inside a stretched clip seeks the speed-scaled file position",
          "[engine][clipspeed]")
 {
-    MessageManager::getInstance();
-    MessageManagerLock mmLock(Thread::getCurrentThread());
+    // 2 s source at half speed = 4 s timeline; bouncing the second half
+    // must play source seconds 1..2, not run out of material
+    Fixture fixture(createSlowSawAudioFile(2, false, false));
+    fixture.item()->setSpeedRatio(0.5);
+    fixture.commit();
 
+    auto buffer = fixture.bounce(2.0, 2.0);
+
+    THEN("the rendered tail matches the speed-scaled source mapping")
     {
-        // 2 s source at half speed = 4 s timeline; bouncing the second half
-        // must play source seconds 1..2, not run out of material
-        auto fixture = makeFixture(createSlowSawAudioFile(2, false, false));
-        fixture.item()->setSpeedRatio(0.5);
-        fixture.commit();
+        REQUIRE(buffer.getNumSamples() == Catch::Approx(2.0 * 44100.0).margin(512));
 
-        auto buffer = fixture.bounce(2.0, 2.0);
+        // output t maps to source 1.0 + t * 0.5; the saw's value there
+        // is -1 + 2 * cycleFraction
+        const auto probe = static_cast<int>(0.5 * 44100.0);   // source 1.25 s -> -0.5
+        REQUIRE(buffer.getSample(0, probe) == Catch::Approx(-0.5).margin(0.02));
 
-        THEN("the rendered tail matches the speed-scaled source mapping")
-        {
-            REQUIRE(buffer.getNumSamples() == Catch::Approx(2.0 * 44100.0).margin(512));
-
-            // output t maps to source 1.0 + t * 0.5; the saw's value there
-            // is -1 + 2 * cycleFraction
-            const auto probe = static_cast<int>(0.5 * 44100.0);   // source 1.25 s -> -0.5
-            REQUIRE(buffer.getSample(0, probe) == Catch::Approx(-0.5).margin(0.02));
-
-            const auto probeLate = static_cast<int>(1.5 * 44100.0); // source 1.75 s -> +0.5
-            REQUIRE(buffer.getSample(0, probeLate) == Catch::Approx(0.5).margin(0.02));
-        }
+        const auto probeLate = static_cast<int>(1.5 * 44100.0); // source 1.75 s -> +0.5
+        REQUIRE(buffer.getSample(0, probeLate) == Catch::Approx(0.5).margin(0.02));
     }
-
-    DeletedAtShutdown::deleteAll();
-    MessageManager::deleteInstance();
 }
 
 SCENARIO("a stretched item bounce is speed-scaled", "[engine][clipspeed]")
 {
-    MessageManager::getInstance();
-    MessageManagerLock mmLock(Thread::getCurrentThread());
+    Fixture fixture(generateDcOffsetAudioFile(1.0));
+    auto item = fixture.item();
+    item->setSpeedRatio(0.5);
+    fixture.commit();
 
+    auto config = std::make_shared<ExportAudioConfig>();
+    config->fileName = fixture.bounceFile;
+    config->sampleRate = 44100.0;
+    config->blockSize = 512;
+    config->playListItem = item;
+
+    AudioExporter(*fixture.engine, config).bounce();
+    auto buffer = audioFileToAudioBuffer(fixture.bounceFile);
+
+    THEN("the item bounce covers source length / speed")
     {
-        auto fixture = makeFixture(generateDcOffsetAudioFile(1.0));
-        auto item = fixture.item();
-        item->setSpeedRatio(0.5);
-        fixture.commit();
-
-        auto config = std::make_shared<ExportAudioConfig>();
-        config->fileName = fixture.bounceFile;
-        config->sampleRate = 44100.0;
-        config->blockSize = 512;
-        config->playListItem = item;
-
-        AudioExporter(*fixture.engine, config).bounce();
-        auto buffer = audioFileToAudioBuffer(fixture.bounceFile);
-
-        THEN("the item bounce covers source length / speed")
-        {
-            REQUIRE(buffer.getNumSamples() == Catch::Approx(2.0 * 44100.0).margin(512));
-        }
+        REQUIRE(buffer.getNumSamples() == Catch::Approx(2.0 * 44100.0).margin(512));
     }
-
-    DeletedAtShutdown::deleteAll();
-    MessageManager::deleteInstance();
 }
 
 SCENARIO("stretch mode keeps the pitch while the length changes", "[engine][clipspeed][stretch]")
 {
-    MessageManager::getInstance();
-    MessageManagerLock mmLock(Thread::getCurrentThread());
+    Fixture fixture(createSineAudioFile(440.0, 2.0));
+    auto item = fixture.item();
 
+    WHEN("a half-speed clip is bounced in both modes")
     {
-        auto fixture = makeFixture(createSineAudioFile(440.0, 2.0));
-        auto item = fixture.item();
+        item->setSpeedRatio(0.5);
+        fixture.commit();
+        auto rePitched = fixture.bounce();
 
-        WHEN("a half-speed clip is bounced in both modes")
+        item->setStretchMode(StretchMode::Stretch);
+        fixture.commit();
+        auto stretched = fixture.bounce();
+
+        THEN("re-pitch drops an octave, stretch holds 440 Hz - at the same length")
         {
-            item->setSpeedRatio(0.5);
-            fixture.commit();
-            auto rePitched = fixture.bounce();
+            REQUIRE(rePitched.getNumSamples() == Catch::Approx(4.0 * 44100.0).margin(512));
+            REQUIRE(stretched.getNumSamples() == Catch::Approx(4.0 * 44100.0).margin(512));
 
-            item->setStretchMode(StretchMode::Stretch);
-            fixture.commit();
-            auto stretched = fixture.bounce();
-
-            THEN("re-pitch drops an octave, stretch holds 440 Hz - at the same length")
-            {
-                REQUIRE(rePitched.getNumSamples() == Catch::Approx(4.0 * 44100.0).margin(512));
-                REQUIRE(stretched.getNumSamples() == Catch::Approx(4.0 * 44100.0).margin(512));
-
-                REQUIRE(measureFrequency(rePitched, 0.5, 3.5) == Catch::Approx(220.0).epsilon(0.02));
-                REQUIRE(measureFrequency(stretched, 0.5, 3.5) == Catch::Approx(440.0).epsilon(0.02));
-            }
-
-            THEN("the stretched level survives within a phase-vocoder tolerance")
-            {
-                REQUIRE(stretched.getRMSLevel(0, static_cast<int>(0.5 * 44100.0),
-                                              static_cast<int>(3.0 * 44100.0))
-                        == Catch::Approx(1.0 / std::sqrt(2.0)).epsilon(0.1));
-            }
+            REQUIRE(measureFrequency(rePitched, 0.5, 3.5) == Catch::Approx(220.0).epsilon(0.02));
+            REQUIRE(measureFrequency(stretched, 0.5, 3.5) == Catch::Approx(440.0).epsilon(0.02));
         }
 
-        WHEN("a double-speed stretch clip is bounced")
+        THEN("the stretched level survives within a phase-vocoder tolerance")
         {
-            item->setSpeedRatio(2.0);
-            item->setStretchMode(StretchMode::Stretch);
-            fixture.commit();
-            auto buffer = fixture.bounce();
-
-            THEN("half the length, still 440 Hz")
-            {
-                REQUIRE(buffer.getNumSamples() == Catch::Approx(1.0 * 44100.0).margin(512));
-                REQUIRE(measureFrequency(buffer, 0.1, 0.9) == Catch::Approx(440.0).epsilon(0.02));
-            }
+            REQUIRE(stretched.getRMSLevel(0, static_cast<int>(0.5 * 44100.0),
+                                          static_cast<int>(3.0 * 44100.0))
+                    == Catch::Approx(1.0 / std::sqrt(2.0)).epsilon(0.1));
         }
     }
 
-    DeletedAtShutdown::deleteAll();
-    MessageManager::deleteInstance();
+    WHEN("a double-speed stretch clip is bounced")
+    {
+        item->setSpeedRatio(2.0);
+        item->setStretchMode(StretchMode::Stretch);
+        fixture.commit();
+        auto buffer = fixture.bounce();
+
+        THEN("half the length, still 440 Hz")
+        {
+            REQUIRE(buffer.getNumSamples() == Catch::Approx(1.0 * 44100.0).margin(512));
+            REQUIRE(measureFrequency(buffer, 0.1, 0.9) == Catch::Approx(440.0).epsilon(0.02));
+        }
+    }
 }
 
 SCENARIO("a stretch-mode clip starts aligned with the timeline", "[engine][clipspeed][stretch]")
 {
-    MessageManager::getInstance();
-    MessageManagerLock mmLock(Thread::getCurrentThread());
+    // one silent second, then the tone: the stretched onset must land at
+    // its speed-scaled timeline position, which pins down the stretcher's
+    // latency priming
+    Fixture fixture(createSineAudioFile(440.0, 1.0, 1.0));
+    auto item = fixture.item();
 
+    item->setSpeedRatio(0.5);
+    item->setStretchMode(StretchMode::Stretch);
+    fixture.commit();
+    auto buffer = fixture.bounce();
+
+    THEN("the onset lands at 2.0 timeline seconds")
     {
-        // one silent second, then the tone: the stretched onset must land at
-        // its speed-scaled timeline position, which pins down the stretcher's
-        // latency priming
-        auto fixture = makeFixture(createSineAudioFile(440.0, 1.0, 1.0));
-        auto item = fixture.item();
-
-        item->setSpeedRatio(0.5);
-        item->setStretchMode(StretchMode::Stretch);
-        fixture.commit();
-        auto buffer = fixture.bounce();
-
-        THEN("the onset lands at 2.0 timeline seconds")
+        auto onset = -1;
+        for (auto i = 0; i < buffer.getNumSamples(); ++i)
         {
-            auto onset = -1;
-            for (auto i = 0; i < buffer.getNumSamples(); ++i)
+            if (std::abs(buffer.getSample(0, i)) > 0.1f)
             {
-                if (std::abs(buffer.getSample(0, i)) > 0.1f)
-                {
-                    onset = i;
-                    break;
-                }
+                onset = i;
+                break;
             }
-
-            REQUIRE(onset >= 0);
-            REQUIRE(onset / 44100.0 == Catch::Approx(2.0).margin(0.05));
         }
-    }
 
-    DeletedAtShutdown::deleteAll();
-    MessageManager::deleteInstance();
+        REQUIRE(onset >= 0);
+        REQUIRE(onset / 44100.0 == Catch::Approx(2.0).margin(0.05));
+    }
 }
 
 SCENARIO("clip speed persists and resets like the other item state", "[engine][clipspeed]")
 {
-    MessageManager::getInstance();
-    MessageManagerLock mmLock(Thread::getCurrentThread());
+    Fixture fixture(createSlowSawTwoSecondsAudioFile());
+    auto item = fixture.item();
 
+    json plain;
+    REQUIRE(item->writeToJson(plain));
+
+    THEN("the default speed writes no key, so old projects stay identical")
     {
-        auto fixture = makeFixture(createSlowSawTwoSecondsAudioFile());
-        auto item = fixture.item();
+        REQUIRE_FALSE(plain.contains("speed_ratio"));
+        REQUIRE_FALSE(plain.contains("stretch_mode"));
+    }
 
-        json plain;
-        REQUIRE(item->writeToJson(plain));
+    WHEN("a speed is set and the item state round-trips")
+    {
+        item->setSpeedRatio(0.5);
 
-        THEN("the default speed writes no key, so old projects stay identical")
+        json withSpeed;
+        REQUIRE(item->writeToJson(withSpeed));
+        REQUIRE(withSpeed.at("speed_ratio").get<double>() == Catch::Approx(0.5));
+
+        item->setSpeedRatio(2.0);
+        REQUIRE(item->readFromJson(withSpeed, false));
+
+        THEN("the stored speed comes back")
         {
-            REQUIRE_FALSE(plain.contains("speed_ratio"));
-            REQUIRE_FALSE(plain.contains("stretch_mode"));
+            REQUIRE(item->getSpeedRatio() == Catch::Approx(0.5));
         }
 
-        WHEN("a speed is set and the item state round-trips")
+        THEN("restoring a speedless state resets to 1.0 - undo reuses items")
         {
-            item->setSpeedRatio(0.5);
-
-            json withSpeed;
-            REQUIRE(item->writeToJson(withSpeed));
-            REQUIRE(withSpeed.at("speed_ratio").get<double>() == Catch::Approx(0.5));
-
-            item->setSpeedRatio(2.0);
-            REQUIRE(item->readFromJson(withSpeed, false));
-
-            THEN("the stored speed comes back")
-            {
-                REQUIRE(item->getSpeedRatio() == Catch::Approx(0.5));
-            }
-
-            THEN("restoring a speedless state resets to 1.0 - undo reuses items")
-            {
-                REQUIRE(item->readFromJson(plain, false));
-                REQUIRE(item->getSpeedRatio() == Catch::Approx(1.0));
-            }
-        }
-
-        WHEN("stretch mode is set and the item state round-trips")
-        {
-            item->setStretchMode(StretchMode::Stretch);
-
-            json withMode;
-            REQUIRE(item->writeToJson(withMode));
-            REQUIRE(withMode.at("stretch_mode").get<int>() == 1);
-
-            item->setStretchMode(StretchMode::RePitch);
-            REQUIRE(item->readFromJson(withMode, false));
-
-            THEN("the stored mode comes back, and a modeless state resets it")
-            {
-                REQUIRE(item->getStretchMode() == StretchMode::Stretch);
-
-                REQUIRE(item->readFromJson(plain, false));
-                REQUIRE(item->getStretchMode() == StretchMode::RePitch);
-            }
+            REQUIRE(item->readFromJson(plain, false));
+            REQUIRE(item->getSpeedRatio() == Catch::Approx(1.0));
         }
     }
 
-    DeletedAtShutdown::deleteAll();
-    MessageManager::deleteInstance();
+    WHEN("stretch mode is set and the item state round-trips")
+    {
+        item->setStretchMode(StretchMode::Stretch);
+
+        json withMode;
+        REQUIRE(item->writeToJson(withMode));
+        REQUIRE(withMode.at("stretch_mode").get<int>() == 1);
+
+        item->setStretchMode(StretchMode::RePitch);
+        REQUIRE(item->readFromJson(withMode, false));
+
+        THEN("the stored mode comes back, and a modeless state resets it")
+        {
+            REQUIRE(item->getStretchMode() == StretchMode::Stretch);
+
+            REQUIRE(item->readFromJson(plain, false));
+            REQUIRE(item->getStretchMode() == StretchMode::RePitch);
+        }
+    }
 }
 
 SCENARIO("fades on a stretched clip scale with the audio", "[engine][clipspeed]")
 {
-    MessageManager::getInstance();
-    MessageManagerLock mmLock(Thread::getCurrentThread());
+    Fixture fixture(generateDcOffsetAudioFile(1.0));
+    auto item = fixture.item();
 
+    // half the source faded in; at half speed that ramp lasts one
+    // timeline second
+    item->getDynamics().setFadeIn(0.5);
+    item->setSpeedRatio(0.5);
+    fixture.commit();
+
+    auto buffer = fixture.bounce();
+
+    THEN("the ramp midpoint sits half a timeline second in, at equal-power gain")
     {
-        auto fixture = makeFixture(generateDcOffsetAudioFile(1.0));
-        auto item = fixture.item();
+        const auto midRamp = static_cast<int>(0.5 * 44100.0);
+        REQUIRE(buffer.getSample(0, midRamp) == Catch::Approx(std::sqrt(0.5)).margin(0.05));
 
-        // half the source faded in; at half speed that ramp lasts one
-        // timeline second
-        item->getDynamics().setFadeIn(0.5);
-        item->setSpeedRatio(0.5);
-        fixture.commit();
-
-        auto buffer = fixture.bounce();
-
-        THEN("the ramp midpoint sits half a timeline second in, at equal-power gain")
-        {
-            const auto midRamp = static_cast<int>(0.5 * 44100.0);
-            REQUIRE(buffer.getSample(0, midRamp) == Catch::Approx(std::sqrt(0.5)).margin(0.05));
-
-            // past the (stretched) ramp: unity
-            const auto pastRamp = static_cast<int>(1.5 * 44100.0);
-            REQUIRE(buffer.getSample(0, pastRamp) == Catch::Approx(1.0).margin(0.02));
-        }
+        // past the (stretched) ramp: unity
+        const auto pastRamp = static_cast<int>(1.5 * 44100.0);
+        REQUIRE(buffer.getSample(0, pastRamp) == Catch::Approx(1.0).margin(0.02));
     }
-
-    DeletedAtShutdown::deleteAll();
-    MessageManager::deleteInstance();
 }
 
 SCENARIO("splitting and cloning a stretched clip preserve its speed", "[engine][clipspeed]")
 {
-    MessageManager::getInstance();
-    MessageManagerLock mmLock(Thread::getCurrentThread());
+    Fixture fixture(createSlowSawTwoSecondsAudioFile());
+    auto container = fixture.engine->getAudioTrackContainer();
+    auto track = container->getAudioTrack(0);
+    auto playList = track->getPlayListContainer();
 
+    fixture.item()->setSpeedRatio(0.5);   // 2 s source -> 4 s timeline
+
+    WHEN("the clip is split in the middle of its timeline extent")
     {
-        auto fixture = makeFixture(createSlowSawTwoSecondsAudioFile());
-        auto container = fixture.engine->getAudioTrackContainer();
-        auto track = container->getAudioTrack(0);
-        auto playList = track->getPlayListContainer();
+        container->getAudioRegionAdapter().splitRegions(2.0, audium::seconds);
 
-        fixture.item()->setSpeedRatio(0.5);   // 2 s source -> 4 s timeline
-
-        WHEN("the clip is split in the middle of its timeline extent")
+        THEN("both pieces keep the speed, and their windows add up")
         {
-            container->getAudioRegionAdapter().splitRegions(2.0, audium::seconds);
+            REQUIRE(playList->getPlayListItems().size() == 2);
+            auto first = playList->getPlayListItem(0);
+            auto second = playList->getPlayListItem(1);
 
-            THEN("both pieces keep the speed, and their windows add up")
-            {
-                REQUIRE(playList->getPlayListItems().size() == 2);
-                auto first = playList->getPlayListItem(0);
-                auto second = playList->getPlayListItem(1);
+            REQUIRE(first->getSpeedRatio() == Catch::Approx(0.5));
+            REQUIRE(second->getSpeedRatio() == Catch::Approx(0.5));
 
-                REQUIRE(first->getSpeedRatio() == Catch::Approx(0.5));
-                REQUIRE(second->getSpeedRatio() == Catch::Approx(0.5));
+            // each piece: half the source, twice that on the timeline
+            REQUIRE(first->getRegionData(audium::seconds).getLength() == Catch::Approx(1.0));
+            REQUIRE(second->getRegionData(audium::seconds).getLength() == Catch::Approx(1.0));
+            REQUIRE(second->getRegionData(audium::seconds).getStart()
+                    == Catch::Approx(first->getRegionData(audium::seconds).getEnd()));
 
-                // each piece: half the source, twice that on the timeline
-                REQUIRE(first->getRegionData(audium::seconds).getLength() == Catch::Approx(1.0));
-                REQUIRE(second->getRegionData(audium::seconds).getLength() == Catch::Approx(1.0));
-                REQUIRE(second->getRegionData(audium::seconds).getStart()
-                        == Catch::Approx(first->getRegionData(audium::seconds).getEnd()));
-
-                // timeline: seamless halves of the original extent
-                REQUIRE(first->getAbsolutePositionRange(audium::seconds).getEnd() == Catch::Approx(2.0));
-                REQUIRE(second->getAbsolutePositionRange(audium::seconds).getStart() == Catch::Approx(2.0));
-                REQUIRE(second->getAbsolutePositionRange(audium::seconds).getEnd() == Catch::Approx(4.0));
-            }
-        }
-
-        WHEN("the clip is cloned")
-        {
-            fixture.item()->setStretchMode(StretchMode::Stretch);
-            auto clone = playList->clonePlayListItem(fixture.item());
-            REQUIRE(clone != nullptr);
-
-            THEN("the clone keeps the speed and the mode")
-            {
-                REQUIRE(clone->getSpeedRatio() == Catch::Approx(0.5));
-                REQUIRE(clone->getStretchMode() == StretchMode::Stretch);
-            }
-        }
-
-        WHEN("a pending speed change is cancelled")
-        {
-            auto undoManager = container->getUndoManager();
-            const auto undoableBefore = undoManager->canUndo();
-
-            fixture.item()->onDragStart();
-            fixture.item()->setSpeedRatio(2.0);
-            fixture.item()->onDragCancel();
-
-            THEN("the speed is rolled back and no undo entry appears")
-            {
-                REQUIRE(fixture.item()->getSpeedRatio() == Catch::Approx(0.5));
-                REQUIRE(undoManager->canUndo() == undoableBefore);
-                REQUIRE_FALSE(undoManager->canRedo());
-            }
-        }
-
-        WHEN("a speed change is undone and redone")
-        {
-            auto undoManager = container->getUndoManager();
-
-            fixture.item()->onDragStart();
-            fixture.item()->setSpeedRatio(2.0);
-            fixture.item()->onDragEnd();
-
-            REQUIRE(undoManager->canUndo());
-            undoManager->undo();
-
-            THEN("undo restores the previous speed and redo re-applies it")
-            {
-                REQUIRE(fixture.item()->getSpeedRatio() == Catch::Approx(0.5));
-
-                undoManager->redo();
-                REQUIRE(fixture.item()->getSpeedRatio() == Catch::Approx(2.0));
-            }
+            // timeline: seamless halves of the original extent
+            REQUIRE(first->getAbsolutePositionRange(audium::seconds).getEnd() == Catch::Approx(2.0));
+            REQUIRE(second->getAbsolutePositionRange(audium::seconds).getStart() == Catch::Approx(2.0));
+            REQUIRE(second->getAbsolutePositionRange(audium::seconds).getEnd() == Catch::Approx(4.0));
         }
     }
 
-    DeletedAtShutdown::deleteAll();
-    MessageManager::deleteInstance();
+    WHEN("the clip is cloned")
+    {
+        fixture.item()->setStretchMode(StretchMode::Stretch);
+        auto clone = playList->clonePlayListItem(fixture.item());
+        REQUIRE(clone != nullptr);
+
+        THEN("the clone keeps the speed and the mode")
+        {
+            REQUIRE(clone->getSpeedRatio() == Catch::Approx(0.5));
+            REQUIRE(clone->getStretchMode() == StretchMode::Stretch);
+        }
+    }
+
+    WHEN("a pending speed change is cancelled")
+    {
+        auto undoManager = container->getUndoManager();
+        const auto undoableBefore = undoManager->canUndo();
+
+        fixture.item()->onDragStart();
+        fixture.item()->setSpeedRatio(2.0);
+        fixture.item()->onDragCancel();
+
+        THEN("the speed is rolled back and no undo entry appears")
+        {
+            REQUIRE(fixture.item()->getSpeedRatio() == Catch::Approx(0.5));
+            REQUIRE(undoManager->canUndo() == undoableBefore);
+            REQUIRE_FALSE(undoManager->canRedo());
+        }
+    }
+
+    WHEN("a speed change is undone and redone")
+    {
+        auto undoManager = container->getUndoManager();
+
+        fixture.item()->onDragStart();
+        fixture.item()->setSpeedRatio(2.0);
+        fixture.item()->onDragEnd();
+
+        REQUIRE(undoManager->canUndo());
+        undoManager->undo();
+
+        THEN("undo restores the previous speed and redo re-applies it")
+        {
+            REQUIRE(fixture.item()->getSpeedRatio() == Catch::Approx(0.5));
+
+            undoManager->redo();
+            REQUIRE(fixture.item()->getSpeedRatio() == Catch::Approx(2.0));
+        }
+    }
 }
 
 SCENARIO("dropping a stretched clip keeps its speed and mode", "[engine][clipspeed]")
 {
-    MessageManager::getInstance();
-    MessageManagerLock mmLock(Thread::getCurrentThread());
+    Fixture fixture(createSlowSawTwoSecondsAudioFile());
+    auto container = fixture.engine->getAudioTrackContainer();
+    auto sourceTrack = container->getAudioTrack(0);
+    auto item = fixture.item();
 
+    item->setSpeedRatio(0.5);
+    item->setStretchMode(StretchMode::Stretch);
+
+    auto expectSpeedCopied = [] (const PlayListItem& copy)
     {
-        auto fixture = makeFixture(createSlowSawTwoSecondsAudioFile());
-        auto container = fixture.engine->getAudioTrackContainer();
-        auto sourceTrack = container->getAudioTrack(0);
-        auto item = fixture.item();
+        REQUIRE(copy.getSpeedRatio() == Catch::Approx(0.5));
+        REQUIRE(copy.getStretchMode() == StretchMode::Stretch);
+    };
 
-        item->setSpeedRatio(0.5);
-        item->setStretchMode(StretchMode::Stretch);
+    WHEN("the clip is dragged onto a second track")
+    {
+        auto targetTrack = container->createNewAudioTrack(juce::String());
+        REQUIRE(targetTrack != nullptr);
 
-        auto expectSpeedCopied = [] (const PlayListItem& copy)
+        targetTrack->dropPlayListItem(item, 96.0, audium::clocks);
+
+        THEN("the moved clip keeps the speed and the mode")
         {
-            REQUIRE(copy.getSpeedRatio() == Catch::Approx(0.5));
-            REQUIRE(copy.getStretchMode() == StretchMode::Stretch);
-        };
+            REQUIRE(sourceTrack->getPlayListContainer()->getPlayListItems().empty());
 
-        WHEN("the clip is dragged onto a second track")
-        {
-            auto targetTrack = container->createNewAudioTrack(juce::String());
-            REQUIRE(targetTrack != nullptr);
+            auto moved = targetTrack->getPlayListContainer()->getPlayListItems();
+            REQUIRE(moved.size() == 1);
+            expectSpeedCopied(*moved[0]);
 
-            targetTrack->dropPlayListItem(item, 96.0, audium::clocks);
-
-            THEN("the moved clip keeps the speed and the mode")
-            {
-                REQUIRE(sourceTrack->getPlayListContainer()->getPlayListItems().empty());
-
-                auto moved = targetTrack->getPlayListContainer()->getPlayListItems();
-                REQUIRE(moved.size() == 1);
-                expectSpeedCopied(*moved[0]);
-
-                // and the timeline extent follows: 2 s source at half speed
-                REQUIRE(moved[0]->getAbsolutePositionRange(audium::seconds).getLength()
-                        == Catch::Approx(4.0));
-            }
-        }
-
-        WHEN("the clip is dropped as a new item")
-        {
-            sourceTrack->dropPlayListItem(item, 96.0 * 8.0, audium::clocks, true);
-
-            THEN("the copy keeps the speed and the mode")
-            {
-                auto items = sourceTrack->getPlayListContainer()->getPlayListItems();
-                REQUIRE(items.size() == 2);
-                expectSpeedCopied(*items[1]);
-            }
+            // and the timeline extent follows: 2 s source at half speed
+            REQUIRE(moved[0]->getAbsolutePositionRange(audium::seconds).getLength()
+                    == Catch::Approx(4.0));
         }
     }
 
-    DeletedAtShutdown::deleteAll();
-    MessageManager::deleteInstance();
+    WHEN("the clip is dropped as a new item")
+    {
+        sourceTrack->dropPlayListItem(item, 96.0 * 8.0, audium::clocks, true);
+
+        THEN("the copy keeps the speed and the mode")
+        {
+            auto items = sourceTrack->getPlayListContainer()->getPlayListItems();
+            REQUIRE(items.size() == 2);
+            expectSpeedCopied(*items[1]);
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -659,336 +554,296 @@ SCENARIO("dropping a stretched clip keeps its speed and mode", "[engine][clipspe
 
 SCENARIO("a tempo-locked clip derives its speed from the project tempo", "[engine][clipspeed][tempolock]")
 {
-    MessageManager::getInstance();
-    MessageManagerLock mmLock(Thread::getCurrentThread());
+    Fixture fixture(createSlowSawTwoSecondsAudioFile());
+    auto item = fixture.item();
+    auto tempoProvider = fixture.engine->getPlayListScheduler()->getTempoProvider();
+    tempoProvider->setTempo(120.0);
 
+    const auto extent = [&item] {
+        return item->getAbsolutePositionRange(audium::seconds).getLength();
+    };
+
+    WHEN("the clip is locked at a clip tempo of 60")
     {
-        auto fixture = makeFixture(createSlowSawTwoSecondsAudioFile());
-        auto item = fixture.item();
-        auto tempoProvider = fixture.engine->getPlayListScheduler()->getTempoProvider();
-        tempoProvider->setTempo(120.0);
+        item->setClipTempo(60.0);
+        item->setTempoLocked(true);
 
-        const auto extent = [&item] {
-            return item->getAbsolutePositionRange(audium::seconds).getLength();
-        };
-
-        WHEN("the clip is locked at a clip tempo of 60")
+        THEN("it plays at double speed on half the timeline, the source window untouched")
         {
-            item->setClipTempo(60.0);
-            item->setTempoLocked(true);
-
-            THEN("it plays at double speed on half the timeline, the source window untouched")
-            {
-                REQUIRE(item->isTempoLocked());
-                REQUIRE(item->getSpeedRatio() == Catch::Approx(2.0));
-                REQUIRE(extent() == Catch::Approx(1.0));
-                REQUIRE(item->getRegionData(audium::seconds).getLength() == Catch::Approx(2.0));
-            }
-
-            THEN("a plain ratio is ignored while locked")
-            {
-                item->setSpeedRatio(0.5);
-                REQUIRE(item->getSpeedRatio() == Catch::Approx(2.0));
-            }
-
-            THEN("a tempo change moves the ratio and the extent")
-            {
-                tempoProvider->setTempo(90.0);
-                REQUIRE(item->getSpeedRatio() == Catch::Approx(1.5));
-                REQUIRE(extent() == Catch::Approx(2.0 / 1.5));
-            }
-
-            THEN("unlocking bakes the derived ratio, so the clip stays put")
-            {
-                tempoProvider->setTempo(90.0);
-                item->setTempoLocked(false);
-                REQUIRE_FALSE(item->isTempoLocked());
-                REQUIRE(item->getSpeedRatio() == Catch::Approx(1.5));
-
-                tempoProvider->setTempo(120.0);
-                REQUIRE(item->getSpeedRatio() == Catch::Approx(1.5));
-            }
-
-            THEN("the derived ratio is clamped to the speed range")
-            {
-                tempoProvider->setTempo(999.0);
-                REQUIRE(item->getSpeedRatio() == Catch::Approx(ClipSpeed::maxSpeedRatio));
-            }
+            REQUIRE(item->isTempoLocked());
+            REQUIRE(item->getSpeedRatio() == Catch::Approx(2.0));
+            REQUIRE(extent() == Catch::Approx(1.0));
+            REQUIRE(item->getRegionData(audium::seconds).getLength() == Catch::Approx(2.0));
         }
 
-        WHEN("a clip is locked without a known tempo")
+        THEN("a plain ratio is ignored while locked")
         {
-            item->setTempoLocked(true);
+            item->setSpeedRatio(0.5);
+            REQUIRE(item->getSpeedRatio() == Catch::Approx(2.0));
+        }
 
-            THEN("it plays as recorded until a tempo is set")
-            {
-                REQUIRE(item->getClipTempo() == 0.0);
-                REQUIRE(item->getSpeedRatio() == Catch::Approx(1.0));
+        THEN("a tempo change moves the ratio and the extent")
+        {
+            tempoProvider->setTempo(90.0);
+            REQUIRE(item->getSpeedRatio() == Catch::Approx(1.5));
+            REQUIRE(extent() == Catch::Approx(2.0 / 1.5));
+        }
 
-                item->setClipTempo(240.0);
-                REQUIRE(item->getSpeedRatio() == Catch::Approx(0.5));
-            }
+        THEN("unlocking bakes the derived ratio, so the clip stays put")
+        {
+            tempoProvider->setTempo(90.0);
+            item->setTempoLocked(false);
+            REQUIRE_FALSE(item->isTempoLocked());
+            REQUIRE(item->getSpeedRatio() == Catch::Approx(1.5));
+
+            tempoProvider->setTempo(120.0);
+            REQUIRE(item->getSpeedRatio() == Catch::Approx(1.5));
+        }
+
+        THEN("the derived ratio is clamped to the speed range")
+        {
+            tempoProvider->setTempo(999.0);
+            REQUIRE(item->getSpeedRatio() == Catch::Approx(ClipSpeed::maxSpeedRatio));
         }
     }
 
-    DeletedAtShutdown::deleteAll();
-    MessageManager::deleteInstance();
+    WHEN("a clip is locked without a known tempo")
+    {
+        item->setTempoLocked(true);
+
+        THEN("it plays as recorded until a tempo is set")
+        {
+            REQUIRE(item->getClipTempo() == 0.0);
+            REQUIRE(item->getSpeedRatio() == Catch::Approx(1.0));
+
+            item->setClipTempo(240.0);
+            REQUIRE(item->getSpeedRatio() == Catch::Approx(0.5));
+        }
+    }
 }
 
 SCENARIO("the tempo lock persists, resets and copies like the other item state", "[engine][clipspeed][tempolock]")
 {
-    MessageManager::getInstance();
-    MessageManagerLock mmLock(Thread::getCurrentThread());
+    Fixture fixture(createSlowSawTwoSecondsAudioFile());
+    auto item = fixture.item();
+    auto playList = fixture.engine->getAudioTrackContainer()->getAudioTrack(0)->getPlayListContainer();
 
+    json plain;
+    REQUIRE(item->writeToJson(plain));
+    REQUIRE_FALSE(plain.contains("tempo_locked"));
+    REQUIRE_FALSE(plain.contains("clip_tempo"));
+
+    WHEN("a locked clip's state round-trips")
     {
-        auto fixture = makeFixture(createSlowSawTwoSecondsAudioFile());
-        auto item = fixture.item();
-        auto playList = fixture.engine->getAudioTrackContainer()->getAudioTrack(0)->getPlayListContainer();
+        item->setClipTempo(128.0);
+        item->setTempoLocked(true);
 
-        json plain;
-        REQUIRE(item->writeToJson(plain));
-        REQUIRE_FALSE(plain.contains("tempo_locked"));
-        REQUIRE_FALSE(plain.contains("clip_tempo"));
+        json locked;
+        REQUIRE(item->writeToJson(locked));
+        REQUIRE(locked.at("tempo_locked").get<bool>());
+        REQUIRE(locked.at("clip_tempo").get<double>() == Catch::Approx(128.0));
 
-        WHEN("a locked clip's state round-trips")
+        item->setTempoLocked(false);
+        item->setClipTempo(0.0);
+        REQUIRE(item->readFromJson(locked, false));
+
+        THEN("the lock and the tempo come back")
         {
-            item->setClipTempo(128.0);
-            item->setTempoLocked(true);
-
-            json locked;
-            REQUIRE(item->writeToJson(locked));
-            REQUIRE(locked.at("tempo_locked").get<bool>());
-            REQUIRE(locked.at("clip_tempo").get<double>() == Catch::Approx(128.0));
-
-            item->setTempoLocked(false);
-            item->setClipTempo(0.0);
-            REQUIRE(item->readFromJson(locked, false));
-
-            THEN("the lock and the tempo come back")
-            {
-                REQUIRE(item->isTempoLocked());
-                REQUIRE(item->getClipTempo() == Catch::Approx(128.0));
-            }
-
-            THEN("restoring an unlocked state resets both - undo reuses items")
-            {
-                REQUIRE(item->readFromJson(plain, false));
-                REQUIRE_FALSE(item->isTempoLocked());
-                REQUIRE(item->getClipTempo() == 0.0);
-            }
+            REQUIRE(item->isTempoLocked());
+            REQUIRE(item->getClipTempo() == Catch::Approx(128.0));
         }
 
-        WHEN("a locked clip is cloned")
+        THEN("restoring an unlocked state resets both - undo reuses items")
         {
-            item->setClipTempo(128.0);
-            item->setTempoLocked(true);
-            auto clone = playList->clonePlayListItem(item);
-            REQUIRE(clone != nullptr);
-
-            THEN("the clone is locked at the same tempo")
-            {
-                REQUIRE(clone->isTempoLocked());
-                REQUIRE(clone->getClipTempo() == Catch::Approx(128.0));
-            }
+            REQUIRE(item->readFromJson(plain, false));
+            REQUIRE_FALSE(item->isTempoLocked());
+            REQUIRE(item->getClipTempo() == 0.0);
         }
     }
 
-    DeletedAtShutdown::deleteAll();
-    MessageManager::deleteInstance();
+    WHEN("a locked clip is cloned")
+    {
+        item->setClipTempo(128.0);
+        item->setTempoLocked(true);
+        auto clone = playList->clonePlayListItem(item);
+        REQUIRE(clone != nullptr);
+
+        THEN("the clone is locked at the same tempo")
+        {
+            REQUIRE(clone->isTempoLocked());
+            REQUIRE(clone->getClipTempo() == Catch::Approx(128.0));
+        }
+    }
 }
 
 SCENARIO("a tempo-locked clip bounces at the project tempo", "[engine][clipspeed][tempolock]")
 {
-    MessageManager::getInstance();
-    MessageManagerLock mmLock(Thread::getCurrentThread());
+    Fixture fixture(createSineAudioFile(440.0, 2.0));
+    auto item = fixture.item();
+    auto tempoProvider = fixture.engine->getPlayListScheduler()->getTempoProvider();
 
+    item->setClipTempo(120.0);
+    item->setTempoLocked(true);
+
+    WHEN("the project runs at half the clip's tempo")
     {
-        auto fixture = makeFixture(createSineAudioFile(440.0, 2.0));
-        auto item = fixture.item();
-        auto tempoProvider = fixture.engine->getPlayListScheduler()->getTempoProvider();
+        tempoProvider->setTempo(60.0);
+        fixture.commit();
+        auto rePitched = fixture.bounce();
 
-        item->setClipTempo(120.0);
-        item->setTempoLocked(true);
+        item->setStretchMode(StretchMode::Stretch);
+        fixture.commit();
+        auto stretched = fixture.bounce();
 
-        WHEN("the project runs at half the clip's tempo")
+        THEN("both modes take twice the time; re-pitch drops an octave, stretch holds the pitch")
         {
-            tempoProvider->setTempo(60.0);
-            fixture.commit();
-            auto rePitched = fixture.bounce();
-
-            item->setStretchMode(StretchMode::Stretch);
-            fixture.commit();
-            auto stretched = fixture.bounce();
-
-            THEN("both modes take twice the time; re-pitch drops an octave, stretch holds the pitch")
-            {
-                REQUIRE(rePitched.getNumSamples() == Catch::Approx(4.0 * 44100.0).margin(512));
-                REQUIRE(stretched.getNumSamples() == Catch::Approx(4.0 * 44100.0).margin(512));
-                REQUIRE(measureFrequency(rePitched, 0.5, 3.5) == Catch::Approx(220.0).epsilon(0.02));
-                REQUIRE(measureFrequency(stretched, 0.5, 3.5) == Catch::Approx(440.0).epsilon(0.02));
-            }
-        }
-
-        WHEN("the project runs at the clip's tempo")
-        {
-            tempoProvider->setTempo(120.0);
-            fixture.commit();
-            auto buffer = fixture.bounce();
-
-            THEN("the clip plays as recorded")
-            {
-                REQUIRE(buffer.getNumSamples() == Catch::Approx(2.0 * 44100.0).margin(512));
-                REQUIRE(measureFrequency(buffer, 0.2, 1.8) == Catch::Approx(440.0).epsilon(0.02));
-            }
+            REQUIRE(rePitched.getNumSamples() == Catch::Approx(4.0 * 44100.0).margin(512));
+            REQUIRE(stretched.getNumSamples() == Catch::Approx(4.0 * 44100.0).margin(512));
+            REQUIRE(measureFrequency(rePitched, 0.5, 3.5) == Catch::Approx(220.0).epsilon(0.02));
+            REQUIRE(measureFrequency(stretched, 0.5, 3.5) == Catch::Approx(440.0).epsilon(0.02));
         }
     }
 
-    DeletedAtShutdown::deleteAll();
-    MessageManager::deleteInstance();
+    WHEN("the project runs at the clip's tempo")
+    {
+        tempoProvider->setTempo(120.0);
+        fixture.commit();
+        auto buffer = fixture.bounce();
+
+        THEN("the clip plays as recorded")
+        {
+            REQUIRE(buffer.getNumSamples() == Catch::Approx(2.0 * 44100.0).margin(512));
+            REQUIRE(measureFrequency(buffer, 0.2, 1.8) == Catch::Approx(440.0).epsilon(0.02));
+        }
+    }
 }
 
 SCENARIO("a tempo-locked clip follows a tempo change while it plays", "[engine][clipspeed][tempolock]")
 {
-    MessageManager::getInstance();
-    MessageManagerLock mmLock(Thread::getCurrentThread());
+    // 4 s of sine, locked at the project tempo: ratio 1.0. Two seconds
+    // in, the tempo halves - the remaining two source seconds then take
+    // four, so the clip ends at 6 s.
+    Fixture fixture(createSineAudioFile(440.0, 4.0));
+    auto item = fixture.item();
+    auto tempoProvider = fixture.engine->getPlayListScheduler()->getTempoProvider();
 
+    constexpr double bounceSeconds = 6.5;
+
+    const auto bounceWithTempoDrop = [&] {
+        tempoProvider->setTempo(120.0);
+        item->setClipTempo(120.0);
+        item->setTempoLocked(true);
+        fixture.commit();
+
+        auto config = std::make_shared<ExportAudioConfig>();
+        config->fileName = fixture.bounceFile;
+        config->sampleRate = 44100.0;
+        config->blockSize = 512;
+        config->numChannels = 1;
+        config->positionSeconds = 0.0;
+        config->lengthSeconds = bounceSeconds;
+
+        auto dropped = false;
+        auto playingAfterDrop = false;
+        auto ratioAfterDrop = 0.0;
+
+        AudioExporter(*fixture.engine, config).bounce([&] (double progress) {
+            const auto seconds = progress * bounceSeconds;
+
+            if (! dropped && seconds >= 2.0) {
+                tempoProvider->setTempo(60.0);
+                dropped = true;
+            }
+
+            // well inside the slow half: the voice must still be the
+            // one started at 0 s, now at the new ratio
+            if (dropped && seconds >= 4.0 && seconds < 4.1) {
+                const auto& voice = item->getVoiceSources().front();
+                playingAfterDrop = voice->isPlaying();
+                ratioAfterDrop = voice->getSpeedRatio();
+            }
+            return true;
+        });
+
+        REQUIRE(dropped);
+        REQUIRE(playingAfterDrop);
+        REQUIRE(ratioAfterDrop == Catch::Approx(0.5));
+
+        return audioFileToAudioBuffer(fixture.bounceFile);
+    };
+
+    WHEN("a re-pitched clip is bounced across the tempo drop")
     {
-        // 4 s of sine, locked at the project tempo: ratio 1.0. Two seconds
-        // in, the tempo halves - the remaining two source seconds then take
-        // four, so the clip ends at 6 s.
-        auto fixture = makeFixture(createSineAudioFile(440.0, 4.0));
-        auto item = fixture.item();
-        auto tempoProvider = fixture.engine->getPlayListScheduler()->getTempoProvider();
+        auto buffer = bounceWithTempoDrop();
 
-        constexpr double bounceSeconds = 6.5;
-
-        const auto bounceWithTempoDrop = [&] {
-            tempoProvider->setTempo(120.0);
-            item->setClipTempo(120.0);
-            item->setTempoLocked(true);
-            fixture.commit();
-
-            auto config = std::make_shared<ExportAudioConfig>();
-            config->fileName = fixture.bounceFile;
-            config->sampleRate = 44100.0;
-            config->blockSize = 512;
-            config->numChannels = 1;
-            config->positionSeconds = 0.0;
-            config->lengthSeconds = bounceSeconds;
-
-            auto dropped = false;
-            auto playingAfterDrop = false;
-            auto ratioAfterDrop = 0.0;
-
-            AudioExporter(*fixture.engine, config).bounce([&] (double progress) {
-                const auto seconds = progress * bounceSeconds;
-
-                if (! dropped && seconds >= 2.0) {
-                    tempoProvider->setTempo(60.0);
-                    dropped = true;
-                }
-
-                // well inside the slow half: the voice must still be the
-                // one started at 0 s, now at the new ratio
-                if (dropped && seconds >= 4.0 && seconds < 4.1) {
-                    const auto& voice = item->getVoiceSources().front();
-                    playingAfterDrop = voice->isPlaying();
-                    ratioAfterDrop = voice->getSpeedRatio();
-                }
-                return true;
-            });
-
-            REQUIRE(dropped);
-            REQUIRE(playingAfterDrop);
-            REQUIRE(ratioAfterDrop == Catch::Approx(0.5));
-
-            return audioFileToAudioBuffer(fixture.bounceFile);
-        };
-
-        WHEN("a re-pitched clip is bounced across the tempo drop")
+        THEN("the pitch halves at the drop and the clip runs on to 6 s, no early stop")
         {
-            auto buffer = bounceWithTempoDrop();
+            REQUIRE(measureFrequency(buffer, 0.5, 1.8) == Catch::Approx(440.0).epsilon(0.02));
+            REQUIRE(measureFrequency(buffer, 3.5, 5.5) == Catch::Approx(220.0).epsilon(0.02));
 
-            THEN("the pitch halves at the drop and the clip runs on to 6 s, no early stop")
-            {
-                REQUIRE(measureFrequency(buffer, 0.5, 1.8) == Catch::Approx(440.0).epsilon(0.02));
-                REQUIRE(measureFrequency(buffer, 3.5, 5.5) == Catch::Approx(220.0).epsilon(0.02));
-
-                const auto rms = [&buffer] (double from, double to) {
-                    return buffer.getRMSLevel(0, static_cast<int>(from * 44100.0),
-                                              static_cast<int>((to - from) * 44100.0));
-                };
-                REQUIRE(rms(5.5, 5.9) > 0.5);
-                REQUIRE(rms(6.1, 6.4) < 0.01);
-            }
-        }
-
-        WHEN("a time-stretched clip is bounced across the tempo drop")
-        {
-            item->setStretchMode(StretchMode::Stretch);
-            auto buffer = bounceWithTempoDrop();
-
-            THEN("the pitch holds on both sides of the drop")
-            {
-                REQUIRE(measureFrequency(buffer, 0.5, 1.8) == Catch::Approx(440.0).epsilon(0.02));
-                REQUIRE(measureFrequency(buffer, 3.5, 5.5) == Catch::Approx(440.0).epsilon(0.02));
-            }
+            const auto rms = [&buffer] (double from, double to) {
+                return buffer.getRMSLevel(0, static_cast<int>(from * 44100.0),
+                                          static_cast<int>((to - from) * 44100.0));
+            };
+            REQUIRE(rms(5.5, 5.9) > 0.5);
+            REQUIRE(rms(6.1, 6.4) < 0.01);
         }
     }
 
-    DeletedAtShutdown::deleteAll();
-    MessageManager::deleteInstance();
+    WHEN("a time-stretched clip is bounced across the tempo drop")
+    {
+        item->setStretchMode(StretchMode::Stretch);
+        auto buffer = bounceWithTempoDrop();
+
+        THEN("the pitch holds on both sides of the drop")
+        {
+            REQUIRE(measureFrequency(buffer, 0.5, 1.8) == Catch::Approx(440.0).epsilon(0.02));
+            REQUIRE(measureFrequency(buffer, 3.5, 5.5) == Catch::Approx(440.0).epsilon(0.02));
+        }
+    }
 }
 
 SCENARIO("locking seeds the clip tempo from the beat analysis", "[engine][clipspeed][tempolock]")
 {
-    MessageManager::getInstance();
-    MessageManagerLock mmLock(Thread::getCurrentThread());
+    Fixture fixture(createSlowSawTwoSecondsAudioFile());
+    auto item = fixture.item();
+    auto provider = fixture.engine->getAudioTrackContainer()->getAnalysisProvider();
+    REQUIRE(provider != nullptr);
 
+    const auto file = ClipTempo::sourceFile(*item);
+    REQUIRE(file.existsAsFile());
+
+    WHEN("the source has no beat analysis")
     {
-        auto fixture = makeFixture(createSlowSawTwoSecondsAudioFile());
-        auto item = fixture.item();
-        auto provider = fixture.engine->getAudioTrackContainer()->getAnalysisProvider();
-        REQUIRE(provider != nullptr);
+        const auto known = ClipTempo::lockToTempo(*item, *provider);
 
-        const auto file = ClipTempo::sourceFile(*item);
-        REQUIRE(file.existsAsFile());
-
-        WHEN("the source has no beat analysis")
+        THEN("the clip is locked, its tempo unknown")
         {
-            const auto known = ClipTempo::lockToTempo(*item, *provider);
-
-            THEN("the clip is locked, its tempo unknown")
-            {
-                REQUIRE_FALSE(known);
-                REQUIRE(item->isTempoLocked());
-                REQUIRE(item->getClipTempo() == 0.0);
-                REQUIRE(item->getSpeedRatio() == Catch::Approx(1.0));
-            }
-        }
-
-        WHEN("the analysis cache knows the source's tempo")
-        {
-            provider->getCache()->put(file, AnalysisType::Beats, { 0.5f, 1.0f, 1.5f }, 96.0f);
-            const auto known = ClipTempo::lockToTempo(*item, *provider);
-
-            THEN("the clip takes it")
-            {
-                REQUIRE(known);
-                REQUIRE(item->getClipTempo() == Catch::Approx(96.0));
-            }
-
-            THEN("a tempo the user set already is kept")
-            {
-                item->setClipTempo(192.0);
-                ClipTempo::lockToTempo(*item, *provider);
-                REQUIRE(item->getClipTempo() == Catch::Approx(192.0));
-            }
+            REQUIRE_FALSE(known);
+            REQUIRE(item->isTempoLocked());
+            REQUIRE(item->getClipTempo() == 0.0);
+            REQUIRE(item->getSpeedRatio() == Catch::Approx(1.0));
         }
     }
 
-    DeletedAtShutdown::deleteAll();
-    MessageManager::deleteInstance();
+    WHEN("the analysis cache knows the source's tempo")
+    {
+        provider->getCache()->put(file, AnalysisType::Beats, { 0.5f, 1.0f, 1.5f }, 96.0f);
+        const auto known = ClipTempo::lockToTempo(*item, *provider);
+
+        THEN("the clip takes it")
+        {
+            REQUIRE(known);
+            REQUIRE(item->getClipTempo() == Catch::Approx(96.0));
+        }
+
+        THEN("a tempo the user set already is kept")
+        {
+            item->setClipTempo(192.0);
+            ClipTempo::lockToTempo(*item, *provider);
+            REQUIRE(item->getClipTempo() == Catch::Approx(192.0));
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -999,16 +854,13 @@ SCENARIO("locking seeds the clip tempo from the beat analysis", "[engine][clipsp
 
 SCENARIO("clip speed is independent of the source file's sample rate", "[engine][clipspeed][samplerate]")
 {
-    MessageManager::getInstance();
-    MessageManagerLock mmLock(Thread::getCurrentThread());
-
     for (const auto sourceRate : { 22050.0, 48000.0, 96000.0 })
     {
         DYNAMIC_SECTION("source at " << static_cast<int>(sourceRate) << " Hz")
         {
             WHEN("the clip plays as recorded")
             {
-                auto fixture = makeFixture(createSineAudioFile(440.0, 2.0, 0.0, sourceRate));
+                Fixture fixture(createSineAudioFile(440.0, 2.0, 0.0, sourceRate));
                 fixture.commit();
                 auto buffer = fixture.bounce();
 
@@ -1022,7 +874,7 @@ SCENARIO("clip speed is independent of the source file's sample rate", "[engine]
 
             WHEN("a half-speed clip is bounced in both modes")
             {
-                auto fixture = makeFixture(createSineAudioFile(440.0, 2.0, 0.0, sourceRate));
+                Fixture fixture(createSineAudioFile(440.0, 2.0, 0.0, sourceRate));
                 auto item = fixture.item();
 
                 item->setSpeedRatio(0.5);
@@ -1052,7 +904,7 @@ SCENARIO("clip speed is independent of the source file's sample rate", "[engine]
 
             WHEN("a double-speed clip is bounced in both modes")
             {
-                auto fixture = makeFixture(createSineAudioFile(440.0, 2.0, 0.0, sourceRate));
+                Fixture fixture(createSineAudioFile(440.0, 2.0, 0.0, sourceRate));
                 auto item = fixture.item();
 
                 item->setSpeedRatio(2.0);
@@ -1075,7 +927,7 @@ SCENARIO("clip speed is independent of the source file's sample rate", "[engine]
 
             WHEN("a clip with a silent second is stretched to half speed")
             {
-                auto fixture = makeFixture(createSineAudioFile(440.0, 1.0, 1.0, sourceRate));
+                Fixture fixture(createSineAudioFile(440.0, 1.0, 1.0, sourceRate));
                 auto item = fixture.item();
                 item->setSpeedRatio(0.5);
                 item->setStretchMode(StretchMode::Stretch);
@@ -1097,7 +949,7 @@ SCENARIO("clip speed is independent of the source file's sample rate", "[engine]
             {
                 // 2 s source at half speed = 4 s timeline; the second half
                 // must seek to source second 1 in the file's own rate
-                auto fixture = makeFixture(createSineAudioFile(440.0, 2.0, 0.0, sourceRate));
+                Fixture fixture(createSineAudioFile(440.0, 2.0, 0.0, sourceRate));
                 fixture.item()->setSpeedRatio(0.5);
                 fixture.commit();
                 auto buffer = fixture.bounce(2.0, 2.0);
@@ -1112,23 +964,17 @@ SCENARIO("clip speed is independent of the source file's sample rate", "[engine]
             }
         }
     }
-
-    DeletedAtShutdown::deleteAll();
-    MessageManager::deleteInstance();
 }
 
 SCENARIO("stretch mode handles every source sample rate", "[engine][clipspeed][stretch][samplerate]")
 {
-    MessageManager::getInstance();
-    MessageManagerLock mmLock(Thread::getCurrentThread());
-
     for (const auto sourceRate : { 22050.0, 48000.0, 96000.0 })
     {
         DYNAMIC_SECTION("source at " << static_cast<int>(sourceRate) << " Hz")
         {
             WHEN("a 440 Hz clip is stretched to half and double speed")
             {
-                auto fixture = makeFixture(createSineAudioFile(440.0, 2.0, 0.0, sourceRate));
+                Fixture fixture(createSineAudioFile(440.0, 2.0, 0.0, sourceRate));
                 auto item = fixture.item();
                 item->setStretchMode(StretchMode::Stretch);
 
@@ -1157,7 +1003,7 @@ SCENARIO("stretch mode handles every source sample rate", "[engine][clipspeed][s
 
             WHEN("a clip with a silent second is stretched to half speed")
             {
-                auto fixture = makeFixture(createSineAudioFile(440.0, 1.0, 1.0, sourceRate));
+                Fixture fixture(createSineAudioFile(440.0, 1.0, 1.0, sourceRate));
                 auto item = fixture.item();
                 item->setSpeedRatio(0.5);
                 item->setStretchMode(StretchMode::Stretch);
@@ -1176,9 +1022,6 @@ SCENARIO("stretch mode handles every source sample rate", "[engine][clipspeed][s
             }
         }
     }
-
-    DeletedAtShutdown::deleteAll();
-    MessageManager::deleteInstance();
 }
 
 // A Rubber Band instance costs ~5 MB per channel and every voice source
@@ -1186,62 +1029,54 @@ SCENARIO("stretch mode handles every source sample rate", "[engine][clipspeed][s
 // Stretch mode (#204 follow-up: memory grew with every clip).
 SCENARIO("a clip allocates its stretchers only in Stretch mode", "[engine][clipspeed][stretch][memory]")
 {
-    MessageManager::getInstance();
-    MessageManagerLock mmLock(Thread::getCurrentThread());
+    Fixture fixture(createSineAudioFile(440.0, 2.0));
+    auto item = fixture.item();
+    REQUIRE_FALSE(item->getVoiceSources().empty());
 
-    {
-        auto fixture = makeFixture(createSineAudioFile(440.0, 2.0));
-        auto item = fixture.item();
-        REQUIRE_FALSE(item->getVoiceSources().empty());
+    auto hasStretchers = [&] {
+        for (auto& voice : item->getVoiceSources())
+            if (! voice->getClipTransportSource().getStretchSource()->hasStretchers())
+                return false;
+        return true;
+    };
 
-        auto hasStretchers = [&] {
-            for (auto& voice : item->getVoiceSources())
-                if (! voice->getClipTransportSource().getStretchSource()->hasStretchers())
-                    return false;
-            return true;
-        };
+    THEN("a RePitch clip has none") {
+        REQUIRE(item->getStretchMode() == StretchMode::RePitch);
+        REQUIRE_FALSE(hasStretchers());
+    }
 
-        THEN("a RePitch clip has none") {
-            REQUIRE(item->getStretchMode() == StretchMode::RePitch);
-            REQUIRE_FALSE(hasStretchers());
-        }
+    WHEN("it enters Stretch mode") {
+        item->setStretchMode(StretchMode::Stretch);
 
-        WHEN("it enters Stretch mode") {
-            item->setStretchMode(StretchMode::Stretch);
-
-            THEN("every voice source has its stretchers, and keeps them in RePitch") {
-                REQUIRE(hasStretchers());
-                item->setStretchMode(StretchMode::RePitch);
-                REQUIRE(hasStretchers());
-            }
-        }
-
-        WHEN("a RePitch clip reads a Stretch state from JSON, as a project load does") {
-            json state;
-            REQUIRE(item->writeToJson(state));
-            state["stretch_mode"] = 1;
-            REQUIRE_FALSE(hasStretchers());
-            REQUIRE(item->readFromJson(state, false));   // deinit + init with the old mode, then the new one
-
-            THEN("the new voice sources have their stretchers") {
-                REQUIRE(item->getStretchMode() == StretchMode::Stretch);
-                REQUIRE(hasStretchers());
-            }
-        }
-
-        WHEN("a stretched clip plays at half speed") {
-            item->setSpeedRatio(0.5);
-            item->setStretchMode(StretchMode::Stretch);
-            fixture.commit();
-            auto stretched = fixture.bounce();
-
-            THEN("the on-demand stretchers hold the pitch, so this is not the pass-through") {
-                REQUIRE(stretched.getNumSamples() == Catch::Approx(4.0 * 44100.0).margin(512));
-                REQUIRE(measureFrequency(stretched, 0.5, 3.5) == Catch::Approx(440.0).epsilon(0.02));
-            }
+        THEN("every voice source has its stretchers, and keeps them in RePitch") {
+            REQUIRE(hasStretchers());
+            item->setStretchMode(StretchMode::RePitch);
+            REQUIRE(hasStretchers());
         }
     }
 
-    DeletedAtShutdown::deleteAll();
-    MessageManager::deleteInstance();
+    WHEN("a RePitch clip reads a Stretch state from JSON, as a project load does") {
+        json state;
+        REQUIRE(item->writeToJson(state));
+        state["stretch_mode"] = 1;
+        REQUIRE_FALSE(hasStretchers());
+        REQUIRE(item->readFromJson(state, false));   // deinit + init with the old mode, then the new one
+
+        THEN("the new voice sources have their stretchers") {
+            REQUIRE(item->getStretchMode() == StretchMode::Stretch);
+            REQUIRE(hasStretchers());
+        }
+    }
+
+    WHEN("a stretched clip plays at half speed") {
+        item->setSpeedRatio(0.5);
+        item->setStretchMode(StretchMode::Stretch);
+        fixture.commit();
+        auto stretched = fixture.bounce();
+
+        THEN("the on-demand stretchers hold the pitch, so this is not the pass-through") {
+            REQUIRE(stretched.getNumSamples() == Catch::Approx(4.0 * 44100.0).margin(512));
+            REQUIRE(measureFrequency(stretched, 0.5, 3.5) == Catch::Approx(440.0).epsilon(0.02));
+        }
+    }
 }

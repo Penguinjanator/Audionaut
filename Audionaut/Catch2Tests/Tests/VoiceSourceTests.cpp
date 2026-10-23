@@ -167,7 +167,7 @@ SCENARIO("tranport source duration scenario", "[engine][dsp][transport][duration
         engine->getPlayListScheduler()->commitPlayListData();
         
         auto bounceConfig = std::make_shared<audium::ExportAudioConfig>();
-        bounceConfig->fileName = File(String(CURRENT_SOURCE_DIR) + String("/TestFiles/out.wav"));
+        bounceConfig->fileName = testOutputDirectory().getChildFile("out.wav");
         bounceConfig->sampleRate = 44100.0;
         bounceConfig->blockSize = 64;
         bounceConfig->lengthSeconds = 3.0;

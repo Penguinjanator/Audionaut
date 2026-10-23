@@ -1,0 +1,103 @@
+name: Run the Catch2 tests
+description: >
+  Fetches the LFS test files, configures, builds and runs the Catch2 suite
+  (Audionaut/Catch2Tests) with ctest, then fails if the run left anything
+  under Audionaut/Catch2Tests/TestFiles. Runs after checkout-submodules.
+
+inputs:
+  build-type:
+    description: >
+      CMAKE_BUILD_TYPE for single-config generators. Leave empty for the
+      Visual Studio generator, which is multi-config and ignores it (CMake
+      warns that the variable went unused); use `config` there instead.
+    required: false
+    default: ""
+  config:
+    description: >
+      Configuration passed to `cmake --build --config` and `ctest -C`
+      (needed by multi-config generators). Empty = none.
+    required: false
+    default: ""
+  build-dir:
+    description: Build directory, relative to the workspace.
+    required: false
+    default: build
+  cmake-args:
+    description: Extra arguments for the configure step (space-separated).
+    required: false
+    default: ""
+  wrapper:
+    description: >
+      Command prefix for ctest, e.g. `xvfb-run -a`: the export tests construct
+      a ThreadWithProgressWindow, and JUCE's AlertWindow layout segfaults
+      without a display to measure.
+    required: false
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    # Some test wavs (see .gitattributes) live in Git LFS; without this the
+    # tests get pointer stubs and fail loading them. A separate step rather
+    # than `lfs: true` on the checkout, which would also smudge whatever LFS
+    # pointers the submodules carry.
+    - name: Fetch Git LFS test files
+      shell: bash
+      run: git lfs pull
+
+    - name: Configure tests
+      shell: bash
+      env:
+        BUILD_DIR: ${{ inputs.build-dir }}
+        BUILD_TYPE: ${{ inputs.build-type }}
+        CMAKE_ARGS: ${{ inputs.cmake-args }}
+      run: |
+        args=(-B "$BUILD_DIR" -S Audionaut/Catch2Tests)
+        if [ -n "$BUILD_TYPE" ]; then args+=("-DCMAKE_BUILD_TYPE=$BUILD_TYPE"); fi
+        # CMAKE_ARGS unquoted on purpose: one argument per word
+        cmake "${args[@]}" $CMAKE_ARGS
+
+    - name: Build tests
+      shell: bash
+      env:
+        BUILD_DIR: ${{ inputs.build-dir }}
+        CONFIG: ${{ inputs.config }}
+      run: |
+        args=(--build "$BUILD_DIR")
+        if [ -n "$CONFIG" ]; then args+=(--config "$CONFIG"); fi
+        # MSBuild picks its own parallelism (the targets add /MP); make
+        # needs the core count spelled out.
+        case "$RUNNER_OS" in
+          macOS)   args+=(--parallel "$(sysctl -n hw.ncpu)") ;;
+          Linux)   args+=(--parallel "$(nproc)") ;;
+          *)       args+=(--parallel) ;;
+        esac
+        cmake "${args[@]}"
+
+    - name: Run tests
+      shell: bash
+      working-directory: ${{ inputs.build-dir }}
+      env:
+        CONFIG: ${{ inputs.config }}
+        WRAPPER: ${{ inputs.wrapper }}
+      # --no-tests=error: ctest passes by default when it finds no tests,
+      # which is how a missing enable_testing() once made this step a silent
+      # no-op. Fail loudly instead.
+      run: |
+        args=(--output-on-failure --no-tests=error)
+        if [ -n "$CONFIG" ]; then args+=(-C "$CONFIG"); fi
+        # WRAPPER unquoted on purpose: a command plus its options
+        $WRAPPER ctest "${args[@]}"
+
+    - name: Check that the suite left the fixtures alone
+      # A test that opens a checked-in session in place would leave what it
+      # imports or records in the repository (see FixtureSessionCopy in
+      # Catch2Tests/Tests/TestEngine.h); the per-engine ProjectDirectories
+      # keep one test's project directory from leaking into the next.
+      shell: bash
+      run: |
+        if [ -n "$(git status --porcelain -- Audionaut/Catch2Tests/TestFiles)" ]; then
+          echo "the test run left files under Audionaut/Catch2Tests/TestFiles:"
+          git status --short -- Audionaut/Catch2Tests/TestFiles
+          exit 1
+        fi

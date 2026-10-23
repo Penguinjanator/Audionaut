@@ -28,7 +28,7 @@ cmake --build build
 ./build/AudionautTests_artefacts/AudionautTests          # run all tests
 ./build/AudionautTests_artefacts/AudionautTests "[analysis]"   # run one tag/scenario
 ```
-Test sources live in `Audionaut/Catch2Tests/Tests/*.cpp`; scenarios are tagged (e.g. `[engine][analysis][segmentation]`) so you can filter by tag. Test audio/data lives in `Audionaut/Catch2Tests/TestFiles/` and is located at runtime via the `CURRENT_SOURCE_DIR` compile define. `Audionaut/Catch2Tests/CMakeLists.txt` globs engine/interface source directories — **a newly added Source subdirectory must be added to the `file(GLOB ...)` list there** or its `.cpp` files won't be compiled into the test binary.
+Test sources live in `Audionaut/Catch2Tests/Tests/*.cpp`; scenarios are tagged (e.g. `[engine][analysis][segmentation]`) so you can filter by tag. Test audio/data lives in `Audionaut/Catch2Tests/TestFiles/` and is located at runtime via the `CURRENT_SOURCE_DIR` compile define. `Audionaut/Catch2Tests/CMakeLists.txt` globs `Source/Engine`, `Source/Interface` and `Source/Cli` recursively (`CONFIGURE_DEPENDS`), so new Source subdirectories and `.cpp` files there are picked up automatically; `Engine/Separation/Demucs/` is the exception (its own library).
 
 CI (`.github/workflows/`) runs this same CMake build + `ctest` on macOS and Linux for pushes/PRs to `main` and `develop`.
 
@@ -60,5 +60,5 @@ Standard JUCE layering: `Application` (app lifecycle, main window, menus, comman
 
 - Everything is namespaced `audium`.
 - Engine classes use `JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR` and pass collaborators as references/shared_ptrs (dependency injection) rather than constructing them.
-- Feature flags are compile-time defines set in the `.jucer` (e.g. `AUTO_EDIT_ENABLED`, `JUCE_MODAL_LOOPS_PERMITTED`), not runtime config.
+- Feature flags are compile-time defines set in the `.jucer` (e.g. `DEMUCS_ENABLED`, `JUCE_MODAL_LOOPS_PERMITTED`), not runtime config.
 - Source files carry the GPL/commercial license header; match it when creating new files.

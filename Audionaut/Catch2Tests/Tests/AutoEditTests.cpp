@@ -20,6 +20,8 @@
 #include "Engine/Resource/AudioResource.h"
 #include "Engine/Resource/AudioResourceContainer.h"
 
+#include "TestEngine.h"
+
 // The native auto edit reads analyses from the cache and never runs one, so
 // these scenarios populate the cache directly and run no analysis.
 
@@ -36,7 +38,7 @@ namespace {
  * instead.
  */
 struct Fixture {
-    std::shared_ptr<AudiumEngine> engine;
+    TestEngine engine;
     juce::File analysedFile;
 
     // Adding an audio file already creates a region covering the whole file,
@@ -50,7 +52,7 @@ struct Fixture {
 
     std::shared_ptr<AudioTrack> track() const
     {
-        return engine->getAudioTrackContainer()->getAudioTrack(0);
+        return engine.track(0);
     }
 
     std::shared_ptr<ResourceGroup> resourceGroup() const
@@ -102,9 +104,28 @@ struct Fixture {
         return group->getAudioResources()[0]->getFileLength(audium::seconds);
     }
 
-    ~Fixture()
+    Fixture()
     {
-        engine = nullptr;
+        auto testFilesDirectory = String(CURRENT_SOURCE_DIR) + String("/TestFiles/");
+        auto inFile = File(testFilesDirectory + "_export_TRK-18.wav");
+        REQUIRE(inFile.existsAsFile());
+
+        engine->getAudioTrackContainer()->addAudioFiles({ inFile.getFullPathName() },
+                                                        0.0,
+                                                        nullptr,
+                                                        false);
+
+        auto group = resourceGroup();
+        REQUIRE(group != nullptr);
+        REQUIRE_FALSE(group->getAudioResources().empty());
+
+        // The resource may reference a copy rather than the file handed in, so the
+        // cache has to be keyed off whatever it actually points at.
+        analysedFile = File(group->getAudioResources()[0]->getFullPathName());
+        baselineRegions = regionCount();
+
+        for (const auto& region : regions())
+            baselineNames.add(region->getName());
     }
 };
 
@@ -116,35 +137,6 @@ std::vector<float> evenTimes(float first, float interval, int count)
         times.push_back(first + interval * (float) i);
 
     return times;
-}
-
-Fixture makeFixture()
-{
-    Fixture fixture;
-    fixture.engine = AudiumFactory::createAudiumEngine();
-
-    auto testFilesDirectory = String(CURRENT_SOURCE_DIR) + String("/TestFiles/");
-    auto inFile = File(testFilesDirectory + "_export_TRK-18.wav");
-    REQUIRE(inFile.existsAsFile());
-
-    fixture.engine->getAudioTrackContainer()->addAudioFiles({ inFile.getFullPathName() },
-                                                            0.0,
-                                                            nullptr,
-                                                            false);
-
-    auto group = fixture.resourceGroup();
-    REQUIRE(group != nullptr);
-    REQUIRE_FALSE(group->getAudioResources().empty());
-
-    // The resource may reference a copy rather than the file handed in, so the
-    // cache has to be keyed off whatever it actually points at.
-    fixture.analysedFile = File(group->getAudioResources()[0]->getFullPathName());
-    fixture.baselineRegions = fixture.regionCount();
-
-    for (const auto& region : fixture.regions())
-        fixture.baselineNames.add(region->getName());
-
-    return fixture;
 }
 
 // Populates the analyses the merge needs, shaped like real results.
@@ -161,500 +153,387 @@ void cacheMergeAnalyses(const Fixture& fixture)
 SCENARIO("AutoEdit cuts a track into regions from its cached analyses",
          "[engine][autoedit]")
 {
-    MessageManager::getInstance();
-    MessageManagerLock mmLock(Thread::getCurrentThread());
+    Fixture fixture;
+    cacheMergeAnalyses(fixture);
 
+    const auto baseline = fixture.baselineRegions;
+
+    AutoEdit autoEdit(fixture.engine.ptr());
+
+    AutoEditConfig config;
+    config.trackId = 0;
+    config.numSegments = 6;
+    REQUIRE(config.source == AutoEditConfig::Source::Native);
+
+    std::string reportedError;
+    auto onError = [&reportedError](std::string error) { reportedError = error; };
+
+    WHEN("the track is auto edited")
     {
-        auto fixture = makeFixture();
-        cacheMergeAnalyses(fixture);
+        const auto succeeded = autoEdit.invokeAutoEdit(config, onError);
 
-        const auto baseline = fixture.baselineRegions;
-
-        AutoEdit autoEdit(fixture.engine);
-
-        AutoEditConfig config;
-        config.trackId = 0;
-        config.numSegments = 6;
-        REQUIRE(config.source == AutoEditConfig::Source::Native);
-
-        std::string reportedError;
-        auto onError = [&reportedError](std::string error) { reportedError = error; };
-
-        WHEN("the track is auto edited")
+        THEN("it reports success without an error")
         {
-            const auto succeeded = autoEdit.invokeAutoEdit(config, onError);
+            INFO("error was: " << reportedError);
+            REQUIRE(succeeded);
+            REQUIRE(reportedError.empty());
+        }
 
-            THEN("it reports success without an error")
+        THEN("regions are created on the track's resource group")
+        {
+            REQUIRE(fixture.regionCount() > baseline);
+        }
+
+        THEN("the new regions tile the material without gaps or overlaps")
+        {
+            auto regions = fixture.regions();
+            REQUIRE(regions.size() > baseline);
+
+            const auto length = fixture.audioLengthSeconds();
+            REQUIRE(length > 0.0);
+
+            // The whole-file region added with the audio is still there, so
+            // only the ones this edit produced are checked for tiling.
+            std::vector<juce::Range<double>> created;
+
+            for (const auto& region : fixture.createdRegions())
+                created.push_back(region->getRegionData(audium::seconds));
+
+            REQUIRE_FALSE(created.empty());
+
+            std::sort(created.begin(), created.end(),
+                      [](const auto& a, const auto& b) { return a.getStart() < b.getStart(); });
+
+            double previousEnd = -1.0;
+
+            for (const auto& range : created)
             {
-                INFO("error was: " << reportedError);
-                REQUIRE(succeeded);
-                REQUIRE(reportedError.empty());
-            }
+                REQUIRE(range.getStart() >= 0.0);
+                REQUIRE(range.getEnd() <= length + 0.001);
+                REQUIRE(range.getLength() > 0.0);
 
-            THEN("regions are created on the track's resource group")
-            {
-                REQUIRE(fixture.regionCount() > baseline);
-            }
+                if (previousEnd >= 0.0)
+                    REQUIRE(range.getStart() == Catch::Approx(previousEnd).margin(0.001));
 
-            THEN("the new regions tile the material without gaps or overlaps")
-            {
-                auto regions = fixture.regions();
-                REQUIRE(regions.size() > baseline);
-
-                const auto length = fixture.audioLengthSeconds();
-                REQUIRE(length > 0.0);
-
-                // The whole-file region added with the audio is still there, so
-                // only the ones this edit produced are checked for tiling.
-                std::vector<juce::Range<double>> created;
-
-                for (const auto& region : fixture.createdRegions())
-                    created.push_back(region->getRegionData(audium::seconds));
-
-                REQUIRE_FALSE(created.empty());
-
-                std::sort(created.begin(), created.end(),
-                          [](const auto& a, const auto& b) { return a.getStart() < b.getStart(); });
-
-                double previousEnd = -1.0;
-
-                for (const auto& range : created)
-                {
-                    REQUIRE(range.getStart() >= 0.0);
-                    REQUIRE(range.getEnd() <= length + 0.001);
-                    REQUIRE(range.getLength() > 0.0);
-
-                    if (previousEnd >= 0.0)
-                        REQUIRE(range.getStart() == Catch::Approx(previousEnd).margin(0.001));
-
-                    previousEnd = range.getEnd();
-                }
-            }
-
-            THEN("one undo removes every region the edit created")
-            {
-                auto undoManager = fixture.engine->getAudioTrackContainer()->getUndoManager();
-                REQUIRE(undoManager->canUndo());
-
-                undoManager->undo();
-
-                REQUIRE(fixture.regionCount() == baseline);
+                previousEnd = range.getEnd();
             }
         }
-    }
 
-    DeletedAtShutdown::deleteAll();
-    MessageManager::deleteInstance();
+        THEN("one undo removes every region the edit created")
+        {
+            auto undoManager = fixture.engine->getAudioTrackContainer()->getUndoManager();
+            REQUIRE(undoManager->canUndo());
+
+            undoManager->undo();
+
+            REQUIRE(fixture.regionCount() == baseline);
+        }
+    }
 }
 
 SCENARIO("AutoEdit refuses to edit before the analyses are cached",
          "[engine][autoedit]")
 {
-    MessageManager::getInstance();
-    MessageManagerLock mmLock(Thread::getCurrentThread());
+    Fixture fixture;
 
+    // Deliberately cache only one of the two the merge needs. A partial
+    // merge would produce plausible but different cuts.
+    auto cache = fixture.engine->getAudioTrackContainer()->getAnalysisProvider()->getCache();
+    cache->put(fixture.analysedFile, AnalysisType::Segments, evenTimes(0.0f, 2.5f, 8));
+
+    AutoEdit autoEdit(fixture.engine.ptr());
+
+    AutoEditConfig config;
+    config.trackId = 0;
+
+    std::string reportedError;
+    auto onError = [&reportedError](std::string error) { reportedError = error; };
+
+    WHEN("the track is auto edited")
     {
-        auto fixture = makeFixture();
+        const auto succeeded = autoEdit.invokeAutoEdit(config, onError);
 
-        // Deliberately cache only one of the two the merge needs. A partial
-        // merge would produce plausible but different cuts.
-        auto cache = fixture.engine->getAudioTrackContainer()->getAnalysisProvider()->getCache();
-        cache->put(fixture.analysedFile, AnalysisType::Segments, evenTimes(0.0f, 2.5f, 8));
-
-        AutoEdit autoEdit(fixture.engine);
-
-        AutoEditConfig config;
-        config.trackId = 0;
-
-        std::string reportedError;
-        auto onError = [&reportedError](std::string error) { reportedError = error; };
-
-        WHEN("the track is auto edited")
+        THEN("it declines rather than cutting on a partial set")
         {
-            const auto succeeded = autoEdit.invokeAutoEdit(config, onError);
+            REQUIRE_FALSE(succeeded);
+            REQUIRE(fixture.regionCount() == fixture.baselineRegions);
+        }
 
-            THEN("it declines rather than cutting on a partial set")
-            {
-                REQUIRE_FALSE(succeeded);
-                REQUIRE(fixture.regionCount() == fixture.baselineRegions);
-            }
-
-            THEN("it names the analysis still outstanding")
-            {
-                REQUIRE_FALSE(reportedError.empty());
-                REQUIRE(reportedError.find(analysisTypeToString(AnalysisType::Beats))
-                            != std::string::npos);
-            }
+        THEN("it names the analysis still outstanding")
+        {
+            REQUIRE_FALSE(reportedError.empty());
+            REQUIRE(reportedError.find(analysisTypeToString(AnalysisType::Beats))
+                        != std::string::npos);
         }
     }
-
-    DeletedAtShutdown::deleteAll();
-    MessageManager::deleteInstance();
 }
 
 SCENARIO("AutoEdit reports whether the target's analyses are done",
          "[engine][autoedit]")
 {
-    MessageManager::getInstance();
-    MessageManagerLock mmLock(Thread::getCurrentThread());
+    Fixture fixture;
 
+    AutoEdit autoEdit(fixture.engine.ptr());
+
+    AutoEditConfig config;
+    config.trackId = 0;
+
+    WHEN("nothing is cached yet")
     {
-        auto fixture = makeFixture();
-
-        AutoEdit autoEdit(fixture.engine);
-
-        AutoEditConfig config;
-        config.trackId = 0;
-
-        WHEN("nothing is cached yet")
+        THEN("the analyses are not done")
         {
-            THEN("the analyses are not done")
-            {
-                REQUIRE_FALSE(autoEdit.isAnalysisDone(config));
-            }
-        }
-
-        WHEN("only one of the analyses the merge needs is cached")
-        {
-            auto cache = fixture.engine->getAudioTrackContainer()->getAnalysisProvider()->getCache();
-            cache->put(fixture.analysedFile, AnalysisType::Segments, evenTimes(0.0f, 2.5f, 8));
-
-            THEN("the analyses are still not done")
-            {
-                REQUIRE_FALSE(autoEdit.isAnalysisDone(config));
-            }
-        }
-
-        WHEN("all the analyses the merge needs are cached")
-        {
-            cacheMergeAnalyses(fixture);
-
-            THEN("the analyses are done")
-            {
-                REQUIRE(autoEdit.isAnalysisDone(config));
-            }
-        }
-
-        WHEN("the target does not resolve")
-        {
-            AutoEditConfig unresolvable;
-            unresolvable.trackId = 99;
-
-            THEN("there is nothing pending to wait for")
-            {
-                REQUIRE(autoEdit.isAnalysisDone(unresolvable));
-            }
+            REQUIRE_FALSE(autoEdit.isAnalysisDone(config));
         }
     }
 
-    DeletedAtShutdown::deleteAll();
-    MessageManager::deleteInstance();
+    WHEN("only one of the analyses the merge needs is cached")
+    {
+        auto cache = fixture.engine->getAudioTrackContainer()->getAnalysisProvider()->getCache();
+        cache->put(fixture.analysedFile, AnalysisType::Segments, evenTimes(0.0f, 2.5f, 8));
+
+        THEN("the analyses are still not done")
+        {
+            REQUIRE_FALSE(autoEdit.isAnalysisDone(config));
+        }
+    }
+
+    WHEN("all the analyses the merge needs are cached")
+    {
+        cacheMergeAnalyses(fixture);
+
+        THEN("the analyses are done")
+        {
+            REQUIRE(autoEdit.isAnalysisDone(config));
+        }
+    }
+
+    WHEN("the target does not resolve")
+    {
+        AutoEditConfig unresolvable;
+        unresolvable.trackId = 99;
+
+        THEN("there is nothing pending to wait for")
+        {
+            REQUIRE(autoEdit.isAnalysisDone(unresolvable));
+        }
+    }
 }
 
 SCENARIO("AutoEdit names the switched-off analyses waiting will not supply",
          "[engine][autoedit]")
 {
-    MessageManager::getInstance();
-    MessageManagerLock mmLock(Thread::getCurrentThread());
+    Fixture fixture;
 
+    auto worker = fixture.engine->getAudioResourceContainer()->getAnalysisWorker();
+    REQUIRE(worker != nullptr);
+
+    // Adding the file already queued its analyses; cancelled so nothing
+    // lands in the cache behind the scenario's back.
+    worker->cancelAll();
+
+    AutoEdit autoEdit(fixture.engine.ptr());
+
+    AutoEditConfig config;
+    config.trackId = 0;
+
+    WHEN("all analyses are enabled but none has finished yet")
     {
-        auto fixture = makeFixture();
-
-        auto worker = fixture.engine->getAudioResourceContainer()->getAnalysisWorker();
-        REQUIRE(worker != nullptr);
-
-        // Adding the file already queued its analyses; cancelled so nothing
-        // lands in the cache behind the scenario's back.
-        worker->cancelAll();
-
-        AutoEdit autoEdit(fixture.engine);
-
-        AutoEditConfig config;
-        config.trackId = 0;
-
-        WHEN("all analyses are enabled but none has finished yet")
+        THEN("nothing is switched off - waiting will supply them")
         {
-            THEN("nothing is switched off - waiting will supply them")
-            {
-                REQUIRE(autoEdit.findSwitchedOffMergeAnalyses(config).empty());
-            }
-        }
-
-        WHEN("automatic analysis is disabled entirely")
-        {
-            worker->setAutoAnalysisEnabled(false);
-
-            THEN("every missing merge analysis is reported")
-            {
-                REQUIRE(autoEdit.findSwitchedOffMergeAnalyses(config)
-                            == AnalysisProvider::getMergeAnalysisTypes());
-            }
-        }
-
-        WHEN("one merge analysis is excluded from the default types")
-        {
-            worker->setDefaultAnalysisTypes({ AnalysisType::Segments });
-
-            THEN("only the excluded one is reported")
-            {
-                REQUIRE(autoEdit.findSwitchedOffMergeAnalyses(config)
-                            == std::vector<AnalysisType> { AnalysisType::Beats });
-            }
-        }
-
-        WHEN("the switched-off analyses are already cached")
-        {
-            worker->setAutoAnalysisEnabled(false);
-            cacheMergeAnalyses(fixture);
-
-            THEN("nothing is reported - the results are there regardless")
-            {
-                REQUIRE(autoEdit.findSwitchedOffMergeAnalyses(config).empty());
-            }
+            REQUIRE(autoEdit.findSwitchedOffMergeAnalyses(config).empty());
         }
     }
 
-    DeletedAtShutdown::deleteAll();
-    MessageManager::deleteInstance();
+    WHEN("automatic analysis is disabled entirely")
+    {
+        worker->setAutoAnalysisEnabled(false);
+
+        THEN("every missing merge analysis is reported")
+        {
+            REQUIRE(autoEdit.findSwitchedOffMergeAnalyses(config)
+                        == AnalysisProvider::getMergeAnalysisTypes());
+        }
+    }
+
+    WHEN("one merge analysis is excluded from the default types")
+    {
+        worker->setDefaultAnalysisTypes({ AnalysisType::Segments });
+
+        THEN("only the excluded one is reported")
+        {
+            REQUIRE(autoEdit.findSwitchedOffMergeAnalyses(config)
+                        == std::vector<AnalysisType> { AnalysisType::Beats });
+        }
+    }
+
+    WHEN("the switched-off analyses are already cached")
+    {
+        worker->setAutoAnalysisEnabled(false);
+        cacheMergeAnalyses(fixture);
+
+        THEN("nothing is reported - the results are there regardless")
+        {
+            REQUIRE(autoEdit.findSwitchedOffMergeAnalyses(config).empty());
+        }
+    }
 }
 
 SCENARIO("AutoEdit reports an unusable target instead of failing silently",
          "[engine][autoedit]")
 {
-    MessageManager::getInstance();
-    MessageManagerLock mmLock(Thread::getCurrentThread());
+    TestEngine engine;
 
+    AutoEdit autoEdit(engine.ptr());
+
+    std::string reportedError;
+    auto onError = [&reportedError](std::string error) { reportedError = error; };
+
+    WHEN("no such track exists")
     {
-        auto engine = AudiumFactory::createAudiumEngine();
+        AutoEditConfig config;
+        config.trackId = 99;
 
-        AutoEdit autoEdit(engine);
-
-        std::string reportedError;
-        auto onError = [&reportedError](std::string error) { reportedError = error; };
-
-        WHEN("no such track exists")
+        THEN("it declines with a reason")
         {
-            AutoEditConfig config;
-            config.trackId = 99;
-
-            THEN("it declines with a reason")
-            {
-                REQUIRE_FALSE(autoEdit.invokeAutoEdit(config, onError));
-                REQUIRE_FALSE(reportedError.empty());
-            }
+            REQUIRE_FALSE(autoEdit.invokeAutoEdit(config, onError));
+            REQUIRE_FALSE(reportedError.empty());
         }
-
-        engine = nullptr;
     }
-
-    DeletedAtShutdown::deleteAll();
-    MessageManager::deleteInstance();
 }
 
 SCENARIO("AutoEdit edits the audio the chosen playlist item refers to",
          "[engine][autoedit]")
 {
-    MessageManager::getInstance();
-    MessageManagerLock mmLock(Thread::getCurrentThread());
+    TestEngine engine;
 
+    auto testFilesDirectory = String(CURRENT_SOURCE_DIR) + String("/TestFiles/");
+    auto firstFile = File(testFilesDirectory + "_export_TRK-18.wav");
+    auto secondFile = File(testFilesDirectory + "TRK-18-epy-jul.wav");
+    REQUIRE(firstFile.existsAsFile());
+    REQUIRE(secondFile.existsAsFile());
+
+    auto trackContainer = engine->getAudioTrackContainer();
+
+    // The container makes a new track per call, so the second file is added
+    // to the same track directly - and at a position no playlist item
+    // occupies, so it gets its own resource group and item rather than
+    // joining the first as another channel.
+    trackContainer->addAudioFiles({ firstFile.getFullPathName() }, 0.0, nullptr, false);
+
+    auto track = trackContainer->getAudioTrack(0);
+    REQUIRE(track != nullptr);
+
+    track->addAudioFiles({ secondFile.getFullPathName() }, 1.0e9, nullptr, false);
+
+    auto playListItems = track->getPlayListContainer()->getPlayListItems();
+
+    // Only meaningful when the track really does carry two separate items.
+    if (playListItems.size() < 2)
+        SKIP("the two audio files did not produce two playlist items");
+
+    auto secondGroup = playListItems[1]->getRegion()->getResourceGroup();
+    REQUIRE(secondGroup != nullptr);
+    REQUIRE(secondGroup != playListItems[0]->getRegion()->getResourceGroup());
+
+    auto secondResource = secondGroup->getAudioResources()[0];
+    const auto secondAnalysed = File(secondResource->getFullPathName());
+
+    // Cache analyses for the second item's audio only. If the edit resolved
+    // its target any other way it would find nothing cached and decline.
+    // Shaped like cacheMergeAnalyses() so the merge places cuts clear of
+    // the clip's edges, where the sub-beat-sliver rule would skip them.
+    auto cache = trackContainer->getAnalysisProvider()->getCache();
+    cache->put(secondAnalysed, AnalysisType::Segments, evenTimes(0.0f, 2.5f, 8));
+    cache->put(secondAnalysed, AnalysisType::Beats, evenTimes(0.0f, 0.5f, 40));
+
+    const auto baseline = secondGroup->getAudioRegionContainer()->getObjects().size();
+
+    AutoEdit autoEdit(engine.ptr());
+
+    AutoEditConfig config;
+    config.trackId = 0;
+    config.playlistItemId = 1;
+    config.numSegments = 4;
+
+    std::string reportedError;
+    auto onError = [&reportedError](std::string error) { reportedError = error; };
+
+    WHEN("the second playlist item is auto edited")
     {
-        auto engine = AudiumFactory::createAudiumEngine();
+        const auto succeeded = autoEdit.invokeAutoEdit(config, onError);
 
-        auto testFilesDirectory = String(CURRENT_SOURCE_DIR) + String("/TestFiles/");
-        auto firstFile = File(testFilesDirectory + "_export_TRK-18.wav");
-        auto secondFile = File(testFilesDirectory + "TRK-18-epy-jul.wav");
-        REQUIRE(firstFile.existsAsFile());
-        REQUIRE(secondFile.existsAsFile());
-
-        auto trackContainer = engine->getAudioTrackContainer();
-
-        // The container makes a new track per call, so the second file is added
-        // to the same track directly - and at a position no playlist item
-        // occupies, so it gets its own resource group and item rather than
-        // joining the first as another channel.
-        trackContainer->addAudioFiles({ firstFile.getFullPathName() }, 0.0, nullptr, false);
-
-        auto track = trackContainer->getAudioTrack(0);
-        REQUIRE(track != nullptr);
-
-        track->addAudioFiles({ secondFile.getFullPathName() }, 1.0e9, nullptr, false);
-
-        auto playListItems = track->getPlayListContainer()->getPlayListItems();
-
-        // Only meaningful when the track really does carry two separate items.
-        if (playListItems.size() < 2)
-            SKIP("the two audio files did not produce two playlist items");
-
-        auto secondGroup = playListItems[1]->getRegion()->getResourceGroup();
-        REQUIRE(secondGroup != nullptr);
-        REQUIRE(secondGroup != playListItems[0]->getRegion()->getResourceGroup());
-
-        auto secondResource = secondGroup->getAudioResources()[0];
-        const auto secondAnalysed = File(secondResource->getFullPathName());
-
-        // Cache analyses for the second item's audio only. If the edit resolved
-        // its target any other way it would find nothing cached and decline.
-        // Shaped like cacheMergeAnalyses() so the merge places cuts clear of
-        // the clip's edges, where the sub-beat-sliver rule would skip them.
-        auto cache = trackContainer->getAnalysisProvider()->getCache();
-        cache->put(secondAnalysed, AnalysisType::Segments, evenTimes(0.0f, 2.5f, 8));
-        cache->put(secondAnalysed, AnalysisType::Beats, evenTimes(0.0f, 0.5f, 40));
-
-        const auto baseline = secondGroup->getAudioRegionContainer()->getObjects().size();
-
-        AutoEdit autoEdit(engine);
-
-        AutoEditConfig config;
-        config.trackId = 0;
-        config.playlistItemId = 1;
-        config.numSegments = 4;
-
-        std::string reportedError;
-        auto onError = [&reportedError](std::string error) { reportedError = error; };
-
-        WHEN("the second playlist item is auto edited")
+        THEN("it edits that item's audio, not the track's first")
         {
-            const auto succeeded = autoEdit.invokeAutoEdit(config, onError);
+            INFO("error was: " << reportedError);
+            REQUIRE(succeeded);
 
-            THEN("it edits that item's audio, not the track's first")
-            {
-                INFO("error was: " << reportedError);
-                REQUIRE(succeeded);
+            // Re-query: the undoable action rebuilt the container.
+            auto items = trackContainer->getAudioTrack(0)->getPlayListContainer()->getPlayListItems();
+            REQUIRE(items.size() >= 2);
 
-                // Re-query: the undoable action rebuilt the container.
-                auto items = trackContainer->getAudioTrack(0)->getPlayListContainer()->getPlayListItems();
-                REQUIRE(items.size() >= 2);
-
-                auto group = items[1]->getRegion()->getResourceGroup();
-                REQUIRE(group->getAudioRegionContainer()->getObjects().size() > baseline);
-            }
+            auto group = items[1]->getRegion()->getResourceGroup();
+            REQUIRE(group->getAudioRegionContainer()->getObjects().size() > baseline);
         }
-
-        engine = nullptr;
     }
-
-    DeletedAtShutdown::deleteAll();
-    MessageManager::deleteInstance();
 }
 
 SCENARIO("AutoEdit cuts only what the selected clip covers", "[engine][autoedit]")
 {
-    MessageManager::getInstance();
-    MessageManagerLock mmLock(Thread::getCurrentThread());
+    Fixture fixture;
+    cacheMergeAnalyses(fixture);
+
+    // Shrink the clip to the middle of the file. The analyses still
+    // describe all of it, so anything outside this window has to be
+    // discarded rather than cut.
+    const juce::Range<double> clip { 4.0, 12.0 };
 
     {
-        auto fixture = makeFixture();
-        cacheMergeAnalyses(fixture);
-
-        // Shrink the clip to the middle of the file. The analyses still
-        // describe all of it, so anything outside this window has to be
-        // discarded rather than cut.
-        const juce::Range<double> clip { 4.0, 12.0 };
-
-        {
-            auto items = fixture.track()->getPlayListContainer()->getPlayListItems();
-            REQUIRE_FALSE(items.empty());
-            items[0]->getRegion()->setRegionData(clip, audium::seconds);
-        }
-
-        const auto baseline = fixture.regionCount();
-
-        AutoEdit autoEdit(fixture.engine);
-
-        AutoEditConfig config;
-        config.trackId = 0;
-        config.playlistItemId = 0;
-        config.numSegments = 8;
-
-        std::string reportedError;
-        auto onError = [&reportedError](std::string error) { reportedError = error; };
-
-        WHEN("the clip is auto edited")
-        {
-            const auto succeeded = autoEdit.invokeAutoEdit(config, onError);
-
-            THEN("regions are created")
-            {
-                INFO("error was: " << reportedError);
-                REQUIRE(succeeded);
-                REQUIRE(fixture.regionCount() > baseline);
-            }
-
-            THEN("none of them reaches outside the clip")
-            {
-                std::vector<juce::Range<double>> created;
-
-                for (const auto& region : fixture.createdRegions())
-                    created.push_back(region->getRegionData(audium::seconds));
-
-                REQUIRE_FALSE(created.empty());
-
-                for (const auto& range : created)
-                {
-                    REQUIRE(range.getStart() >= clip.getStart() - 0.001);
-                    REQUIRE(range.getEnd() <= clip.getEnd() + 0.001);
-                }
-            }
-
-            THEN("together they span the clip exactly")
-            {
-                std::vector<juce::Range<double>> created;
-
-                for (const auto& region : fixture.createdRegions())
-                    created.push_back(region->getRegionData(audium::seconds));
-
-                std::sort(created.begin(), created.end(),
-                          [](const auto& a, const auto& b) { return a.getStart() < b.getStart(); });
-
-                REQUIRE(created.front().getStart() == Catch::Approx(clip.getStart()).margin(0.001));
-                REQUIRE(created.back().getEnd() == Catch::Approx(clip.getEnd()).margin(0.001));
-            }
-        }
+        auto items = fixture.track()->getPlayListContainer()->getPlayListItems();
+        REQUIRE_FALSE(items.empty());
+        items[0]->getRegion()->setRegionData(clip, audium::seconds);
     }
 
-    DeletedAtShutdown::deleteAll();
-    MessageManager::deleteInstance();
-}
+    const auto baseline = fixture.regionCount();
 
-SCENARIO("AutoEdit's first segment begins where the clip does", "[engine][autoedit]")
-{
-    MessageManager::getInstance();
-    MessageManagerLock mmLock(Thread::getCurrentThread());
+    AutoEdit autoEdit(fixture.engine.ptr());
 
+    AutoEditConfig config;
+    config.trackId = 0;
+    config.playlistItemId = 0;
+    config.numSegments = 8;
+
+    std::string reportedError;
+    auto onError = [&reportedError](std::string error) { reportedError = error; };
+
+    WHEN("the clip is auto edited")
     {
-        auto fixture = makeFixture();
-        cacheMergeAnalyses(fixture);
+        const auto succeeded = autoEdit.invokeAutoEdit(config, onError);
 
-        // A clip that starts partway into its audio: the edit covers what the
-        // clip covers, so the first segment starts where it does and the last
-        // ends where it ends.
-        const juce::Range<double> clip { 3.0, 15.0 };
-
+        THEN("regions are created")
         {
-            auto items = fixture.track()->getPlayListContainer()->getPlayListItems();
-            REQUIRE_FALSE(items.empty());
-            items[0]->getRegion()->setRegionData(clip, audium::seconds);
-        }
-
-        AutoEdit autoEdit(fixture.engine);
-
-        AutoEditConfig config;
-        config.trackId = 0;
-        config.numSegments = 8;
-        // -1 is what the dialog sends when its clip list is empty, which it is
-        // for clips under a second. The clip's start still has to be honoured.
-        config.playlistItemId = GENERATE(0, -1);
-
-        std::string reportedError;
-
-        WHEN("the clip is auto edited")
-        {
-            const auto succeeded = autoEdit.invokeAutoEdit(
-                config, [&reportedError](std::string e) { reportedError = e; });
-
             INFO("error was: " << reportedError);
             REQUIRE(succeeded);
+            REQUIRE(fixture.regionCount() > baseline);
+        }
 
+        THEN("none of them reaches outside the clip")
+        {
+            std::vector<juce::Range<double>> created;
+
+            for (const auto& region : fixture.createdRegions())
+                created.push_back(region->getRegionData(audium::seconds));
+
+            REQUIRE_FALSE(created.empty());
+
+            for (const auto& range : created)
+            {
+                REQUIRE(range.getStart() >= clip.getStart() - 0.001);
+                REQUIRE(range.getEnd() <= clip.getEnd() + 0.001);
+            }
+        }
+
+        THEN("together they span the clip exactly")
+        {
             std::vector<juce::Range<double>> created;
 
             for (const auto& region : fixture.createdRegions())
@@ -663,383 +542,412 @@ SCENARIO("AutoEdit's first segment begins where the clip does", "[engine][autoed
             std::sort(created.begin(), created.end(),
                       [](const auto& a, const auto& b) { return a.getStart() < b.getStart(); });
 
-            REQUIRE_FALSE(created.empty());
-
-            THEN("the first segment starts at the clip's start")
-            {
-                REQUIRE(created.front().getStart() == Catch::Approx(3.0).margin(0.001));
-            }
-
-            THEN("the last segment ends at the clip's end")
-            {
-                REQUIRE(created.back().getEnd() == Catch::Approx(15.0).margin(0.001));
-            }
-
-            THEN("they tile the clip without gaps")
-            {
-                for (size_t i = 1; i < created.size(); ++i)
-                    REQUIRE(created[i].getStart()
-                                == Catch::Approx(created[i - 1].getEnd()).margin(0.001));
-            }
+            REQUIRE(created.front().getStart() == Catch::Approx(clip.getStart()).margin(0.001));
+            REQUIRE(created.back().getEnd() == Catch::Approx(clip.getEnd()).margin(0.001));
         }
     }
+}
 
-    DeletedAtShutdown::deleteAll();
-    MessageManager::deleteInstance();
+SCENARIO("AutoEdit's first segment begins where the clip does", "[engine][autoedit]")
+{
+    Fixture fixture;
+    cacheMergeAnalyses(fixture);
+
+    // A clip that starts partway into its audio: the edit covers what the
+    // clip covers, so the first segment starts where it does and the last
+    // ends where it ends.
+    const juce::Range<double> clip { 3.0, 15.0 };
+
+    {
+        auto items = fixture.track()->getPlayListContainer()->getPlayListItems();
+        REQUIRE_FALSE(items.empty());
+        items[0]->getRegion()->setRegionData(clip, audium::seconds);
+    }
+
+    AutoEdit autoEdit(fixture.engine.ptr());
+
+    AutoEditConfig config;
+    config.trackId = 0;
+    config.numSegments = 8;
+    // -1 is what the dialog sends when its clip list is empty, which it is
+    // for clips under a second. The clip's start still has to be honoured.
+    config.playlistItemId = GENERATE(0, -1);
+
+    std::string reportedError;
+
+    WHEN("the clip is auto edited")
+    {
+        const auto succeeded = autoEdit.invokeAutoEdit(
+            config, [&reportedError](std::string e) { reportedError = e; });
+
+        INFO("error was: " << reportedError);
+        REQUIRE(succeeded);
+
+        std::vector<juce::Range<double>> created;
+
+        for (const auto& region : fixture.createdRegions())
+            created.push_back(region->getRegionData(audium::seconds));
+
+        std::sort(created.begin(), created.end(),
+                  [](const auto& a, const auto& b) { return a.getStart() < b.getStart(); });
+
+        REQUIRE_FALSE(created.empty());
+
+        THEN("the first segment starts at the clip's start")
+        {
+            REQUIRE(created.front().getStart() == Catch::Approx(3.0).margin(0.001));
+        }
+
+        THEN("the last segment ends at the clip's end")
+        {
+            REQUIRE(created.back().getEnd() == Catch::Approx(15.0).margin(0.001));
+        }
+
+        THEN("they tile the clip without gaps")
+        {
+            for (size_t i = 1; i < created.size(); ++i)
+                REQUIRE(created[i].getStart()
+                            == Catch::Approx(created[i - 1].getEnd()).margin(0.001));
+        }
+    }
 }
 
 SCENARIO("AutoEdit can replace the edited clip with its segments",
          "[engine][autoedit]")
 {
-    MessageManager::getInstance();
-    MessageManagerLock mmLock(Thread::getCurrentThread());
+    Fixture fixture;
+    cacheMergeAnalyses(fixture);
 
+    const auto playListItems = [&fixture]
     {
-        auto fixture = makeFixture();
-        cacheMergeAnalyses(fixture);
+        return fixture.track()->getPlayListContainer()->getPlayListItems();
+    };
 
-        const auto playListItems = [&fixture]
+    REQUIRE(playListItems().size() == 1);
+    const auto originalRegionName = playListItems()[0]->getRegion()->getName();
+
+    AutoEdit autoEdit(fixture.engine.ptr());
+
+    AutoEditConfig config;
+    config.trackId = 0;
+    config.playlistItemId = 0;
+    config.numSegments = 6;
+
+    std::string reportedError;
+    auto onError = [&reportedError](std::string error) { reportedError = error; };
+
+    GIVEN("the option left on, as it is by default")
+    {
+        REQUIRE(config.replacePlayListItem);
+
+        WHEN("the clip is auto edited")
         {
-            return fixture.track()->getPlayListContainer()->getPlayListItems();
-        };
+            INFO("error was: " << reportedError);
+            REQUIRE(autoEdit.invokeAutoEdit(config, onError));
 
-        REQUIRE(playListItems().size() == 1);
-        const auto originalRegionName = playListItems()[0]->getRegion()->getName();
-
-        AutoEdit autoEdit(fixture.engine);
-
-        AutoEditConfig config;
-        config.trackId = 0;
-        config.playlistItemId = 0;
-        config.numSegments = 6;
-
-        std::string reportedError;
-        auto onError = [&reportedError](std::string error) { reportedError = error; };
-
-        GIVEN("the option left on, as it is by default")
-        {
-            REQUIRE(config.replacePlayListItem);
-
-            WHEN("the clip is auto edited")
+            THEN("the arrangement now holds the segments instead of the clip")
             {
-                INFO("error was: " << reportedError);
-                REQUIRE(autoEdit.invokeAutoEdit(config, onError));
+                auto items = playListItems();
+                REQUIRE(items.size() > 1);
 
-                THEN("the arrangement now holds the segments instead of the clip")
-                {
-                    auto items = playListItems();
-                    REQUIRE(items.size() > 1);
+                for (const auto& item : items)
+                    REQUIRE(fixture.isCreated(item->getRegion()));
+            }
 
-                    for (const auto& item : items)
-                        REQUIRE(fixture.isCreated(item->getRegion()));
-                }
+            THEN("the whole-clip region is gone - Assemble must not pick it up")
+            {
+                auto items = playListItems();
+                REQUIRE(items.size() > 1);
 
-                THEN("the whole-clip region is gone - Assemble must not pick it up")
-                {
-                    auto items = playListItems();
-                    REQUIRE(items.size() > 1);
-
-                    auto regionContainer = items[0]->getRegion()->getResourceGroup()->getAudioRegionContainer();
-                    for (const auto& region : regionContainer->getObjects()) {
-                        INFO("remaining region: " << region->getName());
-                        REQUIRE(region->getName() != originalRegionName);
-                    }
-                }
-
-                THEN("the segments are named <clip>-seg-<number>")
-                {
-                    const auto prefix = originalRegionName + "-seg-";
-
-                    for (const auto& item : playListItems())
-                    {
-                        const auto name = item->getRegion()->getName();
-
-                        INFO("segment name: " << name);
-                        REQUIRE(name.startsWith(prefix));
-                        // The "-" separator reads as a sign to JUCE, hence abs.
-                        REQUIRE(std::abs(name.getTrailingIntValue()) > 0);
-                    }
-                }
-
-                THEN("they are in playing order")
-                {
-                    auto items = playListItems();
-                    double previousStart = -1.0;
-
-                    for (const auto& item : items)
-                    {
-                        const auto start = item->getRegion()->getRegionData(audium::seconds).getStart();
-                        REQUIRE(start > previousStart);
-                        previousStart = start;
-                    }
-                }
-
-                THEN("every joint carries a 20 ms crossfade reaching into the neighbours")
-                {
-                    auto items = playListItems();
-                    REQUIRE(items.size() > 1);
-
-                    for (size_t i = 0; i < items.size(); ++i)
-                    {
-                        auto& dynamics = items[i]->getDynamics();
-
-                        if (i > 0) {
-                            // full level from the clip start, fading in over the 20 ms before it
-                            REQUIRE(dynamics.getFadeIn(audium::seconds) == Catch::Approx(0.0));
-                            REQUIRE(dynamics.getFadeInStart(audium::seconds) == Catch::Approx(-0.02).margin(0.001));
-                        }
-                        else {
-                            REQUIRE(dynamics.getFadeIn(audium::seconds) == Catch::Approx(0.0));
-                            REQUIRE(dynamics.getFadeInStart(audium::seconds) == Catch::Approx(0.0));
-                        }
-
-                        if (i < items.size() - 1) {
-                            // full level to the clip end, fading out over the 20 ms after it
-                            REQUIRE(dynamics.getFadeOut(audium::seconds) == Catch::Approx(0.0));
-                            REQUIRE(dynamics.getFadeOutEnd(audium::seconds) == Catch::Approx(-0.02).margin(0.001));
-                            REQUIRE(dynamics.getFadeOutCurve() == Catch::Approx(0.5));
-                        }
-                        else {
-                            REQUIRE(dynamics.getFadeOut(audium::seconds) == Catch::Approx(0.0));
-                        }
-                    }
-                }
-
-                THEN("one undo puts the clip back")
-                {
-                    auto undoManager = fixture.engine->getAudioTrackContainer()->getUndoManager();
-                    REQUIRE(undoManager->canUndo());
-
-                    undoManager->undo();
-
-                    auto items = playListItems();
-                    REQUIRE(items.size() == 1);
-                    REQUIRE(items[0]->getRegion()->getName() == originalRegionName);
+                auto regionContainer = items[0]->getRegion()->getResourceGroup()->getAudioRegionContainer();
+                for (const auto& region : regionContainer->getObjects()) {
+                    INFO("remaining region: " << region->getName());
+                    REQUIRE(region->getName() != originalRegionName);
                 }
             }
-        }
 
-        GIVEN("a linear crossfade curve")
-        {
-            config.crossfadeCurve = 1.0;
-
-            WHEN("the clip is auto edited")
+            THEN("the segments are named <clip>-seg-<number>")
             {
-                INFO("error was: " << reportedError);
-                REQUIRE(autoEdit.invokeAutoEdit(config, onError));
+                const auto prefix = originalRegionName + "-seg-";
 
-                THEN("the joint fades carry the linear exponent")
+                for (const auto& item : playListItems())
                 {
-                    auto items = playListItems();
-                    REQUIRE(items.size() > 1);
+                    const auto name = item->getRegion()->getName();
 
-                    for (size_t i = 0; i < items.size(); ++i)
-                    {
-                        auto& dynamics = items[i]->getDynamics();
-                        if (i > 0)
-                            REQUIRE(dynamics.getFadeInCurve() == Catch::Approx(1.0));
-                        if (i < items.size() - 1)
-                            REQUIRE(dynamics.getFadeOutCurve() == Catch::Approx(1.0));
-                    }
+                    INFO("segment name: " << name);
+                    REQUIRE(name.startsWith(prefix));
+                    // The "-" separator reads as a sign to JUCE, hence abs.
+                    REQUIRE(std::abs(name.getTrailingIntValue()) > 0);
                 }
             }
-        }
 
-        GIVEN("crossfades turned off")
-        {
-            config.crossfades = false;
-
-            WHEN("the clip is auto edited")
+            THEN("they are in playing order")
             {
-                INFO("error was: " << reportedError);
-                REQUIRE(autoEdit.invokeAutoEdit(config, onError));
+                auto items = playListItems();
+                double previousStart = -1.0;
 
-                THEN("the segments carry no fades")
+                for (const auto& item : items)
                 {
-                    auto items = playListItems();
-                    REQUIRE(items.size() > 1);
+                    const auto start = item->getRegion()->getRegionData(audium::seconds).getStart();
+                    REQUIRE(start > previousStart);
+                    previousStart = start;
+                }
+            }
 
-                    for (const auto& item : items)
-                    {
-                        auto& dynamics = item->getDynamics();
+            THEN("every joint carries a 20 ms crossfade reaching into the neighbours")
+            {
+                auto items = playListItems();
+                REQUIRE(items.size() > 1);
+
+                for (size_t i = 0; i < items.size(); ++i)
+                {
+                    auto& dynamics = items[i]->getDynamics();
+
+                    if (i > 0) {
+                        // full level from the clip start, fading in over the 20 ms before it
                         REQUIRE(dynamics.getFadeIn(audium::seconds) == Catch::Approx(0.0));
-                        REQUIRE(dynamics.getFadeOut(audium::seconds) == Catch::Approx(0.0));
+                        REQUIRE(dynamics.getFadeInStart(audium::seconds) == Catch::Approx(-0.02).margin(0.001));
+                    }
+                    else {
+                        REQUIRE(dynamics.getFadeIn(audium::seconds) == Catch::Approx(0.0));
                         REQUIRE(dynamics.getFadeInStart(audium::seconds) == Catch::Approx(0.0));
-                        REQUIRE(dynamics.getFadeOutEnd(audium::seconds) == Catch::Approx(0.0));
+                    }
+
+                    if (i < items.size() - 1) {
+                        // full level to the clip end, fading out over the 20 ms after it
+                        REQUIRE(dynamics.getFadeOut(audium::seconds) == Catch::Approx(0.0));
+                        REQUIRE(dynamics.getFadeOutEnd(audium::seconds) == Catch::Approx(-0.02).margin(0.001));
+                        REQUIRE(dynamics.getFadeOutCurve() == Catch::Approx(0.5));
+                    }
+                    else {
+                        REQUIRE(dynamics.getFadeOut(audium::seconds) == Catch::Approx(0.0));
                     }
                 }
             }
-        }
 
-        GIVEN("the option turned off")
-        {
-            config.replacePlayListItem = false;
-
-            WHEN("the clip is auto edited")
+            THEN("one undo puts the clip back")
             {
-                INFO("error was: " << reportedError);
-                REQUIRE(autoEdit.invokeAutoEdit(config, onError));
+                auto undoManager = fixture.engine->getAudioTrackContainer()->getUndoManager();
+                REQUIRE(undoManager->canUndo());
 
-                THEN("the arrangement is left as it was")
-                {
-                    auto items = playListItems();
-                    REQUIRE(items.size() == 1);
-                    REQUIRE(items[0]->getRegion()->getName() == originalRegionName);
-                }
+                undoManager->undo();
 
-                THEN("the segments were still created")
+                auto items = playListItems();
+                REQUIRE(items.size() == 1);
+                REQUIRE(items[0]->getRegion()->getName() == originalRegionName);
+            }
+        }
+    }
+
+    GIVEN("a linear crossfade curve")
+    {
+        config.crossfadeCurve = 1.0;
+
+        WHEN("the clip is auto edited")
+        {
+            INFO("error was: " << reportedError);
+            REQUIRE(autoEdit.invokeAutoEdit(config, onError));
+
+            THEN("the joint fades carry the linear exponent")
+            {
+                auto items = playListItems();
+                REQUIRE(items.size() > 1);
+
+                for (size_t i = 0; i < items.size(); ++i)
                 {
-                    REQUIRE(fixture.regionCount() > 1);
+                    auto& dynamics = items[i]->getDynamics();
+                    if (i > 0)
+                        REQUIRE(dynamics.getFadeInCurve() == Catch::Approx(1.0));
+                    if (i < items.size() - 1)
+                        REQUIRE(dynamics.getFadeOutCurve() == Catch::Approx(1.0));
                 }
             }
         }
     }
 
-    DeletedAtShutdown::deleteAll();
-    MessageManager::deleteInstance();
+    GIVEN("crossfades turned off")
+    {
+        config.crossfades = false;
+
+        WHEN("the clip is auto edited")
+        {
+            INFO("error was: " << reportedError);
+            REQUIRE(autoEdit.invokeAutoEdit(config, onError));
+
+            THEN("the segments carry no fades")
+            {
+                auto items = playListItems();
+                REQUIRE(items.size() > 1);
+
+                for (const auto& item : items)
+                {
+                    auto& dynamics = item->getDynamics();
+                    REQUIRE(dynamics.getFadeIn(audium::seconds) == Catch::Approx(0.0));
+                    REQUIRE(dynamics.getFadeOut(audium::seconds) == Catch::Approx(0.0));
+                    REQUIRE(dynamics.getFadeInStart(audium::seconds) == Catch::Approx(0.0));
+                    REQUIRE(dynamics.getFadeOutEnd(audium::seconds) == Catch::Approx(0.0));
+                }
+            }
+        }
+    }
+
+    GIVEN("the option turned off")
+    {
+        config.replacePlayListItem = false;
+
+        WHEN("the clip is auto edited")
+        {
+            INFO("error was: " << reportedError);
+            REQUIRE(autoEdit.invokeAutoEdit(config, onError));
+
+            THEN("the arrangement is left as it was")
+            {
+                auto items = playListItems();
+                REQUIRE(items.size() == 1);
+                REQUIRE(items[0]->getRegion()->getName() == originalRegionName);
+            }
+
+            THEN("the segments were still created")
+            {
+                REQUIRE(fixture.regionCount() > 1);
+            }
+        }
+    }
 }
 
 SCENARIO("AutoEdit resolves the segment count the edit would cut inside the clip",
          "[engine][autoedit][parameter]")
 {
-    MessageManager::getInstance();
-    MessageManagerLock mmLock(Thread::getCurrentThread());
+    Fixture fixture;
 
+    auto cache = fixture.engine->getAudioTrackContainer()->getAnalysisProvider()->getCache();
+
+    AutoEdit autoEdit(fixture.engine.ptr());
+
+    AutoEditConfig config;
+    config.trackId = 0;
+    config.numSegments = 6;
+
+    std::string reportedError;
+    auto onError = [&reportedError](std::string error) { reportedError = error; };
+
+    auto createdSegments = [&fixture]() {
+        return (int) fixture.createdRegions().size();
+    };
+
+    WHEN("the measure parameter is on and the material's tempo is cached")
     {
-        auto fixture = makeFixture();
+        // Analyses spanning the whole (roughly one minute) file, with
+        // structural events far enough apart to clear the parameter's
+        // minimum segment length, so the merge places cuts well inside
+        // the clip - the grid snapping the edit applies skips cuts within
+        // a beat of the clip's edges.
+        cache->put(fixture.analysedFile, AnalysisType::Segments, evenTimes(0.0f, 10.0f, 6));
+        cache->put(fixture.analysedFile, AnalysisType::Beats,
+                   evenTimes(0.0f, 0.5f, 120), 120.0f);
 
-        auto cache = fixture.engine->getAudioTrackContainer()->getAnalysisProvider()->getCache();
+        config.segmentMeasures = 4.0;
 
-        AutoEdit autoEdit(fixture.engine);
+        const auto predicted = autoEdit.resolveNumSegments(config);
 
-        AutoEditConfig config;
-        config.trackId = 0;
-        config.numSegments = 6;
-
-        std::string reportedError;
-        auto onError = [&reportedError](std::string error) { reportedError = error; };
-
-        auto createdSegments = [&fixture]() {
-            return (int) fixture.createdRegions().size();
-        };
-
-        WHEN("the measure parameter is on and the material's tempo is cached")
+        THEN("it predicts exactly the segments the edit then creates")
         {
-            // Analyses spanning the whole (roughly one minute) file, with
-            // structural events far enough apart to clear the parameter's
-            // minimum segment length, so the merge places cuts well inside
-            // the clip - the grid snapping the edit applies skips cuts within
-            // a beat of the clip's edges.
-            cache->put(fixture.analysedFile, AnalysisType::Segments, evenTimes(0.0f, 10.0f, 6));
-            cache->put(fixture.analysedFile, AnalysisType::Beats,
-                       evenTimes(0.0f, 0.5f, 120), 120.0f);
+            REQUIRE(predicted > 0);
 
-            config.segmentMeasures = 4.0;
+            const auto succeeded = autoEdit.invokeAutoEdit(config, onError);
 
-            const auto predicted = autoEdit.resolveNumSegments(config);
-
-            THEN("it predicts exactly the segments the edit then creates")
-            {
-                REQUIRE(predicted > 0);
-
-                const auto succeeded = autoEdit.invokeAutoEdit(config, onError);
-
-                INFO("error was: " << reportedError);
-                REQUIRE(succeeded);
-                REQUIRE(createdSegments() == predicted);
-            }
-
-            // Four measures at 120 bpm are eight seconds a segment, and the
-            // bounds bracket that: half below, double above.
-            THEN("the length bounds resolve to four and sixteen seconds")
-            {
-                const auto bounds = autoEdit.resolveSegmentLengthBounds(config);
-
-                REQUIRE(bounds.getStart() == Catch::Approx(4.0));
-                REQUIRE(bounds.getEnd() == Catch::Approx(16.0));
-            }
+            INFO("error was: " << reportedError);
+            REQUIRE(succeeded);
+            REQUIRE(createdSegments() == predicted);
         }
 
-        WHEN("the clip covers only part of the file")
+        // Four measures at 120 bpm are eight seconds a segment, and the
+        // bounds bracket that: half below, double above.
+        THEN("the length bounds resolve to four and sixteen seconds")
         {
-            cacheMergeAnalyses(fixture);
+            const auto bounds = autoEdit.resolveSegmentLengthBounds(config);
 
-            // The analyses still describe the whole file, but only the
-            // boundaries inside this window become cuts - and only they are
-            // counted.
-            const juce::Range<double> clip { 4.0, 12.0 };
-
-            {
-                auto items = fixture.track()->getPlayListContainer()->getPlayListItems();
-                REQUIRE_FALSE(items.empty());
-                items[0]->getRegion()->setRegionData(clip, audium::seconds);
-            }
-
-            config.playlistItemId = 0;
-            config.numSegments = 8;
-
-            const auto wholeFile = [&] {
-                AutoEditConfig wholeConfig = config;
-                wholeConfig.playlistItemId = -1;
-
-                // The fallback target is the same clip, so widen it back for
-                // the whole-file reading.
-                auto items = fixture.track()->getPlayListContainer()->getPlayListItems();
-                const auto restore = items[0]->getRegion()->getRegionData(audium::seconds);
-                items[0]->getRegion()->setRegionData({ 0.0, fixture.audioLengthSeconds() },
-                                                     audium::seconds);
-
-                const auto count = autoEdit.resolveNumSegments(wholeConfig);
-                items[0]->getRegion()->setRegionData(restore, audium::seconds);
-
-                return count;
-            }();
-
-            const auto predicted = autoEdit.resolveNumSegments(config);
-
-            THEN("the count is the clip's, not the whole file's")
-            {
-                REQUIRE(predicted > 0);
-                REQUIRE(predicted <= wholeFile);
-
-                const auto succeeded = autoEdit.invokeAutoEdit(config, onError);
-
-                INFO("error was: " << reportedError);
-                REQUIRE(succeeded);
-                REQUIRE(createdSegments() == predicted);
-            }
-        }
-
-        WHEN("the analyses are not cached yet")
-        {
-            config.segmentMeasures = 4.0;
-
-            THEN("there is nothing to count and numSegments is used as given")
-            {
-                REQUIRE(autoEdit.resolveNumSegments(config) == 6);
-            }
-
-            THEN("no length bounds resolve either")
-            {
-                REQUIRE(autoEdit.resolveSegmentLengthBounds(config).isEmpty());
-            }
-        }
-
-        WHEN("the parameter is off")
-        {
-            cacheMergeAnalyses(fixture);
-
-            REQUIRE(config.segmentMeasures == 0.0);
-
-            THEN("no length bounds resolve")
-            {
-                REQUIRE(autoEdit.resolveSegmentLengthBounds(config).isEmpty());
-            }
+            REQUIRE(bounds.getStart() == Catch::Approx(4.0));
+            REQUIRE(bounds.getEnd() == Catch::Approx(16.0));
         }
     }
 
-    DeletedAtShutdown::deleteAll();
-    MessageManager::deleteInstance();
+    WHEN("the clip covers only part of the file")
+    {
+        cacheMergeAnalyses(fixture);
+
+        // The analyses still describe the whole file, but only the
+        // boundaries inside this window become cuts - and only they are
+        // counted.
+        const juce::Range<double> clip { 4.0, 12.0 };
+
+        {
+            auto items = fixture.track()->getPlayListContainer()->getPlayListItems();
+            REQUIRE_FALSE(items.empty());
+            items[0]->getRegion()->setRegionData(clip, audium::seconds);
+        }
+
+        config.playlistItemId = 0;
+        config.numSegments = 8;
+
+        const auto wholeFile = [&] {
+            AutoEditConfig wholeConfig = config;
+            wholeConfig.playlistItemId = -1;
+
+            // The fallback target is the same clip, so widen it back for
+            // the whole-file reading.
+            auto items = fixture.track()->getPlayListContainer()->getPlayListItems();
+            const auto restore = items[0]->getRegion()->getRegionData(audium::seconds);
+            items[0]->getRegion()->setRegionData({ 0.0, fixture.audioLengthSeconds() },
+                                                 audium::seconds);
+
+            const auto count = autoEdit.resolveNumSegments(wholeConfig);
+            items[0]->getRegion()->setRegionData(restore, audium::seconds);
+
+            return count;
+        }();
+
+        const auto predicted = autoEdit.resolveNumSegments(config);
+
+        THEN("the count is the clip's, not the whole file's")
+        {
+            REQUIRE(predicted > 0);
+            REQUIRE(predicted <= wholeFile);
+
+            const auto succeeded = autoEdit.invokeAutoEdit(config, onError);
+
+            INFO("error was: " << reportedError);
+            REQUIRE(succeeded);
+            REQUIRE(createdSegments() == predicted);
+        }
+    }
+
+    WHEN("the analyses are not cached yet")
+    {
+        config.segmentMeasures = 4.0;
+
+        THEN("there is nothing to count and numSegments is used as given")
+        {
+            REQUIRE(autoEdit.resolveNumSegments(config) == 6);
+        }
+
+        THEN("no length bounds resolve either")
+        {
+            REQUIRE(autoEdit.resolveSegmentLengthBounds(config).isEmpty());
+        }
+    }
+
+    WHEN("the parameter is off")
+    {
+        cacheMergeAnalyses(fixture);
+
+        REQUIRE(config.segmentMeasures == 0.0);
+
+        THEN("no length bounds resolve")
+        {
+            REQUIRE(autoEdit.resolveSegmentLengthBounds(config).isEmpty());
+        }
+    }
 }
 
 SCENARIO("AutoEdit snaps boundaries onto the project's beat grid",
@@ -1157,50 +1065,42 @@ SCENARIO("AutoEdit snaps boundaries onto the project's beat grid",
 SCENARIO("AutoEdit previews only the boundaries the edit would cut",
          "[engine][autoedit][preview]")
 {
-    MessageManager::getInstance();
-    MessageManagerLock mmLock(Thread::getCurrentThread());
+    Fixture fixture;
+    cacheMergeAnalyses(fixture);
 
+    AutoEdit autoEdit(fixture.engine.ptr());
+
+    AutoEditConfig config;
+    config.trackId = 0;
+    config.numSegments = 6;
+
+    WHEN("a preview is published")
     {
-        auto fixture = makeFixture();
-        cacheMergeAnalyses(fixture);
+        REQUIRE(autoEdit.previewAutoEdit(config));
 
-        AutoEdit autoEdit(fixture.engine);
+        auto analysisProvider = fixture.engine->getAudioTrackContainer()->getAnalysisProvider();
+        auto item = fixture.track()->getPlayListContainer()->getPlayListItem(0);
+        REQUIRE(item != nullptr);
 
-        AutoEditConfig config;
-        config.trackId = 0;
-        config.numSegments = 6;
+        const auto preview = analysisProvider->getMergePreview(fixture.analysedFile,
+                                                               0, item->getId());
 
-        WHEN("a preview is published")
+        // The merge always emits the file's own edges (a boundary at 0 in
+        // particular), which the edit never cuts - shown in the preview
+        // they would read as an edit right at the clip's start.
+        THEN("no previewed boundary sits on or outside the clip's edges")
         {
-            REQUIRE(autoEdit.previewAutoEdit(config));
+            REQUIRE_FALSE(preview.empty());
 
-            auto analysisProvider = fixture.engine->getAudioTrackContainer()->getAnalysisProvider();
-            auto item = fixture.track()->getPlayListContainer()->getPlayListItem(0);
-            REQUIRE(item != nullptr);
+            const auto extent = item->getRegionData(audium::seconds);
 
-            const auto preview = analysisProvider->getMergePreview(fixture.analysedFile,
-                                                                   0, item->getId());
-
-            // The merge always emits the file's own edges (a boundary at 0 in
-            // particular), which the edit never cuts - shown in the preview
-            // they would read as an edit right at the clip's start.
-            THEN("no previewed boundary sits on or outside the clip's edges")
+            for (auto boundary : preview)
             {
-                REQUIRE_FALSE(preview.empty());
-
-                const auto extent = item->getRegionData(audium::seconds);
-
-                for (auto boundary : preview)
-                {
-                    REQUIRE(boundary > extent.getStart());
-                    REQUIRE(boundary < extent.getEnd());
-                }
+                REQUIRE(boundary > extent.getStart());
+                REQUIRE(boundary < extent.getEnd());
             }
         }
     }
-
-    DeletedAtShutdown::deleteAll();
-    MessageManager::deleteInstance();
 }
 
 SCENARIO("AutoEdit skips edge slivers for clips that do not sit on the grid",
@@ -1242,150 +1142,134 @@ SCENARIO("AutoEdit skips edge slivers for clips that do not sit on the grid",
 SCENARIO("AutoEdit keeps the edited clip's timeline position",
          "[engine][autoedit]")
 {
-    MessageManager::getInstance();
-    MessageManagerLock mmLock(Thread::getCurrentThread());
+    Fixture fixture;
+    cacheMergeAnalyses(fixture);
 
+    // Move the clip away from the timeline origin while it stays the
+    // track's first item - the case where an insert-at-the-beginning
+    // heuristic used to shift the first segment left of where the clip
+    // sat.
+    const auto clipStartClocks = 960.0;
+
+    fixture.track()->getPlayListContainer()->getPlayListItem(0)
+        ->setAbsolutePosition(clipStartClocks, audium::clocks);
+
+    AutoEdit autoEdit(fixture.engine.ptr());
+
+    AutoEditConfig config;
+    config.trackId = 0;
+    config.numSegments = 6;
+
+    std::string reportedError;
+    auto onError = [&reportedError](std::string error) { reportedError = error; };
+
+    WHEN("the clip is auto edited in place")
     {
-        auto fixture = makeFixture();
-        cacheMergeAnalyses(fixture);
+        const auto succeeded = autoEdit.invokeAutoEdit(config, onError);
 
-        // Move the clip away from the timeline origin while it stays the
-        // track's first item - the case where an insert-at-the-beginning
-        // heuristic used to shift the first segment left of where the clip
-        // sat.
-        const auto clipStartClocks = 960.0;
+        INFO("error was: " << reportedError);
+        REQUIRE(succeeded);
 
-        fixture.track()->getPlayListContainer()->getPlayListItem(0)
-            ->setAbsolutePosition(clipStartClocks, audium::clocks);
-
-        AutoEdit autoEdit(fixture.engine);
-
-        AutoEditConfig config;
-        config.trackId = 0;
-        config.numSegments = 6;
-
-        std::string reportedError;
-        auto onError = [&reportedError](std::string error) { reportedError = error; };
-
-        WHEN("the clip is auto edited in place")
+        THEN("the segments tile the timeline from exactly the clip's position")
         {
-            const auto succeeded = autoEdit.invokeAutoEdit(config, onError);
+            // Re-query: the undoable action rebuilt the container.
+            auto items = fixture.track()->getPlayListContainer()->getPlayListItems();
 
-            INFO("error was: " << reportedError);
-            REQUIRE(succeeded);
+            std::vector<std::shared_ptr<PlayListItem>> segments;
 
-            THEN("the segments tile the timeline from exactly the clip's position")
+            for (const auto& item : items)
+                if (fixture.isCreated(item->getRegion()))
+                    segments.push_back(item);
+
+            REQUIRE_FALSE(segments.empty());
+
+            std::sort(segments.begin(), segments.end(), [](const auto& a, const auto& b) {
+                return a->getAbsolutePosition(audium::clocks) < b->getAbsolutePosition(audium::clocks);
+            });
+
+            auto expected = clipStartClocks;
+
+            for (const auto& segment : segments)
             {
-                // Re-query: the undoable action rebuilt the container.
-                auto items = fixture.track()->getPlayListContainer()->getPlayListItems();
-
-                std::vector<std::shared_ptr<PlayListItem>> segments;
-
-                for (const auto& item : items)
-                    if (fixture.isCreated(item->getRegion()))
-                        segments.push_back(item);
-
-                REQUIRE_FALSE(segments.empty());
-
-                std::sort(segments.begin(), segments.end(), [](const auto& a, const auto& b) {
-                    return a->getAbsolutePosition(audium::clocks) < b->getAbsolutePosition(audium::clocks);
-                });
-
-                auto expected = clipStartClocks;
-
-                for (const auto& segment : segments)
-                {
-                    REQUIRE(segment->getAbsolutePosition(audium::clocks)
-                                == Catch::Approx(expected));
-                    expected += segment->getRegionData(audium::clocks).getLength();
-                }
+                REQUIRE(segment->getAbsolutePosition(audium::clocks)
+                            == Catch::Approx(expected));
+                expected += segment->getRegionData(audium::clocks).getLength();
             }
         }
     }
-
-    DeletedAtShutdown::deleteAll();
-    MessageManager::deleteInstance();
 }
 
 SCENARIO("AutoEdit leaves the neighbouring clip where it was",
          "[engine][autoedit]")
 {
-    MessageManager::getInstance();
-    MessageManagerLock mmLock(Thread::getCurrentThread());
+    Fixture fixture;
+    cacheMergeAnalyses(fixture);
 
+    auto playListContainer = fixture.track()->getPlayListContainer();
+    auto items = playListContainer->getPlayListItems();
+    REQUIRE(items.size() == 1);
+
+    // A second clip sitting right behind the edited one - the worst case
+    // for an edit that inserts its segments on top of the clip, since any
+    // making-way would push this neighbour down the timeline.
+    const auto neighbourStartClocks =
+        items[0]->getAbsolutePositionRange(audium::clocks).getEnd();
+
+    auto neighbourRegion = fixture.resourceGroup()->getAudioRegionContainer()
+        ->createRegion("neighbour",
+                       items[0]->getRegion()->getRegionData(audium::seconds),
+                       fixture.track(),
+                       fixture.resourceGroup(),
+                       nullptr,
+                       audium::seconds);
+    REQUIRE(neighbourRegion != nullptr);
+    REQUIRE(playListContainer->createPlayListItemAtPositionUI(neighbourRegion,
+                                                              neighbourStartClocks,
+                                                              audium::clocks)
+                != nullptr);
+
+    AutoEdit autoEdit(fixture.engine.ptr());
+
+    AutoEditConfig config;
+    config.trackId = 0;
+    config.playlistItemId = 0;
+    config.numSegments = 6;
+
+    std::string reportedError;
+    auto onError = [&reportedError](std::string error) { reportedError = error; };
+
+    WHEN("the first clip is auto edited in place")
     {
-        auto fixture = makeFixture();
-        cacheMergeAnalyses(fixture);
+        const auto succeeded = autoEdit.invokeAutoEdit(config, onError);
 
-        auto playListContainer = fixture.track()->getPlayListContainer();
-        auto items = playListContainer->getPlayListItems();
-        REQUIRE(items.size() == 1);
+        INFO("error was: " << reportedError);
+        REQUIRE(succeeded);
 
-        // A second clip sitting right behind the edited one - the worst case
-        // for an edit that inserts its segments on top of the clip, since any
-        // making-way would push this neighbour down the timeline.
-        const auto neighbourStartClocks =
-            items[0]->getAbsolutePositionRange(audium::clocks).getEnd();
+        // Re-query: the undoable action rebuilt the container.
+        auto rebuilt = fixture.track()->getPlayListContainer()->getPlayListItems();
 
-        auto neighbourRegion = fixture.resourceGroup()->getAudioRegionContainer()
-            ->createRegion("neighbour",
-                           items[0]->getRegion()->getRegionData(audium::seconds),
-                           fixture.track(),
-                           fixture.resourceGroup(),
-                           nullptr,
-                           audium::seconds);
-        REQUIRE(neighbourRegion != nullptr);
-        REQUIRE(playListContainer->createPlayListItemAtPositionUI(neighbourRegion,
-                                                                  neighbourStartClocks,
-                                                                  audium::clocks)
-                    != nullptr);
+        std::shared_ptr<PlayListItem> neighbour;
+        size_t segmentCount = 0;
 
-        AutoEdit autoEdit(fixture.engine);
-
-        AutoEditConfig config;
-        config.trackId = 0;
-        config.playlistItemId = 0;
-        config.numSegments = 6;
-
-        std::string reportedError;
-        auto onError = [&reportedError](std::string error) { reportedError = error; };
-
-        WHEN("the first clip is auto edited in place")
+        for (const auto& item : rebuilt)
         {
-            const auto succeeded = autoEdit.invokeAutoEdit(config, onError);
+            // The neighbour was created after the fixture, so it counts as
+            // created too - it is told apart by its name.
+            if (item->getRegion()->getName() == "neighbour")
+                neighbour = item;
+            else if (fixture.isCreated(item->getRegion()))
+                ++segmentCount;
+        }
 
-            INFO("error was: " << reportedError);
-            REQUIRE(succeeded);
+        // Without more than one segment nothing would have been pushed
+        // and the scenario would pass vacuously.
+        REQUIRE(segmentCount > 1);
+        REQUIRE(neighbour != nullptr);
 
-            // Re-query: the undoable action rebuilt the container.
-            auto rebuilt = fixture.track()->getPlayListContainer()->getPlayListItems();
-
-            std::shared_ptr<PlayListItem> neighbour;
-            size_t segmentCount = 0;
-
-            for (const auto& item : rebuilt)
-            {
-                // The neighbour was created after the fixture, so it counts as
-                // created too - it is told apart by its name.
-                if (item->getRegion()->getName() == "neighbour")
-                    neighbour = item;
-                else if (fixture.isCreated(item->getRegion()))
-                    ++segmentCount;
-            }
-
-            // Without more than one segment nothing would have been pushed
-            // and the scenario would pass vacuously.
-            REQUIRE(segmentCount > 1);
-            REQUIRE(neighbour != nullptr);
-
-            THEN("the neighbouring clip keeps its timeline position")
-            {
-                REQUIRE(neighbour->getAbsolutePosition(audium::clocks)
-                            == Catch::Approx(neighbourStartClocks));
-            }
+        THEN("the neighbouring clip keeps its timeline position")
+        {
+            REQUIRE(neighbour->getAbsolutePosition(audium::clocks)
+                        == Catch::Approx(neighbourStartClocks));
         }
     }
-
-    DeletedAtShutdown::deleteAll();
-    MessageManager::deleteInstance();
 }

@@ -19,6 +19,8 @@
 #include "Engine/Resource/AudioResource.h"
 #include "Engine/Resource/AudioResourceContainer.h"
 
+#include "TestEngine.h"
+
 // The assemble step arranges the regions a previous auto edit cut, so the
 // engine scenarios run a native auto edit first - fed from a hand-populated
 // analysis cache, like the AutoEdit scenarios, so no analysis runs.
@@ -36,12 +38,32 @@ namespace {
  * instead.
  */
 struct Fixture {
-    std::shared_ptr<AudiumEngine> engine;
+    TestEngine engine;
     juce::File analysedFile;
+
+    Fixture()
+    {
+        auto testFilesDirectory = String(CURRENT_SOURCE_DIR) + String("/TestFiles/");
+        auto inFile = File(testFilesDirectory + "_export_TRK-18.wav");
+        REQUIRE(inFile.existsAsFile());
+
+        engine->getAudioTrackContainer()->addAudioFiles({ inFile.getFullPathName() },
+                                                        0.0,
+                                                        nullptr,
+                                                        false);
+
+        auto group = resourceGroup();
+        REQUIRE(group != nullptr);
+        REQUIRE_FALSE(group->getAudioResources().empty());
+
+        // The resource may reference a copy rather than the file handed in, so the
+        // cache has to be keyed off whatever it actually points at.
+        analysedFile = File(group->getAudioResources()[0]->getFullPathName());
+    }
 
     std::shared_ptr<AudioTrack> track() const
     {
-        return engine->getAudioTrackContainer()->getAudioTrack(0);
+        return engine.track(0);
     }
 
     std::shared_ptr<ResourceGroup> resourceGroup() const
@@ -91,11 +113,6 @@ struct Fixture {
 
         return names;
     }
-
-    ~Fixture()
-    {
-        engine = nullptr;
-    }
 };
 
 std::vector<float> evenTimes(float first, float interval, int count)
@@ -106,31 +123,6 @@ std::vector<float> evenTimes(float first, float interval, int count)
         times.push_back(first + interval * (float) i);
 
     return times;
-}
-
-Fixture makeFixture()
-{
-    Fixture fixture;
-    fixture.engine = AudiumFactory::createAudiumEngine();
-
-    auto testFilesDirectory = String(CURRENT_SOURCE_DIR) + String("/TestFiles/");
-    auto inFile = File(testFilesDirectory + "_export_TRK-18.wav");
-    REQUIRE(inFile.existsAsFile());
-
-    fixture.engine->getAudioTrackContainer()->addAudioFiles({ inFile.getFullPathName() },
-                                                            0.0,
-                                                            nullptr,
-                                                            false);
-
-    auto group = fixture.resourceGroup();
-    REQUIRE(group != nullptr);
-    REQUIRE_FALSE(group->getAudioResources().empty());
-
-    // The resource may reference a copy rather than the file handed in, so the
-    // cache has to be keyed off whatever it actually points at.
-    fixture.analysedFile = File(group->getAudioResources()[0]->getFullPathName());
-
-    return fixture;
 }
 
 // Populates the analyses the merge needs, shaped like real results.
@@ -148,7 +140,7 @@ void cutIntoSegments(Fixture& fixture)
 {
     cacheMergeAnalyses(fixture);
 
-    AutoEdit autoEdit(fixture.engine);
+    AutoEdit autoEdit(fixture.engine.ptr());
 
     AutoEditConfig config;
     config.trackId = 0;
@@ -300,274 +292,258 @@ TEST_CASE("chooseSequentialSequence thins the segments but keeps their order",
 SCENARIO("Assemble rebuilds the track's playlist from its regions",
          "[engine][assemble]")
 {
-    MessageManager::getInstance();
-    MessageManagerLock mmLock(Thread::getCurrentThread());
+    Fixture fixture;
+    cutIntoSegments(fixture);
 
+    const auto regionNamesBefore = fixture.regionNames();
+
+    AutoEdit autoEdit(fixture.engine.ptr());
+
+    AssembleConfig config;
+    config.trackId = 0;
+
+    std::string reportedError;
+    auto onError = [&reportedError](std::string error) { reportedError = error; };
+
+    WHEN("a random song of ten seconds is assembled")
     {
-        auto fixture = makeFixture();
-        cutIntoSegments(fixture);
+        config.mode = AssembleConfig::Mode::Random;
+        config.duration = 10.0;
 
-        const auto regionNamesBefore = fixture.regionNames();
+        const auto succeeded = autoEdit.invokeAssemble(config, onError);
 
-        AutoEdit autoEdit(fixture.engine);
-
-        AssembleConfig config;
-        config.trackId = 0;
-
-        std::string reportedError;
-        auto onError = [&reportedError](std::string error) { reportedError = error; };
-
-        WHEN("a random song of ten seconds is assembled")
+        THEN("it reports success without an error")
         {
-            config.mode = AssembleConfig::Mode::Random;
-            config.duration = 10.0;
+            INFO("error was: " << reportedError);
+            REQUIRE(succeeded);
+            REQUIRE(reportedError.empty());
+        }
 
-            const auto succeeded = autoEdit.invokeAssemble(config, onError);
+        THEN("the clips are butt-joined from the start of the timeline")
+        {
+            auto items = fixture.playListItems();
+            REQUIRE_FALSE(items.empty());
 
-            THEN("it reports success without an error")
+            double expectedPosition = 0.0;
+
+            for (const auto& item : items)
             {
-                INFO("error was: " << reportedError);
-                REQUIRE(succeeded);
-                REQUIRE(reportedError.empty());
-            }
-
-            THEN("the clips are butt-joined from the start of the timeline")
-            {
-                auto items = fixture.playListItems();
-                REQUIRE_FALSE(items.empty());
-
-                double expectedPosition = 0.0;
-
-                for (const auto& item : items)
-                {
-                    REQUIRE(item->getAbsolutePosition(audium::clocks)
-                            == Catch::Approx(expectedPosition).margin(0.001));
-                    expectedPosition += item->getRegionData(audium::clocks).getLength();
-                }
-            }
-
-            THEN("the song is at least as long as asked for")
-            {
-                double totalSeconds = 0.0;
-
-                for (const auto& item : fixture.playListItems())
-                    totalSeconds += item->getRegion()->getRegionData(audium::seconds).getLength();
-
-                REQUIRE(totalSeconds >= config.duration);
-            }
-
-            THEN("every clip plays one of the regions that already existed")
-            {
-                for (const auto& item : fixture.playListItems())
-                    REQUIRE(regionNamesBefore.contains(item->getRegion()->getName()));
-            }
-
-            THEN("no region was created or destroyed")
-            {
-                REQUIRE(fixture.regionNames() == regionNamesBefore);
-            }
-
-            THEN("assembling again with the same seed makes the same song")
-            {
-                const auto firstSong = fixture.playListRegionNames();
-
-                REQUIRE(autoEdit.invokeAssemble(config, onError));
-                REQUIRE(fixture.playListRegionNames() == firstSong);
+                REQUIRE(item->getAbsolutePosition(audium::clocks)
+                        == Catch::Approx(expectedPosition).margin(0.001));
+                expectedPosition += item->getRegionData(audium::clocks).getLength();
             }
         }
 
-        WHEN("a sequential song of exactly the material's length is assembled")
+        THEN("the song is at least as long as asked for")
         {
-            // Summed in the same order invokeAssemble sums, so the duration
-            // matches the total bit for bit and one full pass fills it.
-            juce::StringArray eligibleNames;
             double totalSeconds = 0.0;
 
-            for (const auto& region : fixture.track()->getRegions())
-            {
-                const auto length = region->getRegionData(audium::seconds).getLength();
+            for (const auto& item : fixture.playListItems())
+                totalSeconds += item->getRegion()->getRegionData(audium::seconds).getLength();
 
-                if (length > 0.0)
-                {
-                    eligibleNames.add(region->getName());
-                    totalSeconds += length;
-                }
-            }
-
-            config.mode = AssembleConfig::Mode::Sequential;
-            config.duration = totalSeconds;
-
-            const auto succeeded = autoEdit.invokeAssemble(config, onError);
-
-            THEN("every region appears exactly once, in region order")
-            {
-                INFO("error was: " << reportedError);
-                REQUIRE(succeeded);
-                REQUIRE(fixture.playListRegionNames() == eligibleNames);
-            }
+            REQUIRE(totalSeconds >= config.duration);
         }
 
-        WHEN("a sequential song longer than the material is assembled")
+        THEN("every clip plays one of the regions that already existed")
         {
-            config.mode = AssembleConfig::Mode::Sequential;
-            config.duration = 100.0;
-
-            const auto succeeded = autoEdit.invokeAssemble(config, onError);
-
-            THEN("the material repeats until the song is long enough")
-            {
-                INFO("error was: " << reportedError);
-                REQUIRE(succeeded);
-
-                double totalSeconds = 0.0;
-
-                for (const auto& item : fixture.playListItems())
-                    totalSeconds += item->getRegion()->getRegionData(audium::seconds).getLength();
-
-                REQUIRE(totalSeconds >= config.duration);
-            }
+            for (const auto& item : fixture.playListItems())
+                REQUIRE(regionNamesBefore.contains(item->getRegion()->getName()));
         }
 
-        WHEN("the previous arrangement is assembled over")
+        THEN("no region was created or destroyed")
         {
-            const auto itemsBefore = fixture.playListRegionNames();
+            REQUIRE(fixture.regionNames() == regionNamesBefore);
+        }
 
-            config.mode = AssembleConfig::Mode::Random;
-            config.duration = 10.0;
+        THEN("assembling again with the same seed makes the same song")
+        {
+            const auto firstSong = fixture.playListRegionNames();
 
             REQUIRE(autoEdit.invokeAssemble(config, onError));
+            REQUIRE(fixture.playListRegionNames() == firstSong);
+        }
+    }
 
-            THEN("one undo restores it")
+    WHEN("a sequential song of exactly the material's length is assembled")
+    {
+        // Summed in the same order invokeAssemble sums, so the duration
+        // matches the total bit for bit and one full pass fills it.
+        juce::StringArray eligibleNames;
+        double totalSeconds = 0.0;
+
+        for (const auto& region : fixture.track()->getRegions())
+        {
+            const auto length = region->getRegionData(audium::seconds).getLength();
+
+            if (length > 0.0)
             {
-                REQUIRE(fixture.playListRegionNames() != itemsBefore);
-
-                auto undoManager = fixture.engine->getAudioTrackContainer()->getUndoManager();
-                REQUIRE(undoManager->canUndo());
-
-                undoManager->undo();
-
-                REQUIRE(fixture.playListRegionNames() == itemsBefore);
+                eligibleNames.add(region->getName());
+                totalSeconds += length;
             }
         }
 
-        WHEN("a song is assembled with the default crossfades")
+        config.mode = AssembleConfig::Mode::Sequential;
+        config.duration = totalSeconds;
+
+        const auto succeeded = autoEdit.invokeAssemble(config, onError);
+
+        THEN("every region appears exactly once, in region order")
         {
-            // long enough to repeat the material, so there are joints
-            config.mode = AssembleConfig::Mode::Sequential;
-            config.duration = 100.0;
-
-            REQUIRE(autoEdit.invokeAssemble(config, onError));
-
-            THEN("every joint crossfades over 20 ms reaching into the neighbours")
-            {
-                auto items = fixture.playListItems();
-                REQUIRE(items.size() > 1);
-
-                for (size_t i = 0; i < items.size(); ++i)
-                {
-                    auto& dynamics = items[i]->getDynamics();
-
-                    // each clip at full level across its own region
-                    REQUIRE(dynamics.getFadeIn(audium::seconds) == Catch::Approx(0.0));
-                    REQUIRE(dynamics.getFadeOut(audium::seconds) == Catch::Approx(0.0));
-
-                    REQUIRE(dynamics.getFadeInStart(audium::seconds)
-                            == Catch::Approx(i > 0 ? -0.02 : 0.0).margin(0.001));
-                    REQUIRE(dynamics.getFadeOutEnd(audium::seconds)
-                            == Catch::Approx(i < items.size() - 1 ? -0.02 : 0.0).margin(0.001));
-                }
-            }
+            INFO("error was: " << reportedError);
+            REQUIRE(succeeded);
+            REQUIRE(fixture.playListRegionNames() == eligibleNames);
         }
+    }
 
-        WHEN("a song is assembled with crossfades turned off")
+    WHEN("a sequential song longer than the material is assembled")
+    {
+        config.mode = AssembleConfig::Mode::Sequential;
+        config.duration = 100.0;
+
+        const auto succeeded = autoEdit.invokeAssemble(config, onError);
+
+        THEN("the material repeats until the song is long enough")
         {
-            config.mode = AssembleConfig::Mode::Sequential;
-            config.duration = 100.0;
-            config.crossfades = false;
+            INFO("error was: " << reportedError);
+            REQUIRE(succeeded);
 
-            REQUIRE(autoEdit.invokeAssemble(config, onError));
+            double totalSeconds = 0.0;
 
-            THEN("the joints are hard butt joins")
+            for (const auto& item : fixture.playListItems())
+                totalSeconds += item->getRegion()->getRegionData(audium::seconds).getLength();
+
+            REQUIRE(totalSeconds >= config.duration);
+        }
+    }
+
+    WHEN("the previous arrangement is assembled over")
+    {
+        const auto itemsBefore = fixture.playListRegionNames();
+
+        config.mode = AssembleConfig::Mode::Random;
+        config.duration = 10.0;
+
+        REQUIRE(autoEdit.invokeAssemble(config, onError));
+
+        THEN("one undo restores it")
+        {
+            REQUIRE(fixture.playListRegionNames() != itemsBefore);
+
+            auto undoManager = fixture.engine->getAudioTrackContainer()->getUndoManager();
+            REQUIRE(undoManager->canUndo());
+
+            undoManager->undo();
+
+            REQUIRE(fixture.playListRegionNames() == itemsBefore);
+        }
+    }
+
+    WHEN("a song is assembled with the default crossfades")
+    {
+        // long enough to repeat the material, so there are joints
+        config.mode = AssembleConfig::Mode::Sequential;
+        config.duration = 100.0;
+
+        REQUIRE(autoEdit.invokeAssemble(config, onError));
+
+        THEN("every joint crossfades over 20 ms reaching into the neighbours")
+        {
+            auto items = fixture.playListItems();
+            REQUIRE(items.size() > 1);
+
+            for (size_t i = 0; i < items.size(); ++i)
             {
-                for (const auto& item : fixture.playListItems())
-                {
-                    auto& dynamics = item->getDynamics();
-                    REQUIRE(dynamics.getFadeInStart(audium::seconds) == Catch::Approx(0.0));
-                    REQUIRE(dynamics.getFadeOutEnd(audium::seconds) == Catch::Approx(0.0));
-                }
+                auto& dynamics = items[i]->getDynamics();
+
+                // each clip at full level across its own region
+                REQUIRE(dynamics.getFadeIn(audium::seconds) == Catch::Approx(0.0));
+                REQUIRE(dynamics.getFadeOut(audium::seconds) == Catch::Approx(0.0));
+
+                REQUIRE(dynamics.getFadeInStart(audium::seconds)
+                        == Catch::Approx(i > 0 ? -0.02 : 0.0).margin(0.001));
+                REQUIRE(dynamics.getFadeOutEnd(audium::seconds)
+                        == Catch::Approx(i < items.size() - 1 ? -0.02 : 0.0).margin(0.001));
             }
         }
     }
 
-    DeletedAtShutdown::deleteAll();
-    MessageManager::deleteInstance();
+    WHEN("a song is assembled with crossfades turned off")
+    {
+        config.mode = AssembleConfig::Mode::Sequential;
+        config.duration = 100.0;
+        config.crossfades = false;
+
+        REQUIRE(autoEdit.invokeAssemble(config, onError));
+
+        THEN("the joints are hard butt joins")
+        {
+            for (const auto& item : fixture.playListItems())
+            {
+                auto& dynamics = item->getDynamics();
+                REQUIRE(dynamics.getFadeInStart(audium::seconds) == Catch::Approx(0.0));
+                REQUIRE(dynamics.getFadeOutEnd(audium::seconds) == Catch::Approx(0.0));
+            }
+        }
+    }
 }
 
 SCENARIO("Assemble reports why nothing could be assembled and leaves the "
          "arrangement alone",
          "[engine][assemble]")
 {
-    MessageManager::getInstance();
-    MessageManagerLock mmLock(Thread::getCurrentThread());
+    Fixture fixture;
+    cutIntoSegments(fixture);
 
+    const auto itemsBefore = fixture.playListRegionNames();
+
+    AutoEdit autoEdit(fixture.engine.ptr());
+
+    std::string reportedError;
+    auto onError = [&reportedError](std::string error) { reportedError = error; };
+
+    WHEN("no valid track is named")
     {
-        auto fixture = makeFixture();
-        cutIntoSegments(fixture);
+        AssembleConfig config;
+        REQUIRE(config.trackId == -1);
 
-        const auto itemsBefore = fixture.playListRegionNames();
-
-        AutoEdit autoEdit(fixture.engine);
-
-        std::string reportedError;
-        auto onError = [&reportedError](std::string error) { reportedError = error; };
-
-        WHEN("no valid track is named")
+        THEN("it fails with a message and the arrangement is untouched")
         {
-            AssembleConfig config;
-            REQUIRE(config.trackId == -1);
-
-            THEN("it fails with a message and the arrangement is untouched")
-            {
-                REQUIRE_FALSE(autoEdit.invokeAssemble(config, onError));
-                REQUIRE_FALSE(reportedError.empty());
-                REQUIRE(fixture.playListRegionNames() == itemsBefore);
-            }
-        }
-
-        WHEN("the duration is zero")
-        {
-            AssembleConfig config;
-            config.trackId = 0;
-            config.duration = 0.0;
-
-            THEN("it fails with a message and the arrangement is untouched")
-            {
-                REQUIRE_FALSE(autoEdit.invokeAssemble(config, onError));
-                REQUIRE_FALSE(reportedError.empty());
-                REQUIRE(fixture.playListRegionNames() == itemsBefore);
-            }
-        }
-
-        WHEN("a sequential draw keeps nothing")
-        {
-            // A vanishingly small target makes the keep probability so small
-            // that the walk exhausts its visit cap without keeping anything -
-            // the assemble must then leave the arrangement as it found it
-            // rather than empty it.
-            AssembleConfig config;
-            config.trackId = 0;
-            config.mode = AssembleConfig::Mode::Sequential;
-            config.duration = 1.0e-9;
-
-            THEN("it fails with a message and the arrangement is untouched")
-            {
-                REQUIRE_FALSE(autoEdit.invokeAssemble(config, onError));
-                REQUIRE_FALSE(reportedError.empty());
-                REQUIRE(fixture.playListRegionNames() == itemsBefore);
-            }
+            REQUIRE_FALSE(autoEdit.invokeAssemble(config, onError));
+            REQUIRE_FALSE(reportedError.empty());
+            REQUIRE(fixture.playListRegionNames() == itemsBefore);
         }
     }
 
-    DeletedAtShutdown::deleteAll();
-    MessageManager::deleteInstance();
+    WHEN("the duration is zero")
+    {
+        AssembleConfig config;
+        config.trackId = 0;
+        config.duration = 0.0;
+
+        THEN("it fails with a message and the arrangement is untouched")
+        {
+            REQUIRE_FALSE(autoEdit.invokeAssemble(config, onError));
+            REQUIRE_FALSE(reportedError.empty());
+            REQUIRE(fixture.playListRegionNames() == itemsBefore);
+        }
+    }
+
+    WHEN("a sequential draw keeps nothing")
+    {
+        // A vanishingly small target makes the keep probability so small
+        // that the walk exhausts its visit cap without keeping anything -
+        // the assemble must then leave the arrangement as it found it
+        // rather than empty it.
+        AssembleConfig config;
+        config.trackId = 0;
+        config.mode = AssembleConfig::Mode::Sequential;
+        config.duration = 1.0e-9;
+
+        THEN("it fails with a message and the arrangement is untouched")
+        {
+            REQUIRE_FALSE(autoEdit.invokeAssemble(config, onError));
+            REQUIRE_FALSE(reportedError.empty());
+            REQUIRE(fixture.playListRegionNames() == itemsBefore);
+        }
+    }
 }
