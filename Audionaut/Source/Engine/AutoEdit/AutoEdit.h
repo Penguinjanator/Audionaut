@@ -26,24 +26,6 @@ class ResourceGroup;
 class AudioRegion;
 
 struct AutoEditConfig {
-    /**
-     * @brief Where the segment boundaries come from.
-     *
-     * The UI does not offer this: it always runs the built-in analysis.
-     * Python is selectable from tests, which is where the two implementations
-     * are compared - see AutoEditComparisonTests.
-     */
-    enum class Source {
-        /// AnalysisProvider + EventMerger, merged from the cached analyses.
-        Native,
-        /// The gaborgandalf Python subprocess. Retained so its boundaries can
-        /// be compared against the native ones on the same material; unlike the
-        /// native path it needs a working gaborgandalf environment.
-        Python
-    };
-
-    Source source = Source::Native;
-
     /// Replace the edited clip in the arrangement with the segments cut from
     /// it. Off leaves the arrangement alone and only adds the regions.
     bool replacePlayListItem = true;
@@ -120,7 +102,7 @@ struct AssembleConfig {
  * @class AutoEdit
  * @brief Cuts a track's audio into regions at automatically chosen boundaries.
  *
- * The native path merges the analyses already held in the `AnalysisCache` -
+ * It merges the analyses already held in the `AnalysisCache` -
  * BIC segmentation and beat tracking - through `EventMerger`, which
  * weights rare structural boundaries above frequent beats so the cuts land on
  * beat-aligned segment boundaries.
@@ -248,9 +230,6 @@ public:
      * outside the clip's edges (which the merge always emits but the edit
      * drops).
      *
-     * Native source only - the Python path computes its boundaries in a
-     * subprocess at invoke time, so there is nothing to preview.
-     *
      * @return True when a preview was published.
      */
     bool previewAutoEdit(AutoEditConfig &config);
@@ -315,14 +294,6 @@ public:
      *         target does not resolve, or the file's tempo is not cached.
      */
     juce::Range<double> resolveSegmentLengthBounds(AutoEditConfig &config);
-
-    /**
-     * @brief Runs the gaborgandalf subprocess over @p audioFile and turns the
-     *        segment file it writes into regions.
-     */
-    bool invokePython(const juce::File& audioFile,
-                      AutoEditConfig &config,
-                      std::function<void(std::string)> callback);
 
     /**
      * @brief Snaps boundaries onto the project's beat grid.
@@ -422,22 +393,8 @@ public:
                                         double crossfadeSeconds = 0.0,
                                         double crossfadeCurve = 0.5);
 
-    /** @brief Reads the Python path's segment file and creates regions from
-     *         it, named <baseName>-seg-<number> like the native path's. */
-    bool createRegionsFromSegFile(std::string segFileName,
-                                  double sampleRate,
-                                  std::shared_ptr<AudioTrack> track,
-                                  std::shared_ptr<ResourceGroup> resourceGroup,
-                                  const juce::String& baseName);
-
-    static const juce::String getTempDirectory();
-
 private:
     std::shared_ptr<AudiumEngine> audiumEngine;
-
-    std::string audioResourceFilePath;
-
-    const std::string getBaseName() const;
 };
 
 } // namespace audium

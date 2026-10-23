@@ -5,12 +5,8 @@
 
 #include <algorithm>
 #include <cmath>
-#include <cstdlib>
 #include <numeric>
 #include <optional>
-#include <iostream>
-#include <fstream>
-#include <nlohmann/json.hpp>
 #include <JuceHeader.h>
 
 #include "AutoEdit.h"
@@ -132,50 +128,6 @@ EditTarget resolveEditTarget(std::shared_ptr<AudioTrack> track, int playListItem
     }
 
     return target;
-}
-
-/**
- * Finds a Python interpreter that can actually run gaborgandalf.
- *
- * A plain `python3` is no use: launched from Finder the app inherits a minimal
- * PATH and resolves it to Apple's /usr/bin/python3, and from a shell it finds
- * whatever Homebrew has installed - neither carrying essentia and librosa. So
- * candidates are probed in order and the first one able to import the modules
- * the script needs wins.
- *
- * Set AUDIONAUT_PYTHON to override the search entirely.
- *
- * @return The interpreter path, or an empty string when none can run the script.
- */
-std::string findPythonInterpreter()
-{
-    std::vector<std::string> candidates;
-
-    if (auto* override_ = std::getenv("AUDIONAUT_PYTHON"))
-        candidates.emplace_back(override_);
-
-    const auto home = juce::File::getSpecialLocation(juce::File::userHomeDirectory)
-                          .getFullPathName().toStdString();
-
-    candidates.push_back(home + "/.venvs/gaborgandalf/bin/python3");
-    candidates.push_back("/opt/homebrew/bin/python3");
-    candidates.push_back("/usr/local/bin/python3");
-    // Last resort: whatever PATH offers, which is what this used to assume.
-    candidates.push_back("python3");
-
-    for (const auto& candidate : candidates)
-    {
-        // Quiet on both streams: this runs several times and a failing probe is
-        // expected, not an error worth printing.
-        const auto probe = "\"" + candidate
-                               + "\" -c \"import essentia, librosa, scipy.signal; "
-                                 "assert hasattr(scipy.signal, 'ricker')\" >/dev/null 2>&1";
-
-        if (std::system(probe.c_str()) == 0)
-            return candidate;
-    }
-
-    return {};
 }
 
 /**
@@ -383,12 +335,6 @@ void applyJointCrossfades(const std::vector<std::shared_ptr<PlayListItem>>& item
 }
 
 } // namespace
-
-const juce::String AutoEdit::getTempDirectory()
-{
-    // Temp directory on is ~Library/Caches/AppAudium
-    return juce::File::getSpecialLocation(juce::File::tempDirectory).getFullPathName();
-}
 
 bool AutoEdit::targetSelectedClip(AutoEditConfig &config)
 {
@@ -660,11 +606,6 @@ bool AutoEdit::invokeAutoEdit(AutoEditConfig &config,
         return false;
     }
 
-    audioResourceFilePath = audioFile.getFullPathName().toStdString();
-
-    if (config.source == AutoEditConfig::Source::Python)
-        return invokePython(audioFile, config, std::move(callback));
-
     auto analysisProvider = audioTrackContainer->getAnalysisProvider();
 
     if (analysisProvider == nullptr)
@@ -737,7 +678,7 @@ bool AutoEdit::previewAutoEdit(AutoEditConfig &config)
     auto track = audioTrackContainer->getAudioTrack(config.trackId);
     const auto target = resolveEditTarget(track, config.playlistItemId);
 
-    if (! target.isValid() || config.source != AutoEditConfig::Source::Native)
+    if (! target.isValid())
     {
         analysisProvider->clearMergePreview();
         return false;
@@ -1099,140 +1040,6 @@ bool AutoEdit::replacePlayListItemWithRegions(std::shared_ptr<AudioTrack> track,
     }
 
     return true;
-}
-
-bool AutoEdit::invokePython(const juce::File& audioFile,
-                            AutoEditConfig &config,
-                            std::function<void(std::string)> callback)
-{
-    const auto python = findPythonInterpreter();
-
-    if (python.empty())
-    {
-        NullCheckedInvocation::invoke(callback,
-                                      "No Python interpreter with gaborgandalf's dependencies was found. "
-                                      "Install them into ~/.venvs/gaborgandalf, or point AUDIONAUT_PYTHON at "
-                                      "an interpreter that has essentia, librosa and scipy < 1.15.");
-        return false;
-    }
-
-    const auto audioFilePath = audioFile.getFullPathName().toStdString();
-
-    // Build the command line string
-    std::string commandString;
-    commandString += "cd " + getTempDirectory().toStdString() + ";";
-
-    // automain.py is run by path, which puts its own directory on sys.path but
-    // not the parent - so `import gaborgandalf` needs the checkout added here.
-    // Launched from Finder the app has no PYTHONPATH at all, so relying on the
-    // shell's would work only when started from a terminal.
-    commandString += "PYTHONPATH=\"$HOME/dev/gaborgandalf${PYTHONPATH:+:$PYTHONPATH}\" ";
-
-    // --verbose
-    commandString += "\"" + python + "\" $HOME/dev/gaborgandalf/gaborgandalf/automain.py autoedit";
-    commandString += " --duration " + std::to_string(config.duration);
-    commandString += " --numsegs " + std::to_string(config.numSegments);
-    commandString += " --filenames " + audioFilePath;
-
-    try
-    {
-        if (std::system(commandString.c_str()) != 0)
-        {
-            NullCheckedInvocation::invoke(callback, "The autoedit script failed. Check that gaborgandalf is installed and its Python environment works.");
-            return false;
-        }
-    }
-    catch (std::exception &e)
-    {
-        NullCheckedInvocation::invoke(callback, e.what());
-        return false;
-    }
-
-    // The script writes its segment positions in samples of the file it was
-    // given, so they are converted with that file's rate - not a fixed one.
-    auto audioTrackContainer = audiumEngine->getAudioTrackContainer();
-    const auto target = resolveEditTarget(audioTrackContainer->getAudioTrack(config.trackId),
-                                          config.playlistItemId);
-
-    if (! target.isValid())
-        return false;
-
-    const auto sampleRate = target.resource->getSampleRate();
-
-    if (sampleRate <= 0.0)
-    {
-        NullCheckedInvocation::invoke(callback, "The track's audio file has no usable sample rate.");
-        return false;
-    }
-
-    std::string segFileName = getTempDirectory().toStdString() + "/data/segs/"
-                                  + getBaseName() + "-seg-data.json";
-
-    // Segments are named after the clip they are cut from; without one, the
-    // track name stands in.
-    const auto regionBaseName = target.clipName.isNotEmpty()
-                                    ? target.clipName
-                                    : target.track->getAudioTrackName();
-
-    return applyAsUndoableEdit(*audiumEngine->getAudioTrackContainer(),
-                               [this, segFileName, sampleRate, target, regionBaseName]
-    {
-        return createRegionsFromSegFile(segFileName, sampleRate, target.track,
-                                        target.resourceGroup, regionBaseName);
-    },
-    "Auto Edit");
-}
-
-const std::string AutoEdit::getBaseName() const
-{
-    return juce::File(audioResourceFilePath).getFileNameWithoutExtension().toStdString();
-}
-
-bool AutoEdit::createRegionsFromSegFile(std::string segFileName,
-                                       double sampleRate,
-                                       std::shared_ptr<AudioTrack> track,
-                                       std::shared_ptr<ResourceGroup> resourceGroup,
-                                       const juce::String& baseName)
-{
-    if (track == nullptr || resourceGroup == nullptr)
-        return false;
-
-    std::fstream segFile;
-    segFile.open(segFileName, std::ios::in);
-
-    if (! segFile.is_open())
-    {
-        std::cout << "error seg file not found: " << segFileName << std::endl;
-        return false;
-    }
-
-    auto created = 0;
-    auto segdata = nlohmann::json::parse(segFile);
-    auto regionContainer = resourceGroup->getAudioRegionContainer();
-
-    // create regions from parsed result
-    for (auto& elem : segdata)
-    {
-        juce::Range<double> position;
-        position.setStart(static_cast<double>(elem["start"]) / sampleRate);
-        position.setEnd(static_cast<double>(elem["end"]) / sampleRate);
-
-        // Named <clip>-seg-<number>, numbered by the container's own
-        // unique-name mechanism - each created region advances the number for
-        // the next.
-        const auto regionName = regionContainer->getUniqueName(baseName + "-seg");
-
-        if (regionContainer->createRegion(regionName,
-                                          position,
-                                          track,
-                                          resourceGroup,
-                                          nullptr,
-                                          audium::seconds))
-            ++created;
-    }
-
-    segFile.close();
-    return created > 0;
 }
 
 } // namespace audium

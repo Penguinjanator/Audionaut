@@ -54,7 +54,7 @@ The app splits cleanly into **Engine** (audio/data/business logic, UI-agnostic) 
 Projects serialize through the `Streamable` interface (`Engine/Streamable.h`), which every persistable object implements: `writeToStream`/`readFromStream` (binary) and `writeToJson`/`readFromJson` (via nlohmann `json`, the `json` submodule). A project is a `.audium` document package (directory) containing the project file plus audio files. Serialization takes a `rebuild` flag to distinguish loading into a fresh graph vs. re-reading into an existing one.
 
 ### Interface (`Source/Interface/*`)
-Standard JUCE layering: `Application` (app lifecycle, main window, menus, command IDs) → `Components` (panels: Header / Middle with Arrangement+Channel+Edit views / Right) → `Views`, `Controls`, `Widgets`, `Models` (JUCE list-box models), `Handlers` (zoom, snap-to-grid), `LookAndFeel`. The UI observes/commands the engine; keep audio logic in the engine, not in components.
+Standard JUCE layering: `Application` (app lifecycle, main window, menus, command IDs) → `Components` (panels: Header / Middle with Arrangement+Channel views / Right) → `Views`, `Controls`, `Widgets`, `Models` (JUCE list-box models), `Handlers` (zoom, snap-to-grid), `LookAndFeel`. The UI observes/commands the engine; keep audio logic in the engine, not in components.
 
 ## Conventions
 
