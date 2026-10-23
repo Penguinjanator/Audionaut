@@ -76,12 +76,18 @@ jobs:
       # source dir filters every file back out. --gcov-ignore-errors guards
       # against headers from outside the repository defeating gcovr's
       # working-dir inference, as Essentia's once did.
+      # --gcov-suspicious-hits-threshold=0: gcovr takes any count above a
+      # billion for a gcov bug and stops, but SincResampler's inner loop
+      # really runs that often. pipefail: without it `| tee` hides a failing
+      # gcovr and the run stays green with no report.
       working-directory: build-coverage
       run: |
+        set -o pipefail
         mkdir -p coverage-html
         gcovr --root "$GITHUB_WORKSPACE" \
               --filter "$GITHUB_WORKSPACE/Audionaut/Source" \
               --gcov-ignore-errors=no_working_dir_found \
+              --gcov-suspicious-hits-threshold=0 \
               --exclude-unreachable-branches \
               --print-summary \
               --xml coverage.xml \
