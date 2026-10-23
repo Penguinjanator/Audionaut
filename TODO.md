@@ -69,6 +69,19 @@
   **35.8% lines overall** (4,421/12,358) — Engine **66.8%** (4,209/6,300),
   Interface **3.5%** (212/6,025).
 
+- [ ] **One static library for the CMake tests and the CLI.** With
+  `AUDIONAUT_BUILD_CLI=ON` (the default) `Audionaut/Catch2Tests/CMakeLists.txt`
+  compiles every engine source twice, once for `AudionautTests` and once for
+  `audionaut-cli`. Build the shared sources once as a static library and link
+  both targets against it. Per push, CI would go from 8 full compiles to 5:
+  macOS 2→1, Linux tests 2→1, Windows 3→2, Makefile stays at 1. CMake only:
+  the app keeps building from the Projucer projects, and the in-app CLI/MCP
+  verbs are compiled into the app as before. Both targets already share
+  `AUDIONAUT_HEADLESS`. What differs is `CURRENT_SOURCE_DIR` (tests only) and
+  `GA4_MEASUREMENT_ID` (CLI only, kept out of the tests on purpose so they can
+  never create an analytics destination). Those have to stay on the
+  executables and must not move into the library.
+
 ## Agent access — follow-ups (feature/headless-cli, PR #66)
 
 - [x] **Build the MCP wrapper as a follow-up branch.** Done — `Tools/audionaut-mcp/`
