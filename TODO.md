@@ -293,9 +293,10 @@ the one-gesture crossfade UX on top:
     nullptr, jassert only) - now `MAX_AUDIO_CHANNELS * 2`.
     Bench, 128 samples, mean % before → after: 8 tracks 0.8 → 0.7,
     16 → 2.4 → 1.5, 32 → 8.8 → 3.3, 64 → 18.3 (64 voices) → 8.3 (all 128).
-    Left, all linear: each voice still clears a bus-wide buffer twice per
-    block (`Voice::processAudioBlock`, the remapper's output clear) - a
-    one-channel render buffer would end that; each mono voice decodes and
+    Then the voice renders into a one-channel buffer (the remapper maps its
+    source channel to channel 0; `Playback` and the bounce add it to
+    `VoiceSource::getDestinationChannel()`), which ends the two bus-wide
+    clears per voice and block. Left, all linear: each mono voice decodes and
     resamples every channel of its file and keeps one (O(ch²) for
     multichannel recordings); `ClipResamplingSource` interpolates even at
     ratio 1.0; gain and fade-in still multiply once steady;

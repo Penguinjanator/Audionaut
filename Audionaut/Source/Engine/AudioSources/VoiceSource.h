@@ -172,6 +172,8 @@ public:
         configureClipFades in ClipFadeSpec.h). Real-time safe. */
     void configureClipFades(const ClipFadeSpec& spec, double filePositionSeconds, bool reset);
 
+    /// Renders the voice's one channel into channel 0 of @p info; where it
+    /// belongs is getDestinationChannel(). A one-channel buffer is enough.
     void getNextAudioBlock (const juce::AudioSourceChannelInfo& info) override;
 
     /// Whether the voice reads through a read-ahead buffer and has a standby
@@ -182,7 +184,7 @@ public:
 
     void applyChannelMapping(bool withChannelOffset = true);
 
-    /// The one output channel the voice renders into (set by applyChannelMapping).
+    /// The output channel the voice's rendered channel belongs to (set by applyChannelMapping).
     int getDestinationChannel() const noexcept { return destinationChannel.load(); }
 
     /// < configure gain, fade-in, fade-out

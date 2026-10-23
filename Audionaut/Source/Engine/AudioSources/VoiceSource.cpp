@@ -142,8 +142,11 @@ void VoiceSource::applyChannelMapping(bool withChannelOffset)
     const auto dstChannel = channelMapping.getDestinationChannel();
     jassert(srcChannel < audioFileChannels);
     jassert(dstChannel + channelOffset < totalChannels);
-    channelRemapping->setOutputChannelMapping(srcChannel,
-                                              dstChannel + channelOffset);
+
+    // the voice renders its one channel into channel 0 of a one-channel
+    // buffer; the caller adds it to the destination channel. A bus-wide
+    // render buffer cost two bus-wide clears per voice and block
+    channelRemapping->setOutputChannelMapping(srcChannel, 0);
     destinationChannel.store(dstChannel + channelOffset);
 }
 
