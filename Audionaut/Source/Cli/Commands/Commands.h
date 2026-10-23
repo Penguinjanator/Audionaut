@@ -5,7 +5,9 @@
 
 #pragma once
 
+#include <functional>
 #include <memory>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -21,6 +23,8 @@ class AudioTrackContainer;
 class TempoProvider;
 
 namespace cli {
+
+class ProjectSession;
 
 /**
  * The CLI's verb set. Each command runs to completion inside its own
@@ -111,6 +115,17 @@ bool parseMusicalDuration (const juce::String& value,
                            std::string& error);
 
 /**
+ * parseMusicalDuration without the sign check, for lengths that may be zero
+ * or negative (a fade cleared, a ramp offset reaching outside the clip). Fails
+ * only on an unknown unit.
+ */
+bool musicalDurationToClocks (const juce::String& value,
+                              const juce::String& unit,
+                              const TempoProvider& tempoProvider,
+                              double& outClocks,
+                              std::string& error);
+
+/**
  * Validates a plain numeric option value (seconds, measures, counts - the
  * options that do not go through the musical-unit parsers above). Fails with
  * a message naming the option when the value is not a number or lies below
@@ -132,6 +147,28 @@ findRegionsByName (const AudioTrackContainer& tracks, const juce::String& name, 
 
 /** Resolves a project argument to its Project.json; invalid File() if absent. */
 juce::File resolveProjectFile (const juce::ArgumentList& args, int argumentIndex = 0);
+
+/** What an edit reports once its work is saved: a log line, then the result. */
+struct EditOutcome
+{
+    juce::String log;
+    nlohmann::json result;
+};
+
+/**
+ * The lifecycle the editing verbs share: resolve the project argument (a usage
+ * error naming `verb` when there is none), open it for a mutating session with
+ * stdout redirected, run `edit`, then commit and report the outcome. `edit`
+ * returns exitOk to have its work saved; any other code - a failure it has
+ * already reported - is returned as is, and nothing is saved.
+ *
+ * The project is resolved from `args` as they stand at the call, so take the
+ * value options out first (see getPlainArguments).
+ */
+int runProjectEdit (const juce::ArgumentList& args,
+                    CliContext& context,
+                    const std::string& verb,
+                    const std::function<int (ProjectSession& session, EditOutcome& outcome)>& edit);
 
 /**
  * @class ScopedWorkingDirectory

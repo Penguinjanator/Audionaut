@@ -38,34 +38,23 @@ int runAutoEdit (const juce::ArgumentList& args, CliContext& context)
     }
     config.crossfades = ! working.removeOptionIfFound ("--no-crossfades");
 
-    auto projectFile = resolveProjectFile (working);
-    if (projectFile == juce::File())
-        return context.fail (exitUsage, "usage", "auto-edit requires an existing <project.audium>");
+    return runProjectEdit (working, context, "auto-edit", [&] (ProjectSession& session, EditOutcome& outcome)
+    {
+        // Auto-edit consumes cached analysis results; run `analyze` first. Its
+        // own error callback reports a missing/incomplete cache.
+        std::string error;
+        AutoEdit autoEdit (session.get());
+        if (! autoEdit.invokeAutoEdit (config, [&error] (std::string message) { error = message; }))
+            return context.fail (exitFailure, "auto_edit_failed",
+                                 error.empty() ? "auto-edit failed" : error);
 
-    ScopedCoutToStderr guard (context.json);
-    int openFailure = exitFailure;
-    auto session = openProjectSession (projectFile, CommandAccess::mutating, context, openFailure);
-    if (! session)
-        return openFailure;
-
-    std::string error;
-    auto captureError = [&error] (std::string message) { error = message; };
-
-    // Auto-edit consumes cached analysis results; run `analyze` first. Its
-    // own error callback reports a missing/incomplete cache.
-    AutoEdit autoEdit (session.get());
-    if (! autoEdit.invokeAutoEdit (config, captureError))
-        return context.fail (exitFailure, "auto_edit_failed",
-                             error.empty() ? "auto-edit failed" : error);
-
-    if (! session.commit (error))
-        return context.fail (exitFailure, "save_failed", error.empty() ? "failed to save project" : error);
-
-    context.log ("auto-edit applied");
-    return context.ok ({ { "trackId", config.trackId },
-                         { "numSegments", config.numSegments },
-                         { "segmentMeasures", config.segmentMeasures },
-                         { "crossfades", config.crossfades } });
+        outcome.log = "auto-edit applied";
+        outcome.result = { { "trackId", config.trackId },
+                           { "numSegments", config.numSegments },
+                           { "segmentMeasures", config.segmentMeasures },
+                           { "crossfades", config.crossfades } };
+        return exitOk;
+    });
 }
 
 int runAssemble (const juce::ArgumentList& args, CliContext& context)
@@ -90,32 +79,21 @@ int runAssemble (const juce::ArgumentList& args, CliContext& context)
     else
         return context.fail (exitUsage, "usage", "--mode must be random or sequential");
 
-    auto projectFile = resolveProjectFile (working);
-    if (projectFile == juce::File())
-        return context.fail (exitUsage, "usage", "assemble requires an existing <project.audium>");
+    return runProjectEdit (working, context, "assemble", [&] (ProjectSession& session, EditOutcome& outcome)
+    {
+        std::string error;
+        AutoEdit autoEdit (session.get());
+        if (! autoEdit.invokeAssemble (config, [&error] (std::string message) { error = message; }))
+            return context.fail (exitFailure, "assemble_failed",
+                                 error.empty() ? "assemble failed" : error);
 
-    ScopedCoutToStderr guard (context.json);
-    int openFailure = exitFailure;
-    auto session = openProjectSession (projectFile, CommandAccess::mutating, context, openFailure);
-    if (! session)
-        return openFailure;
-
-    std::string error;
-    auto captureError = [&error] (std::string message) { error = message; };
-
-    AutoEdit autoEdit (session.get());
-    if (! autoEdit.invokeAssemble (config, captureError))
-        return context.fail (exitFailure, "assemble_failed",
-                             error.empty() ? "assemble failed" : error);
-
-    if (! session.commit (error))
-        return context.fail (exitFailure, "save_failed", error.empty() ? "failed to save project" : error);
-
-    context.log ("assemble applied");
-    return context.ok ({ { "trackId", config.trackId },
-                         { "durationSeconds", config.duration },
-                         { "mode", mode.toStdString() },
-                         { "crossfades", config.crossfades } });
+        outcome.log = "assemble applied";
+        outcome.result = { { "trackId", config.trackId },
+                           { "durationSeconds", config.duration },
+                           { "mode", mode.toStdString() },
+                           { "crossfades", config.crossfades } };
+        return exitOk;
+    });
 }
 
 } // namespace cli

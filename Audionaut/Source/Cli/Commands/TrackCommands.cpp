@@ -35,42 +35,30 @@ int runRemoveTrack (const juce::ArgumentList& args, CliContext& context)
     if (trackValue.isEmpty())
         return context.fail (exitUsage, "usage", "remove-track requires --track <id>");
 
-    auto projectFile = resolveProjectFile (working);
-    if (projectFile == juce::File())
-        return context.fail (exitUsage, "usage", "remove-track requires an existing <project.audium>");
+    return runProjectEdit (working, context, "remove-track", [&] (ProjectSession& session, EditOutcome& outcome)
+    {
+        auto& trackContainer = *session->getAudioTrackContainer();
 
-    ScopedCoutToStderr guard (context.json);
-    int openFailure = exitFailure;
-    auto session = openProjectSession (projectFile, CommandAccess::mutating, context, openFailure);
-    if (! session)
-        return openFailure;
+        auto track = trackById (trackContainer, trackValue.getIntValue());
+        if (track == nullptr)
+            return context.fail (exitFailure, "track_not_found",
+                                 "no track with id " + trackValue.toStdString());
 
-    std::string error;
-    auto captureError = [&error] (std::string message) { error = message; };
+        auto removedId = track->getId();
+        auto removedName = track->getAudioTrackName().toStdString();
+        auto removedClips = static_cast<int> (track->getPlayListContainer()->getPlayListItems().size());
 
-    auto& trackContainer = *session->getAudioTrackContainer();
+        if (! trackContainer.deleteAudioTrack (track))
+            return context.fail (exitFailure, "remove_failed", "could not remove the track");
 
-    auto track = trackById (trackContainer, trackValue.getIntValue());
-    if (track == nullptr)
-        return context.fail (exitFailure, "track_not_found",
-                             "no track with id " + trackValue.toStdString());
-
-    auto removedId = track->getId();
-    auto removedName = track->getAudioTrackName().toStdString();
-    auto removedClips = static_cast<int> (track->getPlayListContainer()->getPlayListItems().size());
-
-    if (! trackContainer.deleteAudioTrack (track))
-        return context.fail (exitFailure, "remove_failed", "could not remove the track");
-
-    if (! session.commit (error))
-        return context.fail (exitFailure, "save_failed", error.empty() ? "failed to save project" : error);
-
-    context.log ("removed track " + juce::String (removedId) + " (\"" + removedName + "\")");
-    return context.ok ({ { "removedTrack", removedId },
-                         { "name", removedName },
-                         { "removedClips", removedClips },
-                         { "remainingTracks",
-                           static_cast<int> (trackContainer.getAudioTracks().size()) } });
+        outcome.log = "removed track " + juce::String (removedId) + " (\"" + removedName + "\")";
+        outcome.result = { { "removedTrack", removedId },
+                           { "name", removedName },
+                           { "removedClips", removedClips },
+                           { "remainingTracks",
+                             static_cast<int> (trackContainer.getAudioTracks().size()) } };
+        return exitOk;
+    });
 }
 
 int runRemoveChannel (const juce::ArgumentList& args, CliContext& context)
@@ -82,45 +70,33 @@ int runRemoveChannel (const juce::ArgumentList& args, CliContext& context)
     if (trackValue.isEmpty() || channelValue.isEmpty())
         return context.fail (exitUsage, "usage", "remove-channel requires --track <id> and --channel <index>");
 
-    auto projectFile = resolveProjectFile (working);
-    if (projectFile == juce::File())
-        return context.fail (exitUsage, "usage", "remove-channel requires an existing <project.audium>");
+    return runProjectEdit (working, context, "remove-channel", [&] (ProjectSession& session, EditOutcome& outcome)
+    {
+        auto& trackContainer = *session->getAudioTrackContainer();
 
-    ScopedCoutToStderr guard (context.json);
-    int openFailure = exitFailure;
-    auto session = openProjectSession (projectFile, CommandAccess::mutating, context, openFailure);
-    if (! session)
-        return openFailure;
+        auto track = trackById (trackContainer, trackValue.getIntValue());
+        if (track == nullptr)
+            return context.fail (exitFailure, "track_not_found",
+                                 "no track with id " + trackValue.toStdString());
 
-    std::string error;
-    auto captureError = [&error] (std::string message) { error = message; };
+        auto numChannels = static_cast<int> (track->audioChannelContainer->objects.size());
+        auto channelIndex = channelValue.getIntValue();
+        if (channelIndex < 0 || channelIndex >= numChannels)
+            return context.fail (exitUsage, "usage",
+                                 "--channel must be 0.." + std::to_string (numChannels - 1));
 
-    auto& trackContainer = *session->getAudioTrackContainer();
+        auto channel = track->audioChannelContainer->objects[(size_t) channelIndex];
+        if (! track->deleteChannel (channel.get()))
+            return context.fail (exitFailure, "remove_failed", "could not remove the channel");
 
-    auto track = trackById (trackContainer, trackValue.getIntValue());
-    if (track == nullptr)
-        return context.fail (exitFailure, "track_not_found",
-                             "no track with id " + trackValue.toStdString());
-
-    auto numChannels = static_cast<int> (track->audioChannelContainer->objects.size());
-    auto channelIndex = channelValue.getIntValue();
-    if (channelIndex < 0 || channelIndex >= numChannels)
-        return context.fail (exitUsage, "usage",
-                             "--channel must be 0.." + std::to_string (numChannels - 1));
-
-    auto channel = track->audioChannelContainer->objects[(size_t) channelIndex];
-    if (! track->deleteChannel (channel.get()))
-        return context.fail (exitFailure, "remove_failed", "could not remove the channel");
-
-    if (! session.commit (error))
-        return context.fail (exitFailure, "save_failed", error.empty() ? "failed to save project" : error);
-
-    context.log ("removed channel " + juce::String (channelIndex) + " from track "
-                 + juce::String (track->getId()));
-    return context.ok ({ { "track", track->getId() },
-                         { "removedChannel", channelIndex },
-                         { "remainingChannels",
-                           static_cast<int> (track->audioChannelContainer->objects.size()) } });
+        outcome.log = "removed channel " + juce::String (channelIndex) + " from track "
+                      + juce::String (track->getId());
+        outcome.result = { { "track", track->getId() },
+                           { "removedChannel", channelIndex },
+                           { "remainingChannels",
+                             static_cast<int> (track->audioChannelContainer->objects.size()) } };
+        return exitOk;
+    });
 }
 
 } // namespace cli
