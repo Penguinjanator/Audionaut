@@ -78,6 +78,8 @@ AudiumMainWindow::AudiumMainWindow (juce::String name, std::shared_ptr<audium::A
     setMenuBar (AudiumApplication::getApp().getMenuModel());
 #endif
     
+    commands = makeCommands();
+
     auto& commandManager = AudiumApplication::getCommandManager();
 
     auto registerAllAppCommands = [&]
@@ -140,319 +142,208 @@ ApplicationCommandTarget* AudiumMainWindow::getNextCommandTarget()
     return nullptr;
 }
 
-void AudiumMainWindow::getAllCommands (Array <CommandID>& commands)
+std::vector<AudiumMainWindow::Command> AudiumMainWindow::makeCommands()
 {
-    const CommandID ids[] =
-    {
-        CommandIDs::playStop,
-        CommandIDs::loopSelection,
-        CommandIDs::createRegion,
-        CommandIDs::splitRegion,
-        CommandIDs::cleanupRegions,
-        CommandIDs::autoEdit,
-        CommandIDs::assembleSequential,
-        CommandIDs::assembleRandom,
-        CommandIDs::separateStems,
-        CommandIDs::stretchClip,
-        CommandIDs::bounceProject,
-        CommandIDs::duplicate,
-        
-        CommandIDs::createAudioTrack,
-        
-        CommandIDs::zoomIn,
-        CommandIDs::zoomOut,
-        CommandIDs::pageLeft,
-        CommandIDs::pageRight,
-        CommandIDs::followTransport,
-        CommandIDs::enableSnapToGrid,
-        CommandIDs::toggleFullScreen,
-        StandardApplicationCommandIDs::undo,
-        StandardApplicationCommandIDs::redo,
-        StandardApplicationCommandIDs::cut,
-        StandardApplicationCommandIDs::copy,
-        StandardApplicationCommandIDs::paste,
-        StandardApplicationCommandIDs::del,
-        StandardApplicationCommandIDs::selectAll
+    const int cmd = ModifierKeys::commandModifier;
+    const int shift = ModifierKeys::shiftModifier;
+    const int none = ModifierKeys::noModifiers;
+
+    auto regions = [this]() -> audium::AudioRegionAdapter& {
+        return getEngine()->getAudioTrackContainer()->getAudioRegionAdapter();
     };
 
-    commands.addArray (ids, numElementsInArray (ids));
+    // The order is getAllCommands()' order.
+    return {
+        { CommandIDs::playStop, "Play/Stop", "Play and stop", CommandCategories::transport,
+          { KeyPress (' ', none, 0) }, {}, {}, {},
+          [this] {
+              if (auto scheduler = getEngine()->getPlayListScheduler()) {
+                  scheduler->isPlaying() ? scheduler->stopPlaying() : scheduler->startPlaying();
+              }
+              mainComponent->updateUI();
+          } },
+        { CommandIDs::loopSelection, "Loop Selection", "Sets the loop range to the selected range and turns the loop on", CommandCategories::transport,
+          { KeyPress ('l', cmd, 0) },
+          [regions] { return regions().anyRangeSelected(); }, {}, {},
+          [this] { loopSelectedRange(); } },
+        { CommandIDs::createRegion, "Create Region...", "Creates a new region", CommandCategories::create,
+          { KeyPress ('r', cmd, 0) },
+          [regions] { return regions().canCreateRegion(); }, {}, {},
+          [this] {
+              if (newRegionDialog == nullptr)
+                  newRegionDialog = std::make_unique<NewRegionDialog>();
+              newRegionDialog->createNewRegion(getEngine());
+          } },
+        { CommandIDs::splitRegion, "Split", "Splits a region", CommandCategories::editing,
+          { KeyPress ('e', cmd, 0) },
+          [this, regions] {
+              if (regions().anyRangeSelected())
+                  return regions().canCreateRegion();
+
+              auto pos = getEngine()->getPlayListScheduler()->getAbsoluteStartPosition(audium::clocks);
+              return regions().canSplitAnyRegionAtPosition(pos, audium::clocks);
+          }, {}, {},
+          [this, regions] {
+              auto pos = getEngine()->getPlayListScheduler()->getAbsoluteStartPosition(audium::clocks);
+              regions().splitRegions(pos, audium::clocks);
+          } },
+        { CommandIDs::cleanupRegions, "Delete Unused Regions", "Deletes all unused regions", CommandCategories::editing,
+          {}, {}, {}, {},
+          [this] { getEngine()->getAudioTrackContainer()->deleteUnusedRegions(); } },
+        { CommandIDs::autoEdit, "1. Create Segments...", "Cuts the selected clip into segments at analysed boundaries", CommandCategories::editing,
+          { KeyPress ('1', cmd, 0) },
+          [this] { return canToggleAutoEditPreview(); }, {}, {},
+          [this] { toggleAutoEditPreview(); } },
+        { CommandIDs::assembleSequential, "Sequential...", "Assembles a new sequence from the track's regions, in order", CommandCategories::editing,
+          { KeyPress ('2', cmd, 0) },
+          [this] { return canAssemble(); }, {}, {},
+          [this] { invokeAssemble(audium::AssembleConfig::Mode::Sequential); } },
+        { CommandIDs::assembleRandom, "Random...", "Assembles a new sequence from the track's regions, shuffled", CommandCategories::editing,
+          { KeyPress ('3', cmd, 0) },
+          [this] { return canAssemble(); }, {}, {},
+          [this] { invokeAssemble(audium::AssembleConfig::Mode::Random); } },
+        { CommandIDs::separateStems, "Separate Stems...", "Splits the selected clip into Drums, Bass, Other and Vocals tracks", CommandCategories::editing,
+          {},
+          [this] { return canSeparateStems(); }, {}, {},
+          [this] { invokeSeparateStems(); } },
+        { CommandIDs::stretchClip, "Stretch Clip...", "Adjusts the selected clip's playback speed (re-pitch)", CommandCategories::editing,
+          { KeyPress ('t', cmd, 0) },
+          [this] { return canToggleStretchOverlay(); }, {}, {},
+          [this] { toggleStretchOverlay(); } },
+        { CommandIDs::bounceProject, "Export Audio...", "Export current project as audio file", CommandCategories::general,
+          { KeyPress ('b', cmd | ModifierKeys::altModifier, 0) }, {}, {}, {},
+          [this] {
+              if (exportAudioDialog == nullptr)
+                  exportAudioDialog = std::make_unique<ExportAudioDialog>(getEngine());
+              exportAudioDialog->invoke (mainComponent);
+          } },
+        { CommandIDs::duplicate, TRANS ("Duplicate"), String(), CommandCategories::editing,
+          { KeyPress ('d', cmd, 0) }, {}, {}, {},
+          [this] { mainComponent->duplicate(); } },
+
+        { CommandIDs::createAudioTrack, "Create Audio Track...", "Create a new audio track", CommandCategories::create,
+          { KeyPress ('n', cmd | shift, 0) }, {}, {}, {},
+          [this] {
+              if (newAudioTrackDialog == nullptr)
+                  newAudioTrackDialog = std::make_unique<NewAudioTrackDialog>();
+              newAudioTrackDialog->createNewAudioTrack(getEngine());
+          } },
+
+        { CommandIDs::zoomIn, "Zoom In", "Zoom in", CommandCategories::view,
+          { KeyPress ('+', cmd, 0) }, {}, {}, {},
+          [this] { mainComponent->zoomIn(); } },
+        { CommandIDs::zoomOut, "Zoom Out", "Zoom out", CommandCategories::view,
+          { KeyPress ('-', cmd, 0) }, {}, {}, {},
+          [this] { mainComponent->zoomOut(); } },
+        { CommandIDs::pageLeft, "Page Left", "Scroll one page left", CommandCategories::view,
+          { KeyPress (KeyPress::leftKey, none, 0) }, {}, {}, {},
+          [this] { mainComponent->pageLeft(); } },
+        { CommandIDs::pageRight, "Page Right", "Scroll one page right", CommandCategories::view,
+          { KeyPress (KeyPress::rightKey, none, 0) }, {}, {}, {},
+          [this] { mainComponent->pageRight(); } },
+        { CommandIDs::followTransport, "Follow Transport", "Follow Transport", CommandCategories::view,
+          { KeyPress ('f', ModifierKeys::ctrlModifier, 0) },
+          {}, [this] { return getEngine()->getPlayListScheduler()->getFollowTransport(); }, {},
+          [this] {
+              getEngine()->getPlayListScheduler()->setFollowTransport(!getEngine()->getPlayListScheduler()->getFollowTransport());
+              mainComponent->rebuildUI();
+          } },
+        { CommandIDs::enableSnapToGrid, "Snap to Grid", "Snap drags to the grid", CommandCategories::view,
+          { KeyPress ('g', cmd, 0) },
+          {}, [] { return SnapToGridHandler::isEnabled(); }, {},
+          [] {
+              SnapToGridHandler::setEnabled (! SnapToGridHandler::isEnabled());
+              AudiumApplication::getPreferences().setValue (PreferenceKeys::snapToGridEnabled,
+                                                            SnapToGridHandler::isEnabled() ? "true" : "false");
+          } },
+        { CommandIDs::toggleFullScreen, "Full Screen", "Enter full screen", CommandCategories::view,
+          { KeyPress ('f', cmd | ModifierKeys::ctrlModifier, 0) },
+          {}, [this] { return isFullScreen(); }, {},
+          [this] { setFullScreen (!isFullScreen()); } },
+
+        // The step's name follows the verb, as the undo history names it:
+        // "Undo Move Clip", "Undo Agent: remove pauses". The menu is built
+        // when it opens, so the label is current.
+        { StandardApplicationCommandIDs::undo, TRANS ("Undo"), TRANS ("Undo"), CommandCategories::editing,
+          { KeyPress ('z', cmd, 0) },
+          [this] { return getEngine()->getUndoManager()->canUndo(); }, {},
+          [this] {
+              const auto step = getEngine()->getUndoManager()->getUndoDescription();
+              return step.isEmpty() ? TRANS ("Undo") : TRANS ("Undo") + " " + step;
+          },
+          [this] { getEngine()->getUndoManager()->undo(); } },
+        { StandardApplicationCommandIDs::redo, TRANS ("Redo"), TRANS ("Redo"), CommandCategories::editing,
+          { KeyPress ('z', cmd | shift, 0) },
+          [this] { return getEngine()->getUndoManager()->canRedo(); }, {},
+          [this] {
+              const auto step = getEngine()->getUndoManager()->getRedoDescription();
+              return step.isEmpty() ? TRANS ("Redo") : TRANS ("Redo") + " " + step;
+          },
+          [this] { getEngine()->getUndoManager()->redo(); } },
+        { StandardApplicationCommandIDs::cut, TRANS ("Cut"), String(), CommandCategories::editing,
+          { KeyPress ('x', cmd, 0) },
+          [this] { return anythingSelected(); }, {}, {},
+          [this] {
+              mainComponent->copy();
+              getEngine()->getAudioTrackContainer()->deleteSelectedObjects();
+          } },
+        { StandardApplicationCommandIDs::copy, TRANS ("Copy"), String(), CommandCategories::editing,
+          { KeyPress ('c', cmd, 0) },
+          [this] { return anythingSelected(); }, {}, {},
+          [this] { mainComponent->copy(); } },
+        { StandardApplicationCommandIDs::paste, TRANS ("Paste"), String(), CommandCategories::editing,
+          { KeyPress ('v', cmd, 0) },
+          [this] { return canPaste(); }, {}, {},
+          [this] { mainComponent->paste(); } },
+        { StandardApplicationCommandIDs::del, TRANS ("Delete"), String(), CommandCategories::editing,
+          // the Mac "delete" key: reaches the command whenever the focused
+          // component (a clip body, an overlay, ...) doesn't handle it itself
+          { KeyPress (KeyPress::deleteKey, none, 0), KeyPress (KeyPress::backspaceKey, none, 0) },
+          [this] { return anythingSelected(); }, {}, {},
+          [this] { getEngine()->getAudioTrackContainer()->deleteSelectedObjects(); } },
+        { StandardApplicationCommandIDs::selectAll, TRANS ("Select All"), String(), CommandCategories::editing,
+          { KeyPress ('a', cmd, 0) }, {}, {}, {},
+          [this] { mainComponent->selectAll(); } },
+    };
+}
+
+const AudiumMainWindow::Command* AudiumMainWindow::findCommand (CommandID commandID) const
+{
+    for (const auto& command : commands)
+        if (command.id == commandID)
+            return &command;
+
+    return nullptr;
+}
+
+void AudiumMainWindow::getAllCommands (Array <CommandID>& result)
+{
+    for (const auto& command : commands)
+        result.add (command.id);
 }
 
 void AudiumMainWindow::getCommandInfo (const CommandID commandID, ApplicationCommandInfo& result)
 {
-    const int cmd = ModifierKeys::commandModifier;
-    const int shift = ModifierKeys::shiftModifier;
-    bool bActive = false;
-    
-    
-    switch (commandID)
-    {
-        case CommandIDs::playStop:
-            result.setInfo ("Play/Stop", "Play and stop", CommandCategories::transport, 0);
-            result.defaultKeypresses.add (KeyPress (' ', ModifierKeys::noModifiers, 0));
-            break;
-        case CommandIDs::loopSelection:
-            result.setInfo ("Loop Selection", "Sets the loop range to the selected range and turns the loop on", CommandCategories::transport, 0);
-            result.setActive (getEngine()->getAudioTrackContainer()->getAudioRegionAdapter().anyRangeSelected());
-            result.defaultKeypresses.add (KeyPress ('l', ModifierKeys::commandModifier, 0));
-            break;
-        case CommandIDs::createRegion:
-            result.setInfo ("Create Region...", "Creates a new region", CommandCategories::create, 0);
-            result.setActive (getEngine()->getAudioTrackContainer()->getAudioRegionAdapter().canCreateRegion());
-            result.defaultKeypresses.add (KeyPress ('r', ModifierKeys::commandModifier, 0));
-            break;
-        case CommandIDs::splitRegion:
-            result.setInfo ("Split", "Splits a region", CommandCategories::editing, 0);
-            if (getEngine()->getAudioTrackContainer()->getAudioRegionAdapter().anyRangeSelected()) {
-                if (getEngine()->getAudioTrackContainer()->getAudioRegionAdapter().canCreateRegion())
-                    bActive = true;
-            }
-            else {
-                auto pos = getEngine()->getPlayListScheduler()->getAbsoluteStartPosition(audium::clocks);
-                if (getEngine()->getAudioTrackContainer()->getAudioRegionAdapter().canSplitAnyRegionAtPosition(pos,audium::clocks))
-                    bActive = true;
-            }
-            
-            result.setActive (bActive);
-            result.defaultKeypresses.add (KeyPress ('e', ModifierKeys::commandModifier, 0));
-            break;
-        case CommandIDs::cleanupRegions:
-            result.setInfo ("Delete Unused Regions", "Deletes all unused regions", CommandCategories::editing, 0);
-            break;
-        case CommandIDs::autoEdit:
-            result.setInfo ("1. Create Segments...", "Cuts the selected clip into segments at analysed boundaries", CommandCategories::editing, 0);
-            result.setActive (canToggleAutoEditPreview());
-            result.defaultKeypresses.add (KeyPress ('1', ModifierKeys::commandModifier, 0));
-            break;
-        case CommandIDs::assembleSequential:
-            result.setInfo ("Sequential...", "Assembles a new sequence from the track's regions, in order", CommandCategories::editing, 0);
-            result.setActive (canAssemble());
-            result.defaultKeypresses.add (KeyPress ('2', ModifierKeys::commandModifier, 0));
-            break;
-        case CommandIDs::assembleRandom:
-            result.setInfo ("Random...", "Assembles a new sequence from the track's regions, shuffled", CommandCategories::editing, 0);
-            result.setActive (canAssemble());
-            result.defaultKeypresses.add (KeyPress ('3', ModifierKeys::commandModifier, 0));
-            break;
-        case CommandIDs::separateStems:
-            result.setInfo ("Separate Stems...", "Splits the selected clip into Drums, Bass, Other and Vocals tracks", CommandCategories::editing, 0);
-            result.setActive (canSeparateStems());
-            break;
-        case CommandIDs::stretchClip:
-            result.setInfo ("Stretch Clip...", "Adjusts the selected clip's playback speed (re-pitch)", CommandCategories::editing, 0);
-            result.setActive (canToggleStretchOverlay());
-            result.defaultKeypresses.add (KeyPress ('t', ModifierKeys::commandModifier, 0));
-            break;
-        case CommandIDs::bounceProject:
-            result.setInfo ("Export Audio...", "Export current project as audio file", CommandCategories::general, 0);
-            result.defaultKeypresses.add ({ 'b', ModifierKeys::commandModifier | ModifierKeys::altModifier, 0 });
-            break;
-        
-        case CommandIDs::createAudioTrack:
-            result.setInfo ("Create Audio Track...", "Create a new audio track", CommandCategories::create, 0);
-            result.defaultKeypresses.add ({ 'n', ModifierKeys::commandModifier | ModifierKeys::shiftModifier, 0 });
-            break;
-        
-        case CommandIDs::toggleFullScreen:
-            result.setInfo ("Full Screen", "Enter full screen", CommandCategories::view, 0);
-            result.defaultKeypresses.add (KeyPress ('f', ModifierKeys::commandModifier | ModifierKeys::ctrlModifier, 0));
-            result.setTicked (isFullScreen());
-            break;
-        case CommandIDs::zoomIn:
-            result.setInfo ("Zoom In", "Zoom in", CommandCategories::view, 0);
-            result.defaultKeypresses.add (KeyPress ('+', ModifierKeys::commandModifier, 0));
-            break;
-        case CommandIDs::zoomOut:
-            result.setInfo ("Zoom Out", "Zoom out", CommandCategories::view, 0);
-            result.defaultKeypresses.add (KeyPress ('-', ModifierKeys::commandModifier, 0));
-            break;
-        case CommandIDs::pageLeft:
-            result.setInfo ("Page Left", "Scroll one page feft", CommandCategories::view, 0);
-            result.defaultKeypresses.add (KeyPress (KeyPress::leftKey, ModifierKeys::noModifiers, 0));
-            break;
-        case CommandIDs::pageRight:
-            result.setInfo ("Page Right", "Scrool one page right", CommandCategories::view, 0);
-            result.defaultKeypresses.add (KeyPress (KeyPress::rightKey, ModifierKeys::noModifiers, 0));
-            break;
-        case CommandIDs::followTransport:
-            result.setInfo ("Follow Transport", "Follow Transport", CommandCategories::view, 0);
-            result.defaultKeypresses.add (KeyPress ('f', ModifierKeys::ctrlModifier, 0));
-            result.setTicked (getEngine()->getPlayListScheduler()->getFollowTransport());
-            break;
-        case CommandIDs::enableSnapToGrid:
-            result.setInfo ("Snap to Grid", "Snap drags to the grid", CommandCategories::view, 0);
-            result.defaultKeypresses.add (KeyPress ('g', ModifierKeys::commandModifier, 0));
-            result.setTicked (SnapToGridHandler::isEnabled());
-            break;
-        
-        // The step's name follows the verb, as the undo history names it:
-        // "Undo Move Clip", "Undo Agent: remove pauses". The menu is built
-        // when it opens, so the label is current.
-        case StandardApplicationCommandIDs::undo:
-        {
-            const auto step = getEngine()->getUndoManager()->getUndoDescription();
-            result.setInfo (step.isEmpty() ? TRANS ("Undo") : TRANS ("Undo") + " " + step, TRANS ("Undo"), "Editing", 0);
-            result.setActive (getEngine()->getUndoManager()->canUndo());
-            result.defaultKeypresses.add (KeyPress ('z', cmd, 0));
-            break;
-        }
+    auto command = findCommand (commandID);
+    if (command == nullptr)
+        return;
 
-        case StandardApplicationCommandIDs::redo:
-        {
-            const auto step = getEngine()->getUndoManager()->getRedoDescription();
-            result.setInfo (step.isEmpty() ? TRANS ("Redo") : TRANS ("Redo") + " " + step, TRANS ("Redo"), "Editing", 0);
-            result.setActive (getEngine()->getUndoManager()->canRedo());
-            result.defaultKeypresses.add (KeyPress ('z', cmd | shift, 0));
-            break;
-        }
-
-        case StandardApplicationCommandIDs::cut:
-            result.setInfo (TRANS ("Cut"), String(), "Editing", 0);
-            result.setActive (anythingSelected());
-            result.defaultKeypresses.add (KeyPress ('x', cmd, 0));
-            break;
-
-        case StandardApplicationCommandIDs::copy:
-            result.setInfo (TRANS ("Copy"), String(), "Editing", 0);
-            result.setActive (anythingSelected());
-            result.defaultKeypresses.add (KeyPress ('c', cmd, 0));
-            break;
-
-        case StandardApplicationCommandIDs::paste:
-            result.setInfo (TRANS ("Paste"), String(), "Editing", 0);
-            result.defaultKeypresses.add (KeyPress ('v', cmd, 0));
-            result.setActive (canPaste());
-            break;
-
-        case StandardApplicationCommandIDs::del:
-            result.setInfo (TRANS ("Delete"), String(), "Editing", 0);
-            result.defaultKeypresses.add (KeyPress (KeyPress::deleteKey, ModifierKeys::noModifiers, 0));
-            // the Mac "delete" key: reaches the command whenever the focused
-            // component (a clip body, an overlay, ...) doesn't handle it itself
-            result.defaultKeypresses.add (KeyPress (KeyPress::backspaceKey, ModifierKeys::noModifiers, 0));
-            result.setActive (anythingSelected());
-            break;
-
-        case StandardApplicationCommandIDs::selectAll:
-            result.setInfo (TRANS ("Select All"), String(), "Editing", 0);
-            result.defaultKeypresses.add (KeyPress ('a', cmd, 0));
-            break;
-
-        case CommandIDs::duplicate:
-            result.setInfo (TRANS ("Duplicate"), String(), "Editing", 0);
-            result.defaultKeypresses.add (KeyPress ('d', cmd, 0));
-            break;
-            
-        default:
-            break;
-    }
+    result.setInfo (command->currentName ? command->currentName() : command->name,
+                    command->description, command->category, 0);
+    if (command->isActive)
+        result.setActive (command->isActive());
+    if (command->isTicked)
+        result.setTicked (command->isTicked());
+    result.defaultKeypresses.addArray (command->keys);
 }
 
 bool AudiumMainWindow::perform (const InvocationInfo& info)
 {
-    switch (info.commandID)
-    {
-        case CommandIDs::playStop:
-            if (auto scheduler = getEngine()->getPlayListScheduler()) {
-                scheduler->isPlaying() ? scheduler->stopPlaying() : scheduler->startPlaying();
-            }
-            mainComponent->updateUI();
-            break;
-        case CommandIDs::loopSelection:
-            loopSelectedRange();
-            break;
-        case CommandIDs::createRegion:
-            if (newRegionDialog == nullptr)
-                newRegionDialog = std::make_unique<NewRegionDialog>();
-            newRegionDialog->createNewRegion(getEngine());
-            break;
-        case CommandIDs::splitRegion:
-            {
-                auto pos = getEngine()->getPlayListScheduler()->getAbsoluteStartPosition(audium::clocks);
-                getEngine()->getAudioTrackContainer()->getAudioRegionAdapter().splitRegions(pos, audium::clocks);
-            }
-            break;
-        case CommandIDs::cleanupRegions:
-            getEngine()->getAudioTrackContainer()->deleteUnusedRegions();
-            break;
-        case CommandIDs::autoEdit:
-            toggleAutoEditPreview();
-            break;
-        case CommandIDs::assembleSequential:
-            invokeAssemble(audium::AssembleConfig::Mode::Sequential);
-            break;
-        case CommandIDs::assembleRandom:
-            invokeAssemble(audium::AssembleConfig::Mode::Random);
-            break;
-        case CommandIDs::separateStems:
-            invokeSeparateStems();
-            break;
-        case CommandIDs::stretchClip:
-            toggleStretchOverlay();
-            break;
-        case CommandIDs::bounceProject:
-            if (exportAudioDialog == nullptr)
-                exportAudioDialog = std::make_unique<ExportAudioDialog>(getEngine());
-            exportAudioDialog->invoke (mainComponent);
-            break;
-        case CommandIDs::toggleFullScreen:
-            setFullScreen (!isFullScreen());
-            break;
-        case CommandIDs::zoomIn:
-            mainComponent->zoomIn();
-            break;
-        case CommandIDs::zoomOut:
-            mainComponent->zoomOut();
-            break;
-        case CommandIDs::pageLeft:
-            mainComponent->pageLeft();
-            break;
-        case CommandIDs::pageRight:
-            mainComponent->pageRight();
-            break;
-        case CommandIDs::followTransport:
-            getEngine()->getPlayListScheduler()->setFollowTransport(!getEngine()->getPlayListScheduler()->getFollowTransport());
-            mainComponent->rebuildUI();
-            break;
-        case CommandIDs::enableSnapToGrid:
-            SnapToGridHandler::setEnabled (! SnapToGridHandler::isEnabled());
-            AudiumApplication::getPreferences().setValue (PreferenceKeys::snapToGridEnabled,
-                                                          SnapToGridHandler::isEnabled() ? "true" : "false");
-            break;
-        case StandardApplicationCommandIDs::undo:
-            getEngine()->getUndoManager()->undo();
-            break;
-        case StandardApplicationCommandIDs::redo:
-            getEngine()->getUndoManager()->redo();
-            break;
-        case StandardApplicationCommandIDs::cut:
-            mainComponent->copy();
-            getEngine()->getAudioTrackContainer()->deleteSelectedObjects();
-            break;
-        case StandardApplicationCommandIDs::copy:
-            mainComponent->copy();
-            break;
-        case StandardApplicationCommandIDs::paste:
-            mainComponent->paste();
-            break;
-        case StandardApplicationCommandIDs::del:
-            getEngine()->getAudioTrackContainer()->deleteSelectedObjects();
-            break;
-        case StandardApplicationCommandIDs::selectAll:
-            mainComponent->selectAll();
-            break;
-        case CommandIDs::duplicate:
-            mainComponent->duplicate();
-            break;
-        case CommandIDs::createAudioTrack:
-            if (newAudioTrackDialog == nullptr)
-                newAudioTrackDialog = std::make_unique<NewAudioTrackDialog>();
-            newAudioTrackDialog->createNewAudioTrack(getEngine());
-            break;
-        default:
-            return false;
-    }
+    auto command = findCommand (info.commandID);
+    if (command == nullptr)
+        return false;
 
+    command->perform();
     return true;
 }
 
@@ -594,11 +485,8 @@ bool AudiumMainWindow::canToggleStretchOverlay()
     if (target->isActive())
         return true;
 
-    for (const auto& object : getEngine()->getAudioTrackContainer()->getSelectionManager()->getSelectedObjects())
-        if (auto* item = dynamic_cast<audium::PlayListItem*>(object.get()))
-            return ! item->isRecording();
-
-    return false;
+    auto item = getEngine()->getAudioTrackContainer()->getSelectionManager()->firstSelectedClip();
+    return item != nullptr && ! item->isRecording();
 }
 
 void AudiumMainWindow::loopSelectedRange()
@@ -629,12 +517,6 @@ void AudiumMainWindow::toggleStretchOverlay()
         return;
     }
 
-    for (const auto& object : getEngine()->getAudioTrackContainer()->getSelectionManager()->getSelectedObjects())
-    {
-        if (auto* item = dynamic_cast<audium::PlayListItem*>(object.get()))
-        {
-            target->set(item->getRegion()->getAudioTrack()->getId(), item->getId());
-            return;
-        }
-    }
+    if (auto item = getEngine()->getAudioTrackContainer()->getSelectionManager()->firstSelectedClip())
+        target->set(item->getRegion()->getAudioTrack()->getId(), item->getId());
 }

@@ -32,12 +32,31 @@ public:
     std::shared_ptr<audium::AudiumEngine> getEngine() const { return audiumEngine; }
     
     ApplicationCommandTarget* getNextCommandTarget() override;
-    void getAllCommands (Array <CommandID>& commands) override;
+    void getAllCommands (Array <CommandID>& result) override;
     void getCommandInfo (CommandID commandID, ApplicationCommandInfo& result) override;
     bool perform (const InvocationInfo& info) override;
     
 private:
-    
+    // One entry per command: getAllCommands(), getCommandInfo() and perform()
+    // all read this table.
+    struct Command
+    {
+        juce::CommandID id;
+        juce::String name;
+        juce::String description;
+        juce::String category;
+        juce::Array<juce::KeyPress> keys;
+        std::function<bool()> isActive;             // empty: always active
+        std::function<bool()> isTicked;             // empty: never ticked
+        std::function<juce::String()> currentName;  // empty: name
+        std::function<void()> perform;
+    };
+
+    std::vector<Command> makeCommands();
+    const Command* findCommand (juce::CommandID commandID) const;
+
+    std::vector<Command> commands;
+
     bool anythingSelected();
     bool canPaste();
 

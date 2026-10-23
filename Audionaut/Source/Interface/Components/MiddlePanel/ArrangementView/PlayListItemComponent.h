@@ -99,6 +99,11 @@ private:
     std::unique_ptr<DraggingHandle> curveInControl;
     std::unique_ptr<DraggingHandle> curveOutControl;
 
+    // What each of the six handles above edits - drives their creation and
+    // wiring (defined in the .cpp).
+    struct FadeHandleSpec;
+    static std::array<FadeHandleSpec, 6> fadeHandleSpecs();
+
     // bend handles only make sense on a ramp wide enough to grab
     bool fadeInRampWide = false;
     bool fadeOutRampWide = false;

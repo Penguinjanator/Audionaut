@@ -9,7 +9,7 @@
 
 #include "Engine/PlayList/PlayListItem.h"
 #include "Engine/PlayList/PlayListContainer.h"
-#include "Engine/Export/PlayListItemExport.h"
+#include "Interface/Controls/ClipExportMenu.h"
 #include "Engine/Analysis/AnalysisProvider.h"
 
 class PlayListItemDraggerControl : public DraggerControl,
@@ -126,8 +126,6 @@ public:
     
     void mouseDown (const juce::MouseEvent& e) override;
     
-    void exportSelectedPlayListItem();
-    
     bool isRecording() override
     {
         return playListItem->isRecording();
@@ -187,7 +185,7 @@ private:
 
     std::shared_ptr<audium::PlayListContainer> playListContainer;
     std::shared_ptr<audium::PlayListItem> playListItem;
-    std::unique_ptr<audium::PlayListItemExport> exporter;
+    ClipExportMenu exportMenu;
 
     // the fades of every clip on the dragged clips' playlists at drag start
     std::vector<std::pair<std::weak_ptr<audium::PlayListItem>, json>> dragStartDynamics;

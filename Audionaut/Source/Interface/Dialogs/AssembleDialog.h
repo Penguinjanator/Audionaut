@@ -70,7 +70,7 @@ private:
             xfadeButton = ClipOverlayBase::makeIconButton (TRANS ("Xfade"), ClipOverlayBase::xfadeIconPath());
             xfadeButton->setClickingTogglesState (true);
             xfadeButton->setToggleState (crossfades, dontSendNotification);
-            xfadeButton->setColour (TextButton::buttonOnColourId, Colour (ClipOverlayBase::toggledOnColour));
+            xfadeButton->setColour (TextButton::buttonOnColourId, Colour (audium::toggledOnColour));
             addAndMakeVisible (xfadeButton.get());
 
             addAndMakeVisible (xfadeLabel);

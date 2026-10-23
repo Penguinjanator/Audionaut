@@ -21,4 +21,8 @@ enum ColourIds
     muteColourId                      = 0x234000c,
 };
 
+/// The accent colour of a toggled-on button: the header's Link, Play and
+/// Loop buttons and the clip overlays' toggles.
+inline constexpr juce::uint32 toggledOnColour = 0xff12a4e2;
+
 } // namespace audium

@@ -30,7 +30,7 @@ HeaderComponent::HeaderComponent (std::shared_ptr<audium::AudiumEngine> audiumEn
     linkButton.reset (new juce::TextButton ("Link"));
     addAndMakeVisible (linkButton.get());
     linkButton->setColour (juce::TextButton::buttonColourId, juce::Colour (0xff7a7a7a));
-    linkButton->setColour (juce::TextButton::buttonOnColourId, juce::Colour (0xff12a4e2));
+    linkButton->setColour (juce::TextButton::buttonOnColourId, juce::Colour (audium::toggledOnColour));
     linkButton->setClickingTogglesState(true);
     auto linkEngine = audiumEngine->getPlayListScheduler()->getLinkEngine().get();
     linkButton->onClick = [this, linkEngine] {
@@ -49,93 +49,16 @@ HeaderComponent::HeaderComponent (std::shared_ptr<audium::AudiumEngine> audiumEn
         tempoProvider->setTempo(tempoSlider->getValue());
     };
 
-    // Bars
-    barsSlider = std::make_unique<juce::Slider>("Bars Slider Font 13");
-    addAndMakeVisible (barsSlider.get());
-    AudiumLookAndFeel::configureSlider(barsSlider.get());
-    barsSlider->setVelocityModeParameters(1.0, 1, 0.01);
-    barsSlider->setNormalisableRange(NormalisableRange<double>(0, 1000, 1));
-    barsSlider->onDragStart = [this]() {
-        lastBarsValue = static_cast<int>(barsSlider->getValue());
-    };
-    
-    barsSlider->onValueChange = [this, scheduler]() {
-        auto barsDiff = static_cast<int>(barsSlider->getValue()) - lastBarsValue;
-        if (abs(barsDiff) > 0) {
-            auto clocksDiff = audium::TempoProvider::barsToClocks(barsDiff);
-            auto clocks = scheduler->getAbsoluteStartPosition(audium::clocks);
-            scheduler->setAbsoluteStartPosition(clocks + clocksDiff, audium::clocks);
-            lastBarsValue = static_cast<int>(barsSlider->getValue());
-        }
-    };
-    barsSlider->textFromValueFunction = [](auto val) {
-        return String(static_cast<int>(val) + 1);
-    };
-    barsSlider->valueFromTextFunction = [] (auto string) {
-        return string.getDoubleValue() - 1.0;
-    };
-    barsSlider->updateText();
-    
-    
-    // Beats
-    beatsSlider = std::make_unique<juce::Slider>("Beats Slider Font 13");
-    addAndMakeVisible (beatsSlider.get());
-    AudiumLookAndFeel::configureSlider(beatsSlider.get());
-    beatsSlider->setVelocityModeParameters(1.0, 1, 0.01);
-    beatsSlider->setNormalisableRange(NormalisableRange<double>(0, 4000, 1));
-    beatsSlider->onDragStart = [this]() {
-        lastBeatsValue = static_cast<int>(beatsSlider->getValue());
-    };
-    beatsSlider->onValueChange = [this, scheduler]() {
-        auto beatsDiff = static_cast<int>(beatsSlider->getValue()) - lastBeatsValue;
-        if (abs(beatsDiff) > 0) {
-            auto clocksDiff = audium::TempoProvider::beatsToClocks(beatsDiff);
-            auto clocks = scheduler->getAbsoluteStartPosition(audium::clocks);
-            scheduler->setAbsoluteStartPosition(clocks + clocksDiff, audium::clocks);
-            lastBeatsValue = static_cast<int>(beatsSlider->getValue());
-        }
-    };
-    
-    beatsSlider->textFromValueFunction = [](auto val) {
-        return String((static_cast<int>(val) % 4) + 1);
-    };
-    beatsSlider->valueFromTextFunction = [] (auto string) {
-        return string.getDoubleValue() - 1.0;
-    };
-    beatsSlider->updateText();
-    
-
-    // Clicks
-    clicksSlider = std::make_unique<juce::Slider>("Clocks Slider Font 13");
-    addAndMakeVisible (clicksSlider.get());
-    AudiumLookAndFeel::configureSlider(clicksSlider.get());
-    clicksSlider->setVelocityModeParameters(1.0, 1, 0.01);
-    clicksSlider->setNormalisableRange(NormalisableRange<double>(0, 16000, 1));
-    clicksSlider->onDragStart = [this]() {
-        lastClicksValue = static_cast<int>(clicksSlider->getValue());
-    };
-    clicksSlider->onValueChange = [this, scheduler]() {
-        auto clicksDiff = static_cast<int>(clicksSlider->getValue()) - lastClicksValue;
-        if (abs(clicksDiff) > 0) {
-            auto clocksDiff = audium::TempoProvider::clicksToClocks(clicksDiff);
-            auto clocks = scheduler->getAbsoluteStartPosition(audium::clocks);
-            scheduler->setAbsoluteStartPosition(clocks + clocksDiff, audium::clocks);
-            lastClicksValue = static_cast<int>(clicksSlider->getValue());
-        }
-    };
-    clicksSlider->textFromValueFunction = [](auto val) {
-        auto intVal = (static_cast<int>(val) % 4) + 1;
-        return String(intVal);
-    };
-    clicksSlider->valueFromTextFunction = [] (auto string) {
-        return string.getDoubleValue() - 1.0;
-    };
-    clicksSlider->updateText();
-    
-    // TODO: fix edit mode
-    barsSlider->setTextBoxIsEditable(false);
-    beatsSlider->setTextBoxIsEditable(false);
-    clicksSlider->setTextBoxIsEditable(false);
+    // Position: bars, beats and clicks of the play position
+    barsSlider = makePositionSlider ("Bars Slider Font 13", 1000, lastBarsValue,
+                                     audium::TempoProvider::barsToClocks,
+                                     [] (double val) { return String (static_cast<int> (val) + 1); });
+    beatsSlider = makePositionSlider ("Beats Slider Font 13", 4000, lastBeatsValue,
+                                      audium::TempoProvider::beatsToClocks,
+                                      [] (double val) { return String ((static_cast<int> (val) % 4) + 1); });
+    clicksSlider = makePositionSlider ("Clocks Slider Font 13", 16000, lastClicksValue,
+                                       audium::TempoProvider::clicksToClocks,
+                                       [] (double val) { return String ((static_cast<int> (val) % 4) + 1); });
     
 
     // PLAY
@@ -163,7 +86,7 @@ HeaderComponent::HeaderComponent (std::shared_ptr<audium::AudiumEngine> audiumEn
         }
     };
     playButton->setClickingTogglesState(true);
-    playButton->setColour (TextButton::buttonOnColourId, Colour (0xff12a4e2));
+    playButton->setColour (TextButton::buttonOnColourId, Colour (audium::toggledOnColour));
     playButton->setColour(TextButton::buttonColourId, Colours::grey);
     
     // STOP
@@ -211,7 +134,7 @@ HeaderComponent::HeaderComponent (std::shared_ptr<audium::AudiumEngine> audiumEn
 
     loopButton->setImages(&loopImage);
     loopButton->setClickingTogglesState(true);
-    loopButton->setColour (TextButton::buttonOnColourId, Colour (0xff12a4e2));
+    loopButton->setColour (TextButton::buttonOnColourId, Colour (audium::toggledOnColour));
     loopButton->setColour(TextButton::buttonColourId, Colours::grey);
     
     loopButton->onClick = [this, scheduler]() {
@@ -260,6 +183,47 @@ HeaderComponent::HeaderComponent (std::shared_ptr<audium::AudiumEngine> audiumEn
 
     setSize (1200, 40);
     startTimerHz(AudiumLookAndFeel::timerHz);
+}
+
+std::unique_ptr<juce::Slider> HeaderComponent::makePositionSlider (const juce::String& name,
+                                                                   double maximum,
+                                                                   int& lastValue,
+                                                                   double (*unitsToClocks) (double),
+                                                                   std::function<juce::String (double)> textFromValue)
+{
+    auto slider = std::make_unique<juce::Slider> (name);
+    auto* s = slider.get();
+    auto scheduler = audiumEngine->getPlayListScheduler().get();
+
+    addAndMakeVisible (s);
+    AudiumLookAndFeel::configureSlider (s);
+    s->setVelocityModeParameters (1.0, 1, 0.01);
+    s->setNormalisableRange (NormalisableRange<double> (0, maximum, 1));
+
+    // The timer moves the value without notification, so remember where a
+    // drag starts and move the play position by the dragged difference.
+    s->onDragStart = [s, &lastValue]() {
+        lastValue = static_cast<int> (s->getValue());
+    };
+    s->onValueChange = [s, &lastValue, scheduler, unitsToClocks]() {
+        auto diff = static_cast<int> (s->getValue()) - lastValue;
+        if (abs (diff) > 0) {
+            auto clocksDiff = unitsToClocks (diff);
+            auto clocks = scheduler->getAbsoluteStartPosition (audium::clocks);
+            scheduler->setAbsoluteStartPosition (clocks + clocksDiff, audium::clocks);
+            lastValue = static_cast<int> (s->getValue());
+        }
+    };
+    s->textFromValueFunction = std::move (textFromValue);
+    s->valueFromTextFunction = [] (auto string) {
+        return string.getDoubleValue() - 1.0;
+    };
+    s->updateText();
+
+    // TODO: fix edit mode
+    s->setTextBoxIsEditable (false);
+
+    return slider;
 }
 
 HeaderComponent::~HeaderComponent()

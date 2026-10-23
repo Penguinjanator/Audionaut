@@ -3650,6 +3650,7 @@
     <ClInclude Include="..\..\Source\Interface\Models\PlayListTableListBoxModel.h"/>
     <ClInclude Include="..\..\Source\Interface\Models\RegionTableListBoxModel.h"/>
     <ClInclude Include="..\..\Source\Interface\Models\PlayListItemListBoxModel.h"/>
+    <ClInclude Include="..\..\Source\Interface\Models\TrackListBoxModels.h"/>
     <ClInclude Include="..\..\Source\Interface\Controls\ClipOverlayBase.h"/>
     <ClInclude Include="..\..\Source\Interface\Controls\StretchOverlayControl.h"/>
     <ClInclude Include="..\..\Source\Interface\Controls\AutoEditOverlayControl.h"/>
@@ -3660,6 +3661,7 @@
     <ClInclude Include="..\..\Source\Interface\Controls\AudiumLabel.h"/>
     <ClInclude Include="..\..\Source\Interface\Controls\DragZoomControl.h"/>
     <ClInclude Include="..\..\Source\Interface\Controls\PlayListItemDraggerControl.h"/>
+    <ClInclude Include="..\..\Source\Interface\Controls\ClipExportMenu.h"/>
     <ClInclude Include="..\..\Source\Interface\Controls\DraggerControl.h"/>
     <ClInclude Include="..\..\Source\Interface\Controls\LevelMeter.h"/>
     <ClInclude Include="..\..\Source\Interface\Controls\LoadMeter.h"/>

@@ -14,7 +14,6 @@
 #include "Engine/Playback/AudioBusInterface.h"
 #include "Engine/Resource/ChannelMapping.h"
 #include "Util/EngineAccess.h"
-#include "Application/AudiumCommandIDs.h"
 #include "Engine/PlayList/PlayListScheduler.h"
 
 ChannelComponent::ChannelComponent (std::shared_ptr<audium::AudioTrack> audioTrack_,
@@ -475,25 +474,6 @@ void ChannelComponent::configurePanSlider(juce::Slider *slider)
     slider->updateText();
 }
 
-static void channelMenuCallback (int result, ChannelComponent* component)
-{
-    if (component != nullptr
-        && result != 0) {
-        switch (result) {
-            case CommandIDs::copyChansToNewTrackId:
-                if (!component->getEngine()->getAudioTrackContainer()->copySelectedChannelsToNewTrack()) {
-                    NativeMessageBox::showMessageBoxAsync(MessageBoxIconType::WarningIcon,
-                                                          "Error",
-                                                          "no channel selected.");
-                }
-                break;
-
-            default:
-                break;
-        }
-    }
-}
-
 void ChannelComponent::mouseDown (const juce::MouseEvent& e)
 {
     bool isSelected = isChannelSelected();
@@ -508,13 +488,18 @@ void ChannelComponent::mouseDown (const juce::MouseEvent& e)
     if (e.mods.isPopupMenu()) {
     
         PopupMenu m;
-        m.addItem (CommandIDs::copyChansToNewTrackId, TRANS ("Copy selected channel(s) to new track"), true);
-
-        if (m.getNumItems() > 0) {
-            m.setLookAndFeel (&getLookAndFeel());
-            m.showMenuAsync (PopupMenu::Options().withStandardItemHeight(AudiumLookAndFeel::popupMenuItemHeight),
-                             ModalCallbackFunction::forComponent (channelMenuCallback, this));
-        }
+        m.addItem (TRANS ("Copy selected channel(s) to new track"), [safeThis = Component::SafePointer<ChannelComponent> (this)]
+        {
+            if (safeThis == nullptr)
+                return;
+            if (!safeThis->getEngine()->getAudioTrackContainer()->copySelectedChannelsToNewTrack()) {
+                NativeMessageBox::showMessageBoxAsync(MessageBoxIconType::WarningIcon,
+                                                      "Error",
+                                                      "no channel selected.");
+            }
+        });
+        m.setLookAndFeel (&getLookAndFeel());
+        m.showMenuAsync (PopupMenu::Options().withStandardItemHeight(AudiumLookAndFeel::popupMenuItemHeight));
     }
     
     audioTrack->getAudioTrackContainer().sendActionMessage(audium::updateMiddlePanelAction);

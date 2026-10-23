@@ -5364,6 +5364,9 @@
     <ClInclude Include="..\..\Source\Interface\Models\PlayListItemListBoxModel.h">
       <Filter>Audionaut\Source\Interface\Models</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\Source\Interface\Models\TrackListBoxModels.h">
+      <Filter>Audionaut\Source\Interface\Models</Filter>
+    </ClInclude>
     <ClInclude Include="..\..\Source\Interface\Controls\ClipOverlayBase.h">
       <Filter>Audionaut\Source\Interface\Controls</Filter>
     </ClInclude>
@@ -5392,6 +5395,9 @@
       <Filter>Audionaut\Source\Interface\Controls</Filter>
     </ClInclude>
     <ClInclude Include="..\..\Source\Interface\Controls\PlayListItemDraggerControl.h">
+      <Filter>Audionaut\Source\Interface\Controls</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Source\Interface\Controls\ClipExportMenu.h">
       <Filter>Audionaut\Source\Interface\Controls</Filter>
     </ClInclude>
     <ClInclude Include="..\..\Source\Interface\Controls\DraggerControl.h">

@@ -52,13 +52,6 @@ namespace CommandIDs
         pageRight               = 0x300079,
         
         createAudioTrack     = 0x300085,
-       
-        exportSelectedItemsId   = 0xf836743,
-        copyChansToNewTrackId   = 0xf836744,
-
-        showSegments            = 0x500010,
-        showOnsets              = 0x500011,
-        showBeats               = 0x500012,
 
         lastCommandIDEntry
     };
