@@ -438,11 +438,6 @@ private:
     std::string audioResourceFilePath;
 
     const std::string getBaseName() const;
-
-    // Wraps a mutation in the undo transaction the UI expects, so one Undo
-    // takes back everything the edit changed.
-    bool applyAsUndoableEdit(std::function<bool()> mutate,
-                             const juce::String& transactionName = "Auto Edit");
 };
 
 } // namespace audium

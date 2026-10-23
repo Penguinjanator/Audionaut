@@ -23,13 +23,18 @@ namespace audium {
  * assumed untouched. Returns false as well when the recorded state can't be
  * re-applied (the container is then rolled back to its pre-edit state).
  *
+ * @p rebuild is handed to the recorded action: false lets undo/redo read the
+ * snapshots into the existing tracks instead of rebuilding them, for edits
+ * that don't add or remove tracks, channels or resource groups.
+ *
  * Message thread only, like every other container mutation.
  */
 inline bool applyAsUndoableEdit (AudioTrackContainer& container,
                                  const std::function<bool()>& mutate,
-                                 const juce::String& transactionName)
+                                 const juce::String& transactionName,
+                                 bool rebuild = true)
 {
-    auto action = std::make_unique<UndoableContainerAction> (container);
+    auto action = std::make_unique<UndoableContainerAction> (container, rebuild);
 
     if (! mutate())
         return false;

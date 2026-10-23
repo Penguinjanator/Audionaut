@@ -122,19 +122,13 @@ public:
     void deleteUnusedRegions();
 
     /**
-     * @brief Writes the container data to a stream.
-     * @param outputStream The output stream to write to.
-     * @return True if the operation succeeds, false otherwise.
-     */
-    bool writeToStream(juce::OutputStream& outputStream) override;
-
-    /**
-     * @brief Reads the container data from a stream.
-     * @param inputStream The input stream to read from.
+     * @brief Applies a snapshot taken with writeToJson() (undo/redo) and tells
+     *        the UI and the scheduler that the container changed.
+     * @param state The snapshot to apply; left unmodified.
      * @param rebuild Whether to rebuild the container during reading.
      * @return True if the operation succeeds, false otherwise.
      */
-    bool readFromStream(juce::InputStream& inputStream, bool rebuild) override;
+    bool restoreFromJson(const json& state, bool rebuild);
 
     /**
      * @brief Writes the container data to a JSON object.

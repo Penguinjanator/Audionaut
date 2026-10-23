@@ -61,21 +61,6 @@ public:
     void sendActionMessage(const juce::String& message) const;
 
     /**
-    * @brief Writes the region data to a stream.
-    * @param outputStream The output stream to write to.
-    * @return True if the operation was successful, false otherwise.
-    */
-    bool writeToStream(juce::OutputStream& outputStream) override;
-
-    /**
-    * @brief Reads the region data from a stream.
-    * @param inputStream The input stream to read from.
-    * @param rebuild Whether to rebuild the region after reading.
-    * @return True if the operation was successful, false otherwise.
-    */
-    bool readFromStream(juce::InputStream& inputStream, bool rebuild) override;
-
-    /**
     * @brief Serializes the region data to a JSON object.
     * @param output The JSON object to write to.
     * @return True if the operation was successful, false otherwise.

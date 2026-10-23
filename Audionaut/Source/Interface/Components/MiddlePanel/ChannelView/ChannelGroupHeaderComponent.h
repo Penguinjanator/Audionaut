@@ -11,6 +11,7 @@
 #include "Engine/Group/AudioTrackContainer.h"
 #include "Engine/ActionMessages.h"
 #include "Engine/Analysis/AnalysisProvider.h"
+#include "Engine/Undo/UndoableEdit.h"
 
 #include "Interface/LookAndFeel/AudiumLookAndFeel.h"
 #include "Interface/Controls/AudiumLabel.h"
@@ -107,15 +108,12 @@ public:
     {
         if (labelThatHasChanged == audioTrackNameLabel.get())
         {
-            // undo
-            auto action = std::make_unique<audium::UndoableContainerAction>(audioTrack->getAudioTrackContainer(), false);
-            
-            audioTrack->setAudioTrackName(audioTrackNameLabel->getText());
-            
-            // undo
-            action->storeNewState();
-            audioTrack->getAudioTrackContainer().getUndoManager()->perform(action.release(), "Set audio track name");
-            audioTrack->getAudioTrackContainer().getUndoManager()->beginNewTransaction();
+            audium::applyAsUndoableEdit(audioTrack->getAudioTrackContainer(), [this]
+            {
+                audioTrack->setAudioTrackName(audioTrackNameLabel->getText());
+                return true;
+            },
+            "Set audio track name", false);
         }
     }
     
@@ -155,28 +153,22 @@ public:
     
     void setMinimized(bool bMinimized)
     {
-        // undo
-        auto action = std::make_unique<audium::UndoableContainerAction>(audioTrack->getAudioTrackContainer(), false);
-        
-        audioTrack->getViewState().setMinimized(bMinimized);
-        
-        // undo
-        action->storeNewState();
-        audioTrack->getAudioTrackContainer().getUndoManager()->perform(action.release(), "minimize audio track");
-        audioTrack->getAudioTrackContainer().getUndoManager()->beginNewTransaction();
+        audium::applyAsUndoableEdit(audioTrack->getAudioTrackContainer(), [this, bMinimized]
+        {
+            audioTrack->getViewState().setMinimized(bMinimized);
+            return true;
+        },
+        "minimize audio track", false);
     }
     
     void toggleAnalysisVisibility(audium::AnalysisType analysisType)
     {
-        // undo
-        auto action = std::make_unique<audium::UndoableContainerAction>(audioTrack->getAudioTrackContainer(), false);
-
-        audioTrack->getViewState().setAnalysisTypeVisible(analysisType, !audioTrack->getViewState().isAnalysisTypeVisible(analysisType));
-
-        // undo
-        action->storeNewState();
-        audioTrack->getAudioTrackContainer().getUndoManager()->perform(action.release(), "toggle analysis visibility");
-        audioTrack->getAudioTrackContainer().getUndoManager()->beginNewTransaction();
+        audium::applyAsUndoableEdit(audioTrack->getAudioTrackContainer(), [this, analysisType]
+        {
+            audioTrack->getViewState().setAnalysisTypeVisible(analysisType, !audioTrack->getViewState().isAnalysisTypeVisible(analysisType));
+            return true;
+        },
+        "toggle analysis visibility", false);
 
         // refresh the arrangement so the clips redraw with the new visibility
         audioTrack->getAudioTrackContainer().sendActionMessage(audium::updateArrangementAction);
@@ -184,17 +176,14 @@ public:
 
     void setChannelHeight(int height)
     {
-        // undo
-        auto action = std::make_unique<audium::UndoableContainerAction>(audioTrack->getAudioTrackContainer(), false);
-        
-        jassert(height > 0);
-        audioTrack->getViewState().setMinimized(false);
-        audioTrack->getViewState().setChannelHeight(height);
-        
-        // undo
-        action->storeNewState();
-        audioTrack->getAudioTrackContainer().getUndoManager()->perform(action.release(), "Set audio track height");
-        audioTrack->getAudioTrackContainer().getUndoManager()->beginNewTransaction();
+        audium::applyAsUndoableEdit(audioTrack->getAudioTrackContainer(), [this, height]
+        {
+            jassert(height > 0);
+            audioTrack->getViewState().setMinimized(false);
+            audioTrack->getViewState().setChannelHeight(height);
+            return true;
+        },
+        "Set audio track height", false);
     }
     
     

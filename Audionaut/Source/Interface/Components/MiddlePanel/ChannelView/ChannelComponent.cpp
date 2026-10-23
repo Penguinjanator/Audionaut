@@ -10,6 +10,7 @@
 #include "Engine/Channel/AudioChannel.h"
 #include "Engine/Group/AudioTrackContainer.h"
 #include "Engine/Undo/UndoableContainerAction.h"
+#include "Engine/Undo/UndoableEdit.h"
 #include "Interface/LookAndFeel/AudiumLookAndFeel.h"
 #include "Engine/Playback/AudioBusInterface.h"
 #include "Engine/Resource/ChannelMapping.h"
@@ -396,31 +397,25 @@ void ChannelComponent::stripMenuCallback (int result, ChannelComponent* componen
 
 void ChannelComponent::setChannelHeight(int height)
 {
-    // undo
-    auto action = std::make_unique<audium::UndoableContainerAction>(audioTrack->getAudioTrackContainer(), false);
-
-    audioTrack->getChannel(rowNumber)->setChannelHeight(height);
-
-    // undo
-    action->storeNewState();
-    audioTrack->getAudioTrackContainer().getUndoManager()->perform(action.release(), "Set audio track height");
-    audioTrack->getAudioTrackContainer().getUndoManager()->beginNewTransaction();
+    audium::applyAsUndoableEdit(audioTrack->getAudioTrackContainer(), [this, height]
+    {
+        audioTrack->getChannel(rowNumber)->setChannelHeight(height);
+        return true;
+    },
+    "Set audio track height", false);
 }
 
 void ChannelComponent::setRoutingChannel(bool isInput, int newChannel)
 {
-    // undo
-    auto action = std::make_unique<audium::UndoableContainerAction>(audioTrack->getAudioTrackContainer(), false);
-
-    if (isInput)
-        audioTrack->getChannel(rowNumber)->setInputChannel(newChannel);
-    else
-        audioTrack->getChannel(rowNumber)->setOutputChannel(newChannel);
-
-    // undo
-    action->storeNewState();
-    audioTrack->getAudioTrackContainer().getUndoManager()->perform(action.release(), "Set channel routing");
-    audioTrack->getAudioTrackContainer().getUndoManager()->beginNewTransaction();
+    audium::applyAsUndoableEdit(audioTrack->getAudioTrackContainer(), [this, isInput, newChannel]
+    {
+        if (isInput)
+            audioTrack->getChannel(rowNumber)->setInputChannel(newChannel);
+        else
+            audioTrack->getChannel(rowNumber)->setOutputChannel(newChannel);
+        return true;
+    },
+    "Set channel routing", false);
 }
 
 void ChannelComponent::timerCallback()

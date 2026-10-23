@@ -119,7 +119,7 @@ int runCreateRegion (const juce::ArgumentList& args, CliContext& context)
                                  "no clip fully contains the given range on any track");
 
         auto baseline = regionNames (adapter);
-        adapter.createRegionsFromSelection (name, true);
+        adapter.createRegionsFromSelection (name);
         auto created = newRegionNames (adapter, baseline);
 
         if (created.empty())

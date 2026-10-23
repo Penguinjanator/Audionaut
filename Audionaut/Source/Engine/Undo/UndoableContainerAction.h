@@ -6,7 +6,6 @@
 #pragma once
 
 #include <JuceHeader.h>
-#include "Engine/Streamable.h"
 #include "Engine/Group/AudioTrackContainer.h"
 #include "Engine/Playback/AudioBusInterface.h"
 
@@ -47,9 +46,8 @@ struct UndoableContainerAction final : public juce::UndoableAction
      */
     void storeOldState()
     {
-        juce::MemoryOutputStream outStream;
-        container.writeToStream(outStream);
-        oldMemoryBlock = outStream.getMemoryBlock();
+        oldState = json();
+        container.writeToJson(oldState);
     }
     
     /**
@@ -57,9 +55,8 @@ struct UndoableContainerAction final : public juce::UndoableAction
      */
     void storeNewState()
     {
-        juce::MemoryOutputStream outStream;
-        container.writeToStream(outStream);
-        newMemoryBlock = outStream.getMemoryBlock();
+        newState = json();
+        container.writeToJson(newState);
     }
     
     /**
@@ -69,8 +66,7 @@ struct UndoableContainerAction final : public juce::UndoableAction
     bool perform() override
     {
         try {
-            juce::MemoryInputStream inputStream(newMemoryBlock, false);
-            if (container.readFromStream(inputStream, rebuild))
+            if (container.restoreFromJson(newState, rebuild))
                 return true;
 
             // a rejected state may have been read partway - don't report
@@ -81,7 +77,7 @@ struct UndoableContainerAction final : public juce::UndoableAction
         catch (std::exception &e) {
             std::cout << "UndoableContainerAction::perform -> " << e.what() << std::endl;
         }
-        rollBackTo(oldMemoryBlock);
+        rollBackTo(oldState);
         return false;
     }
 
@@ -96,8 +92,7 @@ struct UndoableContainerAction final : public juce::UndoableAction
             if (container.audioBusInterface->anyChannelRecording())
                 container.audioBusInterface->record(false);
 
-            juce::MemoryInputStream inputStream(oldMemoryBlock, false);
-            if (container.readFromStream(inputStream, rebuild))
+            if (container.restoreFromJson(oldState, rebuild))
                 return true;
 
             std::cout << "UndoableContainerAction::undo -> state rejected" << std::endl;
@@ -106,7 +101,7 @@ struct UndoableContainerAction final : public juce::UndoableAction
         catch (std::exception &e) {
             std::cout << "UndoableContainerAction::undo -> " << e.what() << std::endl;
         }
-        rollBackTo(newMemoryBlock);
+        rollBackTo(newState);
         return false;
     }
 
@@ -114,11 +109,10 @@ struct UndoableContainerAction final : public juce::UndoableAction
      * @brief Best-effort restore after a failed apply, so a rejected state
      *        doesn't leave a partially mutated container behind.
      */
-    void rollBackTo (const juce::MemoryBlock& state)
+    void rollBackTo (const json& state)
     {
         try {
-            juce::MemoryInputStream inputStream(state, false);
-            if (! container.readFromStream(inputStream, rebuild))
+            if (! container.restoreFromJson(state, rebuild))
                 std::cout << "UndoableContainerAction: rollback rejected" << std::endl;
         }
         catch (std::exception &e) {
@@ -139,7 +133,7 @@ struct UndoableContainerAction final : public juce::UndoableAction
         // and removal, corrupting its unit accounting.
         if (sizeInUnits == 0)
             sizeInUnits = (int) juce::jmax ((size_t) 1,
-                                            (oldMemoryBlock.getSize() + newMemoryBlock.getSize()) / 1024);
+                                            (oldState.dump(2).size() + newState.dump(2).size()) / 1024);
         return sizeInUnits;
     }
     
@@ -149,14 +143,14 @@ struct UndoableContainerAction final : public juce::UndoableAction
      AudioTrackContainer &container;
 
      /**
-      * @brief The memory block storing the "old" state of the container.
+      * @brief The "old" state of the container, as written by writeToJson().
       */
-     juce::MemoryBlock oldMemoryBlock;
+     json oldState;
 
      /**
-      * @brief The memory block storing the "new" state of the container.
+      * @brief The "new" state of the container, as written by writeToJson().
       */
-     juce::MemoryBlock newMemoryBlock;
+     json newState;
 
      /**
       * @brief A boolean indicating whether to rebuild the container state after undo/redo.

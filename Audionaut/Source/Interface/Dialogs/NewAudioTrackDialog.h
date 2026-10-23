@@ -14,7 +14,7 @@
 #include "Interface/Components/MainComponent.h"
 #include "Engine/Group/AudioTrack.h"
 #include "Engine/Group/ResourceGroup.h"
-#include "Engine/Undo/UndoableContainerAction.h"
+#include "Engine/Undo/UndoableEdit.h"
 
 using namespace juce;
 
@@ -108,16 +108,14 @@ private:
             return;
         }
 
-        auto action = std::make_unique<audium::UndoableContainerAction>(*audiumEngine->getAudioTrackContainer());
-
-        auto track = audiumEngine->getAudioTrackContainer()->createNewAudioTrack(name);
-        track->getViewState().setColour(audiumEngine->getAudioTrackContainer()->getNewAudioTrackColour());
-        track->ensureNumChannels(numChannels);
-
-        action->storeNewState();
-        auto undoManager = audiumEngine->getAudioTrackContainer()->getUndoManager();
-        undoManager->perform(action.release(), "create track");
-        undoManager->beginNewTransaction();
+        audium::applyAsUndoableEdit(*audiumEngine->getAudioTrackContainer(), [&]
+        {
+            auto track = audiumEngine->getAudioTrackContainer()->createNewAudioTrack(name);
+            track->getViewState().setColour(audiumEngine->getAudioTrackContainer()->getNewAudioTrackColour());
+            track->ensureNumChannels(numChannels);
+            return true;
+        },
+        "create track");
     }
     
     std::unique_ptr<AlertWindow> asyncAlertWindow;

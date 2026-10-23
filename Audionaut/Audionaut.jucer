@@ -343,8 +343,6 @@
         <GROUP id="{38829D96-12DD-C636-0C91-D4606DFE0C72}" name="Factory">
           <FILE id="jEBWMg" name="AudioTrackFactory.h" compile="0" resource="0"
                 file="Source/Engine/Factory/AudioTrackFactory.h"/>
-          <FILE id="VRfXqH" name="AudioResourceFactory.h" compile="0" resource="0"
-                file="Source/Engine/Factory/AudioResourceFactory.h"/>
           <FILE id="M4fDCK" name="AudiumFactory.cpp" compile="1" resource="0"
                 file="Source/Engine/Factory/AudiumFactory.cpp"/>
           <FILE id="ErnMCa" name="AudiumFactory.h" compile="0" resource="0" file="Source/Engine/Factory/AudiumFactory.h"/>

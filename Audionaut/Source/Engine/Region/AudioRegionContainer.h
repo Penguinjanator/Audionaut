@@ -70,7 +70,8 @@ public:
                                               const std::shared_ptr<AudioRegion> otherRegion);
 
     /**
-     * @brief Formats a number as a string.
+     * @brief Formats a number as a string, zero-padded to two digits
+     *        (region, take and channel numbers in names).
      * @param num The number to format.
      * @return The formatted string.
      */

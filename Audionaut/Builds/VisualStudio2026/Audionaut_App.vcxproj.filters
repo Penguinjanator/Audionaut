@@ -5043,9 +5043,6 @@
     <ClInclude Include="..\..\Source\Engine\Factory\AudioTrackFactory.h">
       <Filter>Audionaut\Source\Engine\Factory</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\Source\Engine\Factory\AudioResourceFactory.h">
-      <Filter>Audionaut\Source\Engine\Factory</Filter>
-    </ClInclude>
     <ClInclude Include="..\..\Source\Engine\Factory\AudiumFactory.h">
       <Filter>Audionaut\Source\Engine\Factory</Filter>
     </ClInclude>

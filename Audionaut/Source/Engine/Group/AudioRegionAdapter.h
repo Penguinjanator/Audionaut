@@ -76,9 +76,8 @@ public:
     /**
      * @brief Creates new audio regions from the current selection.
      * @param name The name of the new regions.
-     * @param arrangementMode Whether to use arrangement mode.
      */
-    void createRegionsFromSelection(juce::String name, bool arrangementMode);
+    void createRegionsFromSelection(juce::String name);
 
     /**
      * @brief Splits existing regions into separate regions.

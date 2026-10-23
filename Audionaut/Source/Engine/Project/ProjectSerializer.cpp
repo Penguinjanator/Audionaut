@@ -141,7 +141,7 @@ bool ProjectSerializer::applyProjectJson (json& input, bool preserveUiState)
     playListScheduler->commitPlayListData();
 
     // The UI/scheduler broadcasts normally happen in
-    // AudioTrackContainer::readFromStream; applying JSON directly must
+    // AudioTrackContainer::restoreFromJson; applying JSON directly must
     // publish them here. Only a read that replaced tracks or channels needs
     // the UI rebuilt: a refresh keeps the arrangement's clip views and their
     // waveform thumbnails alive, so an agent edit no longer redraws every

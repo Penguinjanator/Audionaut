@@ -15,7 +15,6 @@
 #include "Engine/Region/AudioRegion.h"
 #include "Engine/Group/AudioTrack.h"
 #include "Engine/AudiumEngine.h"
-#include "Engine/Factory/AudioResourceFactory.h"
 #include "Engine/Resource/audium_AudioThumbnail.h"
 #include "Engine/Resource/ChannelMapping.h"
 

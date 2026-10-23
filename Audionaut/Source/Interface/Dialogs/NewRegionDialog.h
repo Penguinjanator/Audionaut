@@ -43,12 +43,10 @@ private:
         auto context = audium::clocks;
         auto selectedRange = audiumEngine->getAudioTrackContainer()->getAudioRegionAdapter().getSelectedRange(context);
         for (auto track : engine->getAudioTrackContainer()->getAudioTracks()) {
-            if (audiumEngine->getPlayListScheduler()->isArrangementMode()) {
-                if (auto item = track->getPlayListContainer()->itemContainingRange(selectedRange, context)) {
-                    auto resourceGroup = item->getRegion()->getResourceGroup();
-                    name =  resourceGroup->getAudioRegionContainer()->getUniqueName(item->getRegion()->getName());
-                    break;
-                }
+            if (auto item = track->getPlayListContainer()->itemContainingRange(selectedRange, context)) {
+                auto resourceGroup = item->getRegion()->getResourceGroup();
+                name =  resourceGroup->getAudioRegionContainer()->getUniqueName(item->getRegion()->getName());
+                break;
             }
         }
         
@@ -88,8 +86,7 @@ private:
     
     void create(String name)
     {
-        bool isArrangement = audiumEngine->getPlayListScheduler()->isArrangementMode();
-        audiumEngine->getAudioTrackContainer()->getAudioRegionAdapter().createRegionsFromSelection(name, isArrangement);
+        audiumEngine->getAudioTrackContainer()->getAudioRegionAdapter().createRegionsFromSelection(name);
     }
     
     std::unique_ptr<AlertWindow> asyncAlertWindow;

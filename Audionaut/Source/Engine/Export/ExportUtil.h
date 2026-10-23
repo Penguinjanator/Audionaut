@@ -10,6 +10,7 @@
 #include "Engine/AudiumEngine.h"
 #include "Engine/Export/ExportFormat.h"
 #include "Engine/PlayList/PlayListScheduler.h"
+#include "Engine/Project/ProjectFileStore.h"
 
 namespace audium {
 
@@ -58,13 +59,9 @@ public:
                     file = file.withFileExtension (fileExtension (config->format));
                 
                 if (!file.hasWriteAccess()) {
-                    std::string errorString = "No write access. Please select a different location.";
-        #if JUCE_MAC
-                    errorString += "\n\n";
-                    errorString += "As a 'Sandboxed App' you are only allowed to save files in the Music folder.";
-        #endif
                     prompter->showMessage("Error",
-                                          "Failed to save " + file.getFullPathName() +"\n\n" + String(errorString));
+                                          "Failed to save " + file.getFullPathName() +"\n\n"
+                                              + String(ProjectFileStore::noWriteAccessMessage()));
                     return;
                 }
                 
