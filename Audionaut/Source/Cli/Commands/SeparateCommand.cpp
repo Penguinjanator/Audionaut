@@ -74,9 +74,6 @@ int runSeparate (const juce::ArgumentList& args, CliContext& context)
     if (! session)
         return openFailure;
 
-    std::string error;
-    auto captureError = [&error] (std::string message) { error = message; };
-
     StemSeparator separator (session.get(), backend);
 
     // The real backend reports a few times a second for minutes.
@@ -94,6 +91,7 @@ int runSeparate (const juce::ArgumentList& args, CliContext& context)
         return context.fail (exitFailure, "separation_failed",
                              separationError.isEmpty() ? "separation failed" : separationError.toStdString());
 
+    std::string error;
     if (! session.commit (error))
         return context.fail (exitFailure, "save_failed", error.empty() ? "failed to save project" : error);
 
