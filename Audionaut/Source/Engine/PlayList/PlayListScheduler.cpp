@@ -36,6 +36,39 @@ using namespace::juce;
 
 namespace audium {
 
+namespace {
+
+/** Calls renderBlock(numSamples) over totalSamples in blocks of blockSize,
+    the last block shorter. afterFullBlock(index, numFullBlocks) runs after
+    every full-size block; once stop() returns true no further block is
+    rendered, the shorter one included. Returns the samples rendered. */
+template <typename RenderBlock, typename AfterFullBlock, typename Stop>
+int64 renderInBlocks (int64 totalSamples, int blockSize,
+                      RenderBlock&& renderBlock, AfterFullBlock&& afterFullBlock, Stop&& stop)
+{
+    const auto numFullBlocks = totalSamples / blockSize;
+    const auto remainder = static_cast<int>(totalSamples - numFullBlocks * blockSize);
+    int64 rendered = 0;
+
+    for (int64 i = 0; i < numFullBlocks; ++i) {
+        renderBlock(blockSize);
+        rendered += blockSize;
+        afterFullBlock(i, numFullBlocks);
+
+        if (stop())
+            return rendered;
+    }
+
+    if (remainder > 0 && !stop()) {
+        renderBlock(remainder);
+        rendered += remainder;
+    }
+
+    return rendered;
+}
+
+} // namespace
+
 void PlayListScheduler::prepareToPlay (int samplesPerBlockExpected, double sampleRate)
 {
     externalSampleRate = sampleRate;
@@ -617,9 +650,6 @@ bool PlayListScheduler::bouncePlayListItem(juce::AudioFormatWriter* writer,
     auto totalSamples          = static_cast<int64>(std::round(spec.audibleLength() / spec.speedRatio * externalSampleRate));
     auto leadingSilenceSamples = static_cast<int64>(std::round(spec.preFileSilence() / spec.speedRatio * externalSampleRate));
     auto voiceSamples          = totalSamples - leadingSilenceSamples;
-    auto iterations            = voiceSamples / config->blockSize;
-    auto remainder             = voiceSamples - (iterations * config->blockSize);
-    jassert(remainder < config->blockSize);
 
     AudioBuffer<float> buffer(config->numChannels, config->blockSize);
     AudioSourceChannelInfo info (&buffer, 0, config->blockSize);
@@ -654,8 +684,12 @@ bool PlayListScheduler::bouncePlayListItem(juce::AudioFormatWriter* writer,
         silenceRemaining -= numSilence;
     }
 
-    for (auto i = 0; i < iterations; ++i) {
+    auto renderBlock = [&] (int numSamples)
+    {
+        info.numSamples = numSamples;
         info.clearActiveBufferRegion();
+
+        audioBusInfo.numSamples = numSamples;
         audioBusInfo.clearActiveBufferRegion();
         for (auto source : config->playListItem->getVoiceSources()) {
             source->getNextAudioBlock(audioBusInfo);
@@ -663,43 +697,20 @@ bool PlayListScheduler::bouncePlayListItem(juce::AudioFormatWriter* writer,
                 info.buffer->addFrom(c, info.startSample, audioBusBuffer.getReadPointer(c), info.numSamples);
             }
         }
-    
+
         written &= writer->writeFromAudioSampleBuffer(*info.buffer, info.startSample, info.numSamples);
-        
-        samplesWritten += info.numSamples;
-        
-        config->progress = i / (double)iterations;
-        
-        if (callback)
-            callback();
-        
-        if (config->userCanceled)
-            break;
-    }
-    
-    if (!config->userCanceled) {
-        
-        // process remaining samples
-        if (remainder > 0) {
-            buffer.clear();
-            info.numSamples = static_cast<int>(remainder);
-            info.clearActiveBufferRegion();
-            
-            audioBusInfo.numSamples = static_cast<int>(remainder);
-            audioBusInfo.clearActiveBufferRegion();
-            for (auto source : config->playListItem->getVoiceSources()) {
-                source->getNextAudioBlock(audioBusInfo);
-                for (auto c = 0; c < info.buffer->getNumChannels(); c++) {
-                    info.buffer->addFrom(c, info.startSample, audioBusBuffer.getReadPointer(c), info.numSamples);
-                }
-            }
-            
-            written &= writer->writeFromAudioSampleBuffer(*info.buffer, info.startSample, info.numSamples);
-            samplesWritten += info.numSamples;
-        }
-        
-        jassert(samplesWritten == totalSamples);
-    }
+    };
+
+    samplesWritten += renderInBlocks(voiceSamples, config->blockSize, renderBlock,
+                                     [&] (int64 i, int64 numBlocks)
+                                     {
+                                         config->progress = i / (double)numBlocks;
+                                         if (callback)
+                                             callback();
+                                     },
+                                     [&] { return config->userCanceled; });
+
+    jassert(config->userCanceled || samplesWritten == totalSamples);
 
     return written;
 }
@@ -737,59 +748,40 @@ bool PlayListScheduler::bounceProject(juce::AudioFormatWriter* writer,
     if (config->lengthSeconds > 0.0)
         length = config->lengthSeconds;
     auto totalSamples   = static_cast<int64>(length * externalSampleRate);
-    auto iterations     = static_cast<int64>(totalSamples) / config->blockSize;
-    auto remainder      = totalSamples - (iterations * config->blockSize);
-    jassert(remainder < config->blockSize);
     
     auto positionBeats = TempoProvider::clocksToBeats(getAbsolutePosition(audium::clocks));
     
     AudioBuffer<float> outBuffer(config->numChannels, config->blockSize);
     AudioBuffer<float> inBuffer(config->numChannels, config->blockSize);
-    AudioSourceChannelInfo info (&outBuffer, 0, config->blockSize);
     
     juce::dsp::AudioBlock<float> outBlock (outBuffer);
     juce::dsp::AudioBlock<float> inBlock (inBuffer);
     
-    int64 samplesWritten = 0;
     bool written = true; // stays true only while every write succeeds
-    for (auto i = 0; i < iterations; ++i) {
-        const auto clocksThisBuffer = tempoProvider->secondsToClocks(static_cast<double>(config->blockSize) / externalSampleRate);
+    auto renderBlock = [&] (int numSamples)
+    {
+        const auto clocksThisBuffer = tempoProvider->secondsToClocks(static_cast<double>(numSamples) / externalSampleRate);
         const auto beatsThisBuffer = TempoProvider::clocksToBeats(clocksThisBuffer);
         
         juce::dsp::ProcessContextNonReplacing<float> context (inBlock, outBlock);
         inBlock.clear();
         outBlock.clear();
-        process(context, true, positionBeats, config->blockSize);
+        process(context, true, positionBeats, numSamples);
         positionBeats += beatsThisBuffer;
         
-        written &= writer->writeFromAudioSampleBuffer(*info.buffer, info.startSample, info.numSamples);
-        
-        samplesWritten += info.numSamples;
-        
-        config->progress = i / (double)iterations;
-        
-        if (callback)
-            callback();
-        
-        if (config->userCanceled)
-            break;
-    }
-    
-    if (!config->userCanceled) {
-        
-        // process remaining samples
-        if (remainder > 0) {
-            outBlock.clear();
-            info.numSamples = static_cast<int>(remainder);
-            juce::dsp::ProcessContextReplacing<float> context (outBlock);
-            
-            process(context, true, positionBeats, info.numSamples);
-            written &= writer->writeFromAudioSampleBuffer(*info.buffer, info.startSample, info.numSamples);
-            samplesWritten += info.numSamples;
-        }
-        
-        jassert(samplesWritten == totalSamples);
-    }
+        written &= writer->writeFromAudioSampleBuffer(outBuffer, 0, numSamples);
+    };
+
+    const auto samplesWritten = renderInBlocks(totalSamples, config->blockSize, renderBlock,
+                                               [&] (int64 i, int64 numBlocks)
+                                               {
+                                                   config->progress = i / (double)numBlocks;
+                                                   if (callback)
+                                                       callback();
+                                               },
+                                               [&] { return config->userCanceled; });
+
+    jassert(config->userCanceled || samplesWritten == totalSamples);
     
     audioBusInterface->setStemExport(false);
 
@@ -923,9 +915,6 @@ void PlayListScheduler::recordFromAudioBuffer(const AudioBuffer<float> &inputBuf
     jassert((int)sampleRate == (int)externalSampleRate);
     auto totalSamples   = static_cast<int64>(recLengthSeconds * sampleRate);
     jassert(totalSamples <= inputBuffer.getNumSamples());
-    auto iterations     = static_cast<int64>(totalSamples) / blockSize;
-    auto remainder      = totalSamples - (iterations * blockSize);
-    jassert(remainder < blockSize);
     
     auto positionBeats = TempoProvider::clocksToBeats(getAbsolutePosition(audium::clocks));
     
@@ -936,49 +925,39 @@ void PlayListScheduler::recordFromAudioBuffer(const AudioBuffer<float> &inputBuf
     
     
     int64 samplesProcessed = 0;
-    for (auto i = 0; i < iterations; ++i) {
+    auto renderBlock = [&] (int numSamples)
+    {
+        outBlock.clear();
+
+        // the shorter last block runs at its own block size
+        if (numSamples != blockSize) {
+            blockSize = numSamples;
+            prepareToPlay(blockSize, sampleRate);
+
+            inBuffer.setSize(1, blockSize);
+            outBuffer.setSize(1, blockSize);
+            // need to re-assign
+            inBlock = juce::dsp::AudioBlock<float>(inBuffer);
+            outBlock = juce::dsp::AudioBlock<float>(outBuffer);
+        }
+
         const auto clocksThisBuffer = tempoProvider->secondsToClocks(static_cast<double>(blockSize) / externalSampleRate);
         const auto beatsThisBuffer = TempoProvider::clocksToBeats(clocksThisBuffer);
-        
-        
-        jassert(samplesProcessed < inputBuffer.getNumSamples());
+
+        jassert(samplesProcessed + blockSize <= inputBuffer.getNumSamples());
         inBuffer.copyFrom(0, 0, inputBuffer, 0, (int)samplesProcessed, blockSize);
-        
-    
+
         juce::dsp::ProcessContextNonReplacing<float> context (inBlock, outBlock);
-        
-        outBlock.clear();
         process(context, true, positionBeats, blockSize);
-        
+
         positionBeats += beatsThisBuffer;
         samplesProcessed += blockSize;
-        
-        // the threaded writer needs to catch up
-        juce::Thread::sleep (1);
-    }
-    
-    // process remaining samples
-    if (remainder > 0) {
-        outBlock.clear();
-        
-        blockSize = (int)remainder;
-        prepareToPlay(blockSize, sampleRate);
-        
-        inBuffer.setSize(1, blockSize);
-        outBuffer.setSize(1, blockSize);
-        // need to re-assign
-        inBlock = juce::dsp::AudioBlock<float>(inBuffer);
-        outBlock = juce::dsp::AudioBlock<float>(outBuffer);
+    };
 
-        
-        jassert(samplesProcessed + blockSize <= inputBuffer.getNumSamples());
-        inBuffer.copyFrom(0, 0, inputBuffer, 0, (int)(samplesProcessed), blockSize);
-        
-        juce::dsp::ProcessContextNonReplacing<float> context (inBlock, outBlock);
-        process(context, true, positionBeats, blockSize);
-        samplesProcessed += blockSize;
-        
-    }
+    renderInBlocks(totalSamples, blockSize, renderBlock,
+                   // the threaded writer needs to catch up
+                   [] (int64, int64) { juce::Thread::sleep (1); },
+                   [] { return false; });
     
     juce::Thread::sleep (1);
     

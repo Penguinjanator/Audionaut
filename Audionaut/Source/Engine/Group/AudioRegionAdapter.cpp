@@ -8,6 +8,7 @@
 #include "Engine/Group/AudioTrack.h"
 #include "Engine/Region/AudioRegionContainer.h"
 #include "Engine/Undo/UndoableContainerAction.h"
+#include "Engine/Undo/UndoableEdit.h"
 #include "Engine/PlayList/PlayListContainer.h"
 #include "Engine/PlayList/PlayListItem.h"
 #include "Engine/Provider/TempoProvider.h"
@@ -107,31 +108,28 @@ void AudioRegionAdapter::setSelectedRows(juce::SparseSet<int>& selectedRows)
     }
 }
 
-void AudioRegionAdapter::createRegionsFromSelection(juce::String name, bool arrangementMode)
+void AudioRegionAdapter::createRegionsFromSelection(juce::String name)
 {
-    // Undo: store old state
-    auto action = std::make_unique<audium::UndoableContainerAction>(owner, false);
-    
-    auto context = audium::clocks;
-    auto selectedRange = getSelectedRange(context);
-    
-    for (auto track : owner.getAudioTracks()) {
-        if (auto item = track->getPlayListContainer()->itemContainingRange(selectedRange, context)) {
-            auto localRange = item->absoluteToLocalRange(selectedRange, context);
-            auto resourceGroup = item->getRegion()->getResourceGroup();
-            resourceGroup->getAudioRegionContainer()->createRegion(name,
-                                                              localRange,
-                                                              track,
-                                                              resourceGroup,
-                                                              item->getRegion(),
-                                                              context);
+    applyAsUndoableEdit(owner, [this, &name]
+    {
+        auto context = audium::clocks;
+        auto selectedRange = getSelectedRange(context);
+
+        for (auto track : owner.getAudioTracks()) {
+            if (auto item = track->getPlayListContainer()->itemContainingRange(selectedRange, context)) {
+                auto localRange = item->absoluteToLocalRange(selectedRange, context);
+                auto resourceGroup = item->getRegion()->getResourceGroup();
+                resourceGroup->getAudioRegionContainer()->createRegion(name,
+                                                                  localRange,
+                                                                  track,
+                                                                  resourceGroup,
+                                                                  item->getRegion(),
+                                                                  context);
+            }
         }
-    }
-    
-    // Undo: store new state
-    action->storeNewState();
-    owner.getUndoManager()->perform(action.release(), "Create Region(s)");
-    owner.getUndoManager()->beginNewTransaction();
+        return true;
+    },
+    "Create Region(s)", false);
 }
 
 void AudioRegionAdapter::splitRegions(double pos, audium::TimeContextType context)

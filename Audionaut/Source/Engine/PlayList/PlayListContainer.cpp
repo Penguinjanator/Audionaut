@@ -17,6 +17,21 @@
 
 namespace audium {
 
+namespace {
+
+// The play list items; older projects nest them in a "play_list" object.
+json playListItemsFromJson(json& input)
+{
+    if (input.contains("play_list_vector"))
+        return input["play_list_vector"];
+
+    // TODO: remove legacy code soon-ish
+    auto jsonPlayList = input["play_list"];
+    return jsonPlayList["play_list_items"];
+}
+
+} // namespace
+
 PlayListContainer::~PlayListContainer()
 {
     playListItems.cleanup();
@@ -263,30 +278,12 @@ int PlayListContainer::getPlayListItemIndex(PlayListItem* item) const
 
 bool PlayListContainer::writeToJson (json& output)
 {
-    jassert(sortedByPosition());
-    json playList;
-    
-    for (auto item : playListItems.getObjects())
-    {
-        json j;
-        if (item->writeToJson(j))
-            output["play_list_vector"] += j;
-    }
-    
-    return true;
+    return writeChannelToJson(output, nullptr);
 }
 
 bool PlayListContainer::readFromJson (json& input, bool rebuild)
 {
-    json jsonPlayListItems;
-    if (input.contains("play_list_vector")) {
-        jsonPlayListItems = input["play_list_vector"];
-    }
-    else {
-        // TODO: remove legacy code soon-ish
-        auto jsonPlayList = input["play_list"];
-        jsonPlayListItems = jsonPlayList["play_list_items"];
-    }
+    auto jsonPlayListItems = playListItemsFromJson(input);
     
     const auto numNeeded = jsonPlayListItems.size();
     playListItems.resize (std::min (numNeeded, playListItems.size()));
@@ -319,15 +316,16 @@ bool PlayListContainer::readFromJson (json& input, bool rebuild)
 bool PlayListContainer::writeChannelToJson(json& output, AudioChannel* audioChannel)
 {
     jassert(sortedByPosition());
-    const auto channelNumber = audioChannel->getChannelNumber();
 
     for (auto item : playListItems.getObjects())
     {
         json j;
         if (item->writeToJson(j)) {
-            // the full vector is indexed by source channels - meaningless at the destination
-            j.erase("gain_vector");
-            j["channel_clip_gain"] = item->getDynamics().getGain(channelNumber);
+            if (audioChannel != nullptr) {
+                // the full vector is indexed by source channels - meaningless at the destination
+                j.erase("gain_vector");
+                j["channel_clip_gain"] = item->getDynamics().getGain(audioChannel->getChannelNumber());
+            }
             output["play_list_vector"] += j;
         }
     }
@@ -337,15 +335,7 @@ bool PlayListContainer::writeChannelToJson(json& output, AudioChannel* audioChan
 
 void PlayListContainer::mergeFromJson(json& input, int destinationChannel)
 {
-    json jsonPlayListItems;
-    if (input.contains("play_list_vector")) {
-        jsonPlayListItems = input["play_list_vector"];
-    }
-    else {
-        // TODO: remove legacy code soon-ish
-        auto jsonPlayList = input["play_list"];
-        jsonPlayListItems = jsonPlayList["play_list_items"];
-    }
+    auto jsonPlayListItems = playListItemsFromJson(input);
 
     for (auto& jsonElement : jsonPlayListItems) {
 

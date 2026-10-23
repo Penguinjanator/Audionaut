@@ -60,19 +60,17 @@ void ChannelsComponent::itemDropped (const SourceDetails &dragSourceDetails)
         }
         else if (auto channelGroupHeaderComponent = dynamic_cast<ChannelGroupHeaderComponent*>(dragSourceDetails.sourceComponent.get())) {
             
-            // undo
-            auto action = std::make_unique<audium::UndoableContainerAction>(*trackContainer.get());
-            auto currentIndex = channelGroupHeaderComponent->getAudioTrack()->getId();
-            auto insertIndex = audiumEngine->getAudioTrackContainer()->audioTracks.size();
+            audium::applyAsUndoableEdit(*trackContainer, [&]
+            {
+                auto currentIndex = channelGroupHeaderComponent->getAudioTrack()->getId();
+                auto insertIndex = audiumEngine->getAudioTrackContainer()->audioTracks.size();
 
-            audium::MoveItemBefore(audiumEngine->getAudioTrackContainer()->audioTracks,
-                                   currentIndex,
-                                   insertIndex);
-            // undo
-            action->storeNewState();
-            auto undoManager = audiumEngine->getUndoManager();
-            undoManager->perform(action.release(), "track dragged");
-            undoManager->beginNewTransaction();
+                audium::MoveItemBefore(audiumEngine->getAudioTrackContainer()->audioTracks,
+                                       currentIndex,
+                                       insertIndex);
+                return true;
+            },
+            "track dragged");
 
         }
     }

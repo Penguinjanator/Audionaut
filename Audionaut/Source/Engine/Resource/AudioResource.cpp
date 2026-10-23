@@ -10,7 +10,6 @@
 #include "Engine/AudioSources/VoiceSourceContainer.h"
 #include "Engine/AudioSources/VoiceSource.h"
 #include "Engine/Channel/AudioChannel.h"
-#include "Engine/Factory/AudioResourceFactory.h"
 #include "Engine/Resource/ChannelMapping.h"
 #include "Engine/Region/AudioRegionContainer.h"
 

@@ -7,6 +7,7 @@
 #include <cmath>
 #include <cstdlib>
 #include <numeric>
+#include <optional>
 #include <iostream>
 #include <fstream>
 #include <nlohmann/json.hpp>
@@ -283,6 +284,71 @@ std::string describeMissing(const std::vector<AnalysisType>& missing)
     return names;
 }
 
+// The cuts an edit of the target would make: the cached analyses merged with
+// the config's parameters, snapped the way the edit snaps them, and the
+// stretch of audio they apply to. invokeAutoEdit(), previewAutoEdit() and
+// resolveNumSegments() all go through here, so the preview and the count
+// show what the edit does.
+struct PlannedCuts {
+    std::vector<float> boundaries;
+    juce::Range<double> extent;
+};
+
+// Empty when an analysis is still missing, the file is empty or - with
+// requireTwoBoundaries - the merge found fewer than the two boundaries that
+// bound a region; problem then says why.
+std::optional<PlannedCuts> planCuts(const AutoEditConfig& config,
+                                    const EditTarget& target,
+                                    const AnalysisProvider& analysisProvider,
+                                    const AudioTrackContainer& audioTrackContainer,
+                                    const juce::File& audioFile,
+                                    bool requireTwoBoundaries,
+                                    std::string& problem)
+{
+    // Cache-only: a partial set would give plausible but different cuts, so the
+    // user is told what is still running instead.
+    auto missing = analysisProvider.findMissingMergeAnalyses(audioFile);
+
+    if (! missing.empty())
+    {
+        problem = "Still analysing " + audioFile.getFileName().toStdString()
+                      + " (" + describeMissing(missing) + "). Please try again shortly.";
+        return std::nullopt;
+    }
+
+    const auto duration = target.resource->getFileLength(audium::seconds);
+
+    if (duration <= 0.0)
+    {
+        problem = "The track's audio file appears to be empty.";
+        return std::nullopt;
+    }
+
+    const auto params = effectiveMergeParameters(config, analysisProvider, audioFile, duration);
+
+    auto result = analysisProvider.mergeCachedAnalyses(audioFile, (float) duration, params);
+
+    // One boundary bounds no region - two are needed before anything can be cut.
+    if (requireTwoBoundaries && result.boundaries.size() < 2)
+    {
+        problem = "No segment boundaries were found in this audio.";
+        return std::nullopt;
+    }
+
+    PlannedCuts cuts;
+    cuts.boundaries = snapBoundariesForTarget(std::move(result.boundaries),
+                                              target,
+                                              analysisProvider,
+                                              audioTrackContainer,
+                                              audioFile);
+
+    // The analyses describe the whole file; the edit applies only to what the
+    // chosen clip covers. Without a clip to go on, that is the whole file.
+    cuts.extent = target.extent.isEmpty() ? juce::Range<double>(0.0, duration)
+                                          : target.extent;
+    return cuts;
+}
+
 /**
  * A crossfade at every joint between consecutive, butt-joined items, reaching
  * into the neighbours: the left item plays at full level to its end and fades
@@ -519,7 +585,8 @@ bool AutoEdit::invokeAssemble(AssembleConfig &config,
         return false;
     }
 
-    return applyAsUndoableEdit([&track, &eligible, &chosen, &config]
+    return applyAsUndoableEdit(*audiumEngine->getAudioTrackContainer(),
+                               [&track, &eligible, &chosen, &config]
         {
             auto playListContainer = track->getPlayListContainer();
 
@@ -606,47 +673,18 @@ bool AutoEdit::invokeAutoEdit(AutoEditConfig &config,
         return false;
     }
 
-    // Cache-only: a partial set would give plausible but different cuts, so the
-    // user is told what is still running instead.
-    auto missing = analysisProvider->findMissingMergeAnalyses(audioFile);
+    std::string problem;
+    const auto cuts = planCuts(config, target, *analysisProvider, *audioTrackContainer,
+                               audioFile, true, problem);
 
-    if (! missing.empty())
+    if (! cuts)
     {
-        NullCheckedInvocation::invoke(callback,
-                                      "Still analysing " + audioFile.getFileName().toStdString()
-                                          + " (" + describeMissing(missing) + "). Please try again shortly.");
+        NullCheckedInvocation::invoke(callback, problem);
         return false;
     }
 
-    const auto duration = resource->getFileLength(audium::seconds);
-
-    if (duration <= 0.0)
-    {
-        NullCheckedInvocation::invoke(callback, "The track's audio file appears to be empty.");
-        return false;
-    }
-
-    const auto params = effectiveMergeParameters(config, *analysisProvider, audioFile, duration);
-
-    auto result = analysisProvider->mergeCachedAnalyses(audioFile, (float) duration, params);
-
-    // One boundary bounds no region - two are needed before anything can be cut.
-    if (result.boundaries.size() < 2)
-    {
-        NullCheckedInvocation::invoke(callback, "No segment boundaries were found in this audio.");
-        return false;
-    }
-
-    const auto boundaries = snapBoundariesForTarget(std::move(result.boundaries),
-                                                    target,
-                                                    *analysisProvider,
-                                                    *audioTrackContainer,
-                                                    audioFile);
-
-    // The analyses describe the whole file; the edit applies only to what the
-    // chosen clip covers. Without a clip to go on, that is the whole file.
-    const auto extent = target.extent.isEmpty() ? juce::Range<double>(0.0, duration)
-                                                : target.extent;
+    const auto& boundaries = cuts->boundaries;
+    const auto extent = cuts->extent;
 
     const auto replaceClip = config.replacePlayListItem;
     const auto crossfadeSeconds = config.crossfades ? config.crossfadeSeconds : 0.0;
@@ -658,7 +696,8 @@ bool AutoEdit::invokeAutoEdit(AutoEditConfig &config,
     const auto baseName = target.clipName.isNotEmpty() ? target.clipName
                                                        : track->getAudioTrackName();
 
-    if (! applyAsUndoableEdit([this, &boundaries, extent, track, resourceGroup,
+    if (! applyAsUndoableEdit(*audioTrackContainer,
+                              [this, &boundaries, extent, track, resourceGroup,
                                replaceClip, crossfadeSeconds, crossfadeCurve,
                                clipIndex, baseName]
         {
@@ -675,7 +714,8 @@ bool AutoEdit::invokeAutoEdit(AutoEditConfig &config,
                                                crossfadeSeconds, crossfadeCurve);
 
             return true;
-        }))
+        },
+        "Auto Edit"))
     {
         NullCheckedInvocation::invoke(callback,
                                       "No segment boundaries fall inside the selected clip.");
@@ -704,34 +744,24 @@ bool AutoEdit::previewAutoEdit(AutoEditConfig &config)
     }
 
     const auto audioFile = juce::File(target.resource->getFullPathName());
-    const auto duration = target.resource->getFileLength(audium::seconds);
+    std::string problem;
+    auto cuts = audioFile.existsAsFile()
+                    ? planCuts(config, target, *analysisProvider, *audioTrackContainer,
+                               audioFile, false, problem)
+                    : std::nullopt;
 
-    if (! audioFile.existsAsFile()
-        || duration <= 0.0
-        || ! analysisProvider->findMissingMergeAnalyses(audioFile).empty())
+    if (! cuts)
     {
         analysisProvider->clearMergePreview();
         return false;
     }
 
-    const auto params = effectiveMergeParameters(config, *analysisProvider, audioFile, duration);
-
-    auto result = analysisProvider->mergeCachedAnalyses(audioFile, (float) duration, params);
-
-    // Snapped the same way invokeAutoEdit() snaps, so the preview shows the
-    // cuts the edit would actually make.
-    auto boundaries = snapBoundariesForTarget(std::move(result.boundaries),
-                                              target,
-                                              *analysisProvider,
-                                              *audioTrackContainer,
-                                              audioFile);
-
     // Only boundaries that become cuts are published: the merge always emits
     // the file's own edges, which createRegionsFromBoundaries drops - shown in
     // the preview they would read as an edit right at the clip's start or end
     // that invoking the edit never makes.
-    const auto extent = target.extent.isEmpty() ? juce::Range<double>(0.0, duration)
-                                                : target.extent;
+    auto boundaries = std::move(cuts->boundaries);
+    const auto extent = cuts->extent;
 
     std::erase_if(boundaries, [&extent] (float boundary)
     {
@@ -806,32 +836,24 @@ int AutoEdit::resolveNumSegments(AutoEditConfig &config)
         return config.numSegments;
 
     const auto audioFile = juce::File(target.resource->getFullPathName());
-    const auto duration = target.resource->getFileLength(audium::seconds);
-
-    const auto params = effectiveMergeParameters(config, *analysisProvider, audioFile, duration);
-
-    if (duration <= 0.0 || ! analysisProvider->findMissingMergeAnalyses(audioFile).empty())
-        return params.numSegments;
 
     // The merge parameter describes the whole file, but only what falls inside
     // the clip is cut. Counting the merged boundaries the same way
     // createRegionsFromBoundaries filters them - after the same grid snapping
     // invokeAutoEdit() applies - gives the count the edit would actually
     // produce.
-    auto result = analysisProvider->mergeCachedAnalyses(audioFile, (float) duration, params);
+    std::string problem;
+    const auto cuts = planCuts(config, target, *analysisProvider, *audioTrackContainer,
+                               audioFile, false, problem);
 
-    const auto boundaries = snapBoundariesForTarget(std::move(result.boundaries),
-                                                    target,
-                                                    *analysisProvider,
-                                                    *audioTrackContainer,
-                                                    audioFile);
+    if (! cuts)
+        return effectiveMergeParameters(config, *analysisProvider, audioFile,
+                                        target.resource->getFileLength(audium::seconds)).numSegments;
 
-    const auto extent = target.extent.isEmpty() ? juce::Range<double>(0.0, duration)
-                                                : target.extent;
-
+    const auto& extent = cuts->extent;
     int inside = 0;
 
-    for (auto boundary : boundaries)
+    for (auto boundary : cuts->boundaries)
     {
         const auto point = (double) boundary;
 
@@ -865,12 +887,6 @@ juce::Range<double> AutoEdit::resolveSegmentLengthBounds(AutoEditConfig &config)
     // Both bounds are zero when the tempo is unknown, which is the empty range
     // the caller checks for.
     return { parameter.minSegmentSeconds(bpm), parameter.maxSegmentSeconds(bpm) };
-}
-
-bool AutoEdit::applyAsUndoableEdit(std::function<bool()> mutate,
-                                   const juce::String& transactionName)
-{
-    return audium::applyAsUndoableEdit(*audiumEngine->getAudioTrackContainer(), mutate, transactionName);
 }
 
 std::vector<float> AutoEdit::snapBoundariesToGrid(const std::vector<float>& boundarySeconds,
@@ -1158,11 +1174,13 @@ bool AutoEdit::invokePython(const juce::File& audioFile,
                                     ? target.clipName
                                     : target.track->getAudioTrackName();
 
-    return applyAsUndoableEdit([this, segFileName, sampleRate, target, regionBaseName]
+    return applyAsUndoableEdit(*audiumEngine->getAudioTrackContainer(),
+                               [this, segFileName, sampleRate, target, regionBaseName]
     {
         return createRegionsFromSegFile(segFileName, sampleRate, target.track,
                                         target.resourceGroup, regionBaseName);
-    });
+    },
+    "Auto Edit");
 }
 
 const std::string AutoEdit::getBaseName() const

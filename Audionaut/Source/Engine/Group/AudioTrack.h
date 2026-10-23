@@ -117,13 +117,14 @@ public:
     
     
     // Streamable overrides:
-    bool writeToStream (juce::OutputStream& outputStream) override;
-    bool readFromStream (juce::InputStream& inputStream, bool rebuild) override;
     bool writeToJson (json& output) override;
     bool readFromJson (json& input, bool rebuild) override;
     /** Whether the last readFromJson() replaced the channels instead of
         reading them in place - see AudioTrackContainer::didLastReadRebuildStructure(). */
     bool didLastReadRebuildChannels() const { return lastReadRebuiltChannels; }
+    /** Writes what writeToJson() writes but the name and view state, limited
+        to one channel (its channel data, resources and clip gain); nullptr
+        writes every channel. */
     bool writeChannelToJson (json& output, AudioChannel* audioChannel);
     void mergeChannelFromJson(json& input);
     

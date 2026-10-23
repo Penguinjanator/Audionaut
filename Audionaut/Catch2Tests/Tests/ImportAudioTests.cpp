@@ -217,4 +217,22 @@ SCENARIO("undoing an import removes every track it added", "[engine][import][und
             REQUIRE(numTracks() == baseline);
         }
     }
+
+    WHEN("an import is undone and redone, twice") {
+        // the undo step rebuilds the container from its snapshots, and each
+        // snapshot is applied more than once
+        REQUIRE(engine->getAudioTrackContainer()->importAudioFiles(files, 0.0, AudioTrackContainer::ImportPlacement::separateTracks, nullptr) == 2);
+        json imported;
+        engine->getAudioTrackContainer()->writeToJson(imported);
+
+        for (auto round = 0; round < 2; ++round) {
+            REQUIRE(engine->getUndoManager()->undo());
+            REQUIRE(numTracks() == baseline);
+
+            REQUIRE(engine->getUndoManager()->redo());
+            json redone;
+            engine->getAudioTrackContainer()->writeToJson(redone);
+            REQUIRE(redone == imported);
+        }
+    }
 }

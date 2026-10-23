@@ -14,6 +14,7 @@
 #include "Engine/Resource/AudioResourceContainer.h"
 #include "Engine/Region/AudioRegionContainer.h"
 #include "Engine/Undo/UndoableContainerAction.h"
+#include "Engine/Undo/UndoableEdit.h"
 #include "Engine/Channel/AudioChannel.h"
 #include "Engine/Resource/ChannelMapping.h"
 #include "Engine/PlayList/TransportLoop.h"
@@ -156,30 +157,24 @@ void AudioTrackContainer::deleteSelectedObjects()
 
 void AudioTrackContainer::deleteUnusedRegions()
 {
-    // Undo: store old state
-    auto action = std::make_unique<audium::UndoableContainerAction>(*this);
-    
-    for (auto track : audioTracks) {
-        for (auto resourceGroup : track->getResourceGroups()) {
-            resourceGroup->getAudioRegionContainer()->deleteUnusedRegions();
+    applyAsUndoableEdit(*this, [this]
+    {
+        for (auto track : audioTracks) {
+            for (auto resourceGroup : track->getResourceGroups()) {
+                resourceGroup->getAudioRegionContainer()->deleteUnusedRegions();
+            }
+            track->deleteUnusedResourceGroups();
         }
-        track->deleteUnusedResourceGroups();
-    }
-    
-    // Undo: store new state and perform
-    action->storeNewState();
-    undoManager->perform(action.release(), "Delete Unused Regions");
-    undoManager->beginNewTransaction();
+        return true;
+    },
+    "Delete Unused Regions");
 }
 
-bool AudioTrackContainer::writeToStream (juce::OutputStream& outputStream)
+bool AudioTrackContainer::restoreFromJson (const json& state, bool rebuild)
 {
-    return audium::Streamable::writeToStream(outputStream);
-}
-
-bool AudioTrackContainer::readFromStream (juce::InputStream& inputStream, bool rebuild)
-{
-    if (audium::Streamable::readFromStream(inputStream, rebuild)) {
+    // readFromJson may modify what it reads - the snapshot is applied again on redo
+    auto input = state;
+    if (readFromJson(input, rebuild)) {
         // change message for UI
         sendActionMessage(rebuild ? rebuildAll : updateAll);
         
@@ -353,19 +348,19 @@ juce::Colour AudioTrackContainer::getNewAudioTrackColour() const
 
 bool AudioTrackContainer::copySelectedChannelsToNewTrack(bool copyChannels)
 {
-    // undo
-    auto action = std::make_unique<audium::UndoableContainerAction>(*this);
-    
-    auto selectedObjects = getSelectionManager()->getSelectedObjects();
-    if (selectedObjects.size() > 0) {
-        
+    return applyAsUndoableEdit(*this, [this, copyChannels]
+    {
+        auto selectedObjects = getSelectionManager()->getSelectedObjects();
+        if (selectedObjects.empty())
+            return false;
+
         // create new audio track
         auto audioTrack = createNewAudioTrack(juce::String());
         audioTrack->getViewState().setColour(getNewAudioTrackColour());
-        
+
         // copy selected channels
         for (auto object : selectedObjects) {
-            
+
             if (auto audioChannel = std::dynamic_pointer_cast<AudioChannel>(object)) {
                 json j;
                 auto track = &audioChannel->getAudioTrack();
@@ -375,15 +370,9 @@ bool AudioTrackContainer::copySelectedChannelsToNewTrack(bool copyChannels)
                     track->deleteChannel(audioChannel.get());
             }
         }
-    }
-    else return false;
-    
-    
-    // undo
-    action->storeNewState();
-    undoManager->perform(action.release(), "copy channel(s)");
-    undoManager->beginNewTransaction();
-    return true;
+        return true;
+    },
+    "copy channel(s)");
 }
 
 bool AudioTrackContainer::addAudioFiles(const juce::StringArray& filenames,
@@ -391,22 +380,19 @@ bool AudioTrackContainer::addAudioFiles(const juce::StringArray& filenames,
                                         std::function<void (std::string)> callback,
                                         bool undo)
 {
+    auto addFiles = [&]
+    {
+        auto audioTrack = createNewAudioTrack(juce::String());
+        audioTrack->getViewState().setColour(getNewAudioTrackColour());
+        if (!audioTrack->addAudioFiles(filenames, position, callback, false)) {
+            deleteAudioTrack(audioTrack.get());
+            return false;
+        }
+        return true;
+    };
+
     // Undo: snapshot before the new track exists, or undo leaves it behind empty
-    auto action = undo ? std::make_unique<audium::UndoableContainerAction>(*this) : nullptr;
-
-    auto audioTrack = createNewAudioTrack(juce::String());
-    audioTrack->getViewState().setColour(getNewAudioTrackColour());
-    if (!audioTrack->addAudioFiles(filenames, position, callback, false)) {
-        deleteAudioTrack(audioTrack.get());
-        return false;
-    }
-
-    if (action != nullptr) {
-        action->storeNewState();
-        undoManager->perform(action.release(), "File(s) added");
-        undoManager->beginNewTransaction();
-    }
-    return true;
+    return undo ? applyAsUndoableEdit(*this, addFiles, "File(s) added") : addFiles();
 }
 
 int AudioTrackContainer::importAudioFiles(const juce::StringArray& filenames,
@@ -417,8 +403,6 @@ int AudioTrackContainer::importAudioFiles(const juce::StringArray& filenames,
 {
     if (filenames.isEmpty())
         return 0;
-
-    auto action = std::make_unique<audium::UndoableContainerAction>(*this);
 
     juce::StringArray failed;
     auto collectError = [&failed] (std::string error) { failed.add(error); };
@@ -445,44 +429,43 @@ int AudioTrackContainer::importAudioFiles(const juce::StringArray& filenames,
 
     auto imported = 0;
 
-    if (placement == ImportPlacement::backToBack) {
-        auto audioTrack = trackForFiles();
-        auto clipStart = position;
-        for (auto& filename : filenames) {
-            if (audioTrack->addAudioFiles({filename}, clipStart, collectError, false)) {
-                ++imported;
-                // the next file starts where this clip ends; ranges are end-exclusive,
-                // so the next file gets a clip of its own instead of joining this one
-                if (auto item = audioTrack->getPlayListContainer()->itemAtAbsolutePosition(clipStart, audium::clocks))
-                    clipStart = item->getAbsolutePositionRange(audium::clocks).getEnd();
+    applyAsUndoableEdit(*this, [&]
+    {
+        if (placement == ImportPlacement::backToBack) {
+            auto audioTrack = trackForFiles();
+            auto clipStart = position;
+            for (auto& filename : filenames) {
+                if (audioTrack->addAudioFiles({filename}, clipStart, collectError, false)) {
+                    ++imported;
+                    // the next file starts where this clip ends; ranges are end-exclusive,
+                    // so the next file gets a clip of its own instead of joining this one
+                    if (auto item = audioTrack->getPlayListContainer()->itemAtAbsolutePosition(clipStart, audium::clocks))
+                        clipStart = item->getAbsolutePositionRange(audium::clocks).getEnd();
+                }
+            }
+            removeIfEmpty(audioTrack, imported);
+        }
+        else if (placement == ImportPlacement::stackedChannels) {
+            // one file at a time, so a failing file is reported on its own: the
+            // first one creates the clip, the others land on it as extra channels
+            auto audioTrack = trackForFiles();
+            for (auto& filename : filenames) {
+                if (audioTrack->addAudioFiles({filename}, position, collectError, false))
+                    ++imported;
+            }
+            removeIfEmpty(audioTrack, imported);
+        }
+        else {
+            for (auto& filename : filenames) {
+                auto audioTrack = trackForFiles();
+                auto added = audioTrack->addAudioFiles({filename}, position, collectError, false) ? 1 : 0;
+                imported += added;
+                removeIfEmpty(audioTrack, added);
             }
         }
-        removeIfEmpty(audioTrack, imported);
-    }
-    else if (placement == ImportPlacement::stackedChannels) {
-        // one file at a time, so a failing file is reported on its own: the
-        // first one creates the clip, the others land on it as extra channels
-        auto audioTrack = trackForFiles();
-        for (auto& filename : filenames) {
-            if (audioTrack->addAudioFiles({filename}, position, collectError, false))
-                ++imported;
-        }
-        removeIfEmpty(audioTrack, imported);
-    }
-    else {
-        for (auto& filename : filenames) {
-            auto audioTrack = trackForFiles();
-            auto added = audioTrack->addAudioFiles({filename}, position, collectError, false) ? 1 : 0;
-            imported += added;
-            removeIfEmpty(audioTrack, added);
-        }
-    }
-
-    if (imported > 0) {
-        action->storeNewState();
-        undoManager->perform(action.release(), "Import audio");
-        undoManager->beginNewTransaction();
-    }
+        return imported > 0;
+    },
+    "Import audio");
 
     if (!failed.isEmpty())
         NullCheckedInvocation::invoke(callback, failed.joinIntoString("\n").toStdString());

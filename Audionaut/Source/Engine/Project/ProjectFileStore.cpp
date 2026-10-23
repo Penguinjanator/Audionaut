@@ -102,7 +102,7 @@ bool ProjectFileStore::writeJsonAtomically (const juce::File& target, const json
             return false;
         }
 
-        // same framing as Streamable::writeToStream
+        // plain JSON text, see Streamable::writeJsonText
         if (! Streamable::writeJsonText(*out, content)) {
             error = out->getStatus().getErrorMessage().toStdString();
             return false;
@@ -236,6 +236,16 @@ bool ProjectFileStore::open (juce::File inFile, std::function<void (std::string)
     return false;
 }
 
+std::string ProjectFileStore::noWriteAccessMessage()
+{
+    std::string message = "No write access. Please select a different location.";
+#if JUCE_MAC
+    message += "\n\n";
+    message += "As a 'Sandboxed App' you are only allowed to save files in the Music folder.";
+#endif
+    return message;
+}
+
 bool ProjectFileStore::save (const juce::File& file_, std::function<void (std::string)> callback)
 {
     try
@@ -243,12 +253,7 @@ bool ProjectFileStore::save (const juce::File& file_, std::function<void (std::s
         auto file = file_;
 
         if (!juce::File(file).hasWriteAccess()) {
-            std::string errorString = "No write access. Please select a different location.";
-#if JUCE_MAC
-            errorString += "\n\n";
-            errorString += "As a 'Sandboxed App' you are only allowed to save files in the Music folder.";
-#endif
-            NullCheckedInvocation::invoke (callback, errorString);
+            NullCheckedInvocation::invoke (callback, noWriteAccessMessage());
             return false;
         }
 

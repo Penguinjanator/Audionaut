@@ -68,21 +68,6 @@ public:
     void cleanupAudioResources();
 
     /**
-     * @brief Writes the resource group data to a stream.
-     * @param outputStream The output stream to write to.
-     * @return True if the operation succeeds, false otherwise.
-     */
-    bool writeToStream(juce::OutputStream& outputStream) override;
-
-    /**
-     * @brief Reads the resource group data from a stream.
-     * @param inputStream The input stream to read from.
-     * @param rebuild Whether to rebuild the resource group during reading.
-     * @return True if the operation succeeds, false otherwise.
-     */
-    bool readFromStream(juce::InputStream& inputStream, bool rebuild) override;
-
-    /**
      * @brief Writes the resource group data to a JSON object.
      * @param output The JSON object to write to.
      * @return True if the operation succeeds, false otherwise.
@@ -100,7 +85,8 @@ public:
     /**
      * @brief Writes a specific channel's data to a JSON object.
      * @param output The JSON object to write to.
-     * @param audioChannel Pointer to the `AudioChannel` to write.
+     * @param audioChannel Pointer to the `AudioChannel` to write, or nullptr
+     *        for all of them (what writeToJson() writes).
      * @return True if the operation succeeds, false otherwise.
      */
     bool writeChannelToJson(json& output, AudioChannel* audioChannel);

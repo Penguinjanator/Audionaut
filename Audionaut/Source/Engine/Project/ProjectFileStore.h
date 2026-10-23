@@ -116,6 +116,9 @@ public:
      */
     static bool isValidProjectStructure(const juce::File& file);
 
+    /** What to tell the user when the chosen save location isn't writable. */
+    static std::string noWriteAccessMessage();
+
     /**
      * @brief Reads a project JSON file (Streamable::readJsonText, so files
      *        from before 1.6.6 with a trailing NUL still load).

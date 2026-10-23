@@ -10,7 +10,6 @@
 #include "Engine/ActionMessages.h"
 #include "Engine/AudiumEngine.h"
 #include "Engine/Project/ProjectFileStore.h"
-#include "Engine/Factory/AudioResourceFactory.h"
 #include "Engine/Region/AudioRegionContainer.h"
 #include "Engine/Resource/ChannelMapping.h"
 #include "Engine/Channel/AudioChannel.h"
@@ -244,7 +243,7 @@ std::shared_ptr<AudioResource> AudioResourceContainer::findResourceWithUrl(juce:
 
 std::shared_ptr<juce::AudioFormatReader> AudioResourceContainer::getAudioFormatReaderForUrl(juce::URL &url)
 {
-    if (formatManager->findFormatForFileExtension(url.getLocalFile().getFileExtension()) != nullptr) {
+    if (auto audioFormat = formatManager->findFormatForFileExtension(url.getLocalFile().getFileExtension())) {
         
         // file must be a child of our Media/Audio directory
         // see: copyToAudioFileDirectoryIfNeeded(url)
@@ -254,8 +253,18 @@ std::shared_ptr<juce::AudioFormatReader> AudioResourceContainer::getAudioFormatR
         if (auto existingResource = findResourceWithUrl(url)) {
             return existingResource->audioFormatReader;
         }
-        else {
-            return AudioResourceFactory::createAudioFormatReader(url, *formatManager.get());
+
+        auto reader = std::shared_ptr<juce::AudioFormatReader>(audioFormat->createMemoryMappedReader(url.getLocalFile()));
+        if (reader != nullptr) {
+            if (auto memReader = dynamic_cast<juce::MemoryMappedAudioFormatReader*>(reader.get())) {
+                memReader->mapEntireFile();
+            }
+            return reader;
+        }
+        else if (auto inputSource = std::make_unique<juce::URLInputSource>(url)) {
+            if (auto stream = rawToUniquePtr (inputSource->createInputStream())) {
+                return std::shared_ptr<juce::AudioFormatReader>(audioFormat->createReaderFor(stream.release(), false));
+            }
         }
     }
     return nullptr;
@@ -274,13 +283,13 @@ std::shared_ptr<AudioResource> AudioResourceContainer::addAudioResource (juce::U
     jassert(track != nullptr);
     jassert(resourceGroup != nullptr);
     
-    auto audioResource = AudioResourceFactory::createAudioResource(url,
-                                                                   audioFormatReader,
-                                                                   *this,
-                                                                   track,
-                                                                   resourceGroup,
-                                                                   destChannel,
-                                                                   sourceChannel);
+    auto audioResource = std::make_shared<AudioResource>(*this,
+                                                         track,
+                                                         resourceGroup,
+                                                         url,
+                                                         audioFormatReader,
+                                                         destChannel,
+                                                         sourceChannel);
     if (audioResource != nullptr) {
         audioResources.push_back({track, audioResource});
 

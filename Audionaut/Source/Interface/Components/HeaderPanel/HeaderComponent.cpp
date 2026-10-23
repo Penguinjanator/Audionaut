@@ -12,6 +12,7 @@
 #include "Engine/Link/LinkAudioDevice.h"
 #include "Engine/PlayList/TransportLoop.h"
 #include "Engine/Recording/RecordingActionHandler.h"
+#include "Engine/Undo/UndoableEdit.h"
 
 #include "Interface/Controls/DefaultLabel.h"
 #include "Interface/ColourIds.h"
@@ -74,13 +75,9 @@ HeaderComponent::HeaderComponent (std::shared_ptr<audium::AudiumEngine> audiumEn
         if (playButton->getToggleState()) {
             
             if (scheduler->isRecordingArmed()) {
-                // Undo: store old state
-                auto action = std::make_unique<audium::UndoableContainerAction>(*audiumEngine->getAudioTrackContainer(), false);
-                scheduler->startRecording();
-                // Undo: store new state
-                action->storeNewState();
-                audiumEngine->getAudioTrackContainer()->getUndoManager()->perform(action.release(), "Record");
-                audiumEngine->getAudioTrackContainer()->getUndoManager()->beginNewTransaction();
+                audium::applyAsUndoableEdit(*audiumEngine->getAudioTrackContainer(),
+                                            [&scheduler] { scheduler->startRecording(); return true; },
+                                            "Record", false);
             }
             scheduler->startPlaying();
         }

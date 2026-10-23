@@ -56,19 +56,15 @@ void ChannelGroupHeaderComponent::itemDropped (const SourceDetails &dragSourceDe
         }
         
 
-        // Undo: store old state
-        auto action = std::make_unique<audium::UndoableContainerAction>(getAudioTrack()->getAudioTrackContainer());
+        audium::applyAsUndoableEdit(getAudioTrack()->getAudioTrackContainer(), [&]
+        {
 
-
-        audium::MoveItemBefore(getAudioTrack()->getAudioTrackContainer().audioTracks,
-                               channelComponent->getAudioTrack()->getId(),
-                               audioTrack->getId());
-
-        // Undo: store new state
-        action->storeNewState();
-        auto undoManager = audioTrack->getAudioTrackContainer().getUndoManager();
-        undoManager->perform(action.release(), "Channels changed");
-        undoManager->beginNewTransaction();
+            audium::MoveItemBefore(getAudioTrack()->getAudioTrackContainer().audioTracks,
+                                   channelComponent->getAudioTrack()->getId(),
+                                   audioTrack->getId());
+            return true;
+        },
+        "Channels changed");
         
     }
     hideInsertLines();

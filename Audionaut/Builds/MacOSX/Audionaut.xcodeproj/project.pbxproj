@@ -228,7 +228,6 @@
 		03DF3A11364360FFACBE47A6 /* PlayListComponent.h */ /* PlayListComponent.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = PlayListComponent.h; path = ../../Source/Interface/Components/RightPanel/PlayListComponent.h; sourceTree = SOURCE_ROOT; };
 		04FFF590ED05D0000D3B5B06 /* SeparateCommand.cpp */ /* SeparateCommand.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = SeparateCommand.cpp; path = ../../Source/Cli/Commands/SeparateCommand.cpp; sourceTree = SOURCE_ROOT; };
 		05B46617E562A6E50F8D63E8 /* ZoomHandler.h */ /* ZoomHandler.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = ZoomHandler.h; path = ../../Source/Interface/Handlers/ZoomHandler.h; sourceTree = SOURCE_ROOT; };
-		068707BEEF91E3C5815141F9 /* AudioResourceFactory.h */ /* AudioResourceFactory.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = AudioResourceFactory.h; path = ../../Source/Engine/Factory/AudioResourceFactory.h; sourceTree = SOURCE_ROOT; };
 		070CD0EA5C3A961ABD8F3560 /* include_juce_gui_basics_4.cpp */ /* include_juce_gui_basics_4.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = include_juce_gui_basics_4.cpp; path = ../../JuceLibraryCode/include_juce_gui_basics_4.cpp; sourceTree = SOURCE_ROOT; };
 		0779160CB57EE785F95B027E /* PreferencesMacOS.cpp */ /* PreferencesMacOS.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = PreferencesMacOS.cpp; path = ../../Source/Util/native/PreferencesMacOS.cpp; sourceTree = SOURCE_ROOT; };
 		083AC1FA54A15ACD32270BA5 /* SeparationBackend.h */ /* SeparationBackend.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = SeparationBackend.h; path = ../../Source/Engine/Separation/SeparationBackend.h; sourceTree = SOURCE_ROOT; };
@@ -890,7 +889,6 @@
 			isa = PBXGroup;
 			children = (
 				7C1C1E1AF54BD71226534D42,
-				068707BEEF91E3C5815141F9,
 				EF8DD043B0CEFFAC7AFE5227,
 				DB274175268873FA1BDECEB7,
 			);

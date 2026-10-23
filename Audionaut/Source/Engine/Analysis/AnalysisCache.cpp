@@ -283,7 +283,9 @@ bool AnalysisCache::saveToFolder(const juce::File& projectFolder)
     bool wrote = false;
     juce::TemporaryFile temp(file);
     if (auto out = std::unique_ptr<juce::FileOutputStream>(temp.getFile().createOutputStream())) {
-        if (! out->failedToOpen() && writeToStream(*out)) {
+        json content;
+        if (! out->failedToOpen() && writeToJson(content)) {
+            writeJsonText(*out, content);
             out->flush();
             wrote = true;
         }
@@ -313,7 +315,12 @@ bool AnalysisCache::loadFromFolder(const juce::File& projectFolder)
     bool success = false;
     try
     {
-        success = readFromStream(in);
+        const auto text = readJsonText(in);
+        if (text.empty())
+            throw std::runtime_error("empty input string");
+
+        auto content = json::parse(text);
+        success = readFromJson(content, true);
     }
     catch (const std::exception& ex)
     {

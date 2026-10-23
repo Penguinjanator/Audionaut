@@ -3543,7 +3543,6 @@
     <ClInclude Include="..\..\Source\Engine\Channel\AudioChannel.h"/>
     <ClInclude Include="..\..\Source\Engine\Channel\AudioChannelData.h"/>
     <ClInclude Include="..\..\Source\Engine\Factory\AudioTrackFactory.h"/>
-    <ClInclude Include="..\..\Source\Engine\Factory\AudioResourceFactory.h"/>
     <ClInclude Include="..\..\Source\Engine\Factory\AudiumFactory.h"/>
     <ClInclude Include="..\..\Source\Engine\Group\AudioClipData.h"/>
     <ClInclude Include="..\..\Source\Engine\Group\AudioTrack.h"/>

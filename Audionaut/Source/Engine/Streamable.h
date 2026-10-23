@@ -15,11 +15,10 @@ namespace audium
 
 /**
  * @class Streamable
- * @brief An interface for objects that can be serialized to and deserialized from streams or JSON.
+ * @brief An interface for objects that can be serialized to and deserialized from JSON.
  *
  * The `Streamable` class provides a mechanism for objects to be written to and read from
- * JUCE streams or JSON objects. It includes default implementations for stream-based
- * serialization using JSON as the intermediate format.
+ * JSON objects, plus helpers that write and read that JSON as plain text on JUCE streams.
  */
 class Streamable
 {
@@ -28,43 +27,6 @@ public:
      * @brief Virtual destructor.
      */
     virtual ~Streamable() = default;
-
-    /**
-     * @brief Writes the object to a JUCE output stream.
-     *
-     * This method uses JSON as the default implementation for serialization.
-     *
-     * @param outputStream The output stream to write to.
-     * @return True if the operation was successful, false otherwise.
-     */
-    virtual bool writeToStream(juce::OutputStream& outputStream)
-    {
-        json jout;
-        auto result = writeToJson(jout);
-        writeJsonText(outputStream, jout);
-        return result;
-    }
-
-
-    /**
-     * @brief Reads the object from a JUCE input stream.
-     *
-     * This method uses JSON as the default implementation for deserialization.
-     *
-     * @param inputStream The input stream to read from.
-     * @param rebuild Whether to rebuild the object during deserialization.
-     * @return True if the operation was successful, false otherwise.
-     * @throws std::runtime_error If the input string is empty or invalid.
-     */
-    virtual bool readFromStream(juce::InputStream& inputStream, bool rebuild = true)
-    {
-        auto inputString = readJsonText(inputStream);
-        if (inputString.empty())
-            throw std::runtime_error("empty input string");
-
-        auto json = json::parse(inputString);
-        return readFromJson(json, rebuild);
-    }
 
     /**
      * @brief Writes `content` as plain JSON text: no length prefix, no

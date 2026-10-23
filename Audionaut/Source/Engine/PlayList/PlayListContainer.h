@@ -72,7 +72,8 @@ public:
     
     bool writeToJson (json& output) override;
     bool readFromJson (json& input, bool rebuild) override;
-    // writes the playlist items with the given channel's clip gain as "channel_clip_gain"
+    // writes the playlist items with the given channel's clip gain as "channel_clip_gain";
+    // nullptr writes them as writeToJson() does
     bool writeChannelToJson(json& output, AudioChannel* audioChannel);
     void mergeFromJson(json& input, int destinationChannel = -1);
     std::shared_ptr<PlayListItem> findExistingItem(std::shared_ptr<PlayListItem> item) const;
