@@ -41,13 +41,34 @@ clipTransportSource(std::make_shared<ClipTransportSource>())
     // read-ahead. Both cursors read on the read-ahead thread only
     standbyReaderSource = std::make_shared<juce::AudioFormatReaderSource>(audioFormatReaderSource->getAudioFormatReader(), false);
     clipTransportSource->setStandbySource(standbyReaderSource.get());
-
-    channelRemapping = std::make_unique<juce::ChannelRemappingAudioSource>(clipTransportSource.get(), false);
 }
 
 void VoiceSource::prepareToPlay (int samplesPerBlockExpected, double sampleRate)
 {
-    channelRemapping->prepareToPlay(samplesPerBlockExpected, sampleRate);
+    clipTransportSource->prepareToPlay(samplesPerBlockExpected, sampleRate);
+
+    // sized here, off the audio thread; renderChannel only grows it for a
+    // block larger than announced
+    renderBuffer.setSize(static_cast<int>(audioResource.getNumAudioFileChannels()),
+                         samplesPerBlockExpected);
+}
+
+void VoiceSource::renderChannel (const juce::AudioSourceChannelInfo& info)
+{
+    // the transport renders at offset 0 of the voice's buffer, whatever
+    // the caller's startSample: callers split a block at a loop wrap or
+    // clip end
+    if (info.numSamples > renderBuffer.getNumSamples())
+        renderBuffer.setSize(renderBuffer.getNumChannels(), info.numSamples, false, false, true);
+
+    juce::AudioSourceChannelInfo renderInfo (&renderBuffer, 0, info.numSamples);
+    renderInfo.clearActiveBufferRegion();
+    clipTransportSource->getNextAudioBlock(renderInfo);
+
+    const auto src = sourceChannel.load();
+    jassert(src < renderBuffer.getNumChannels());
+    if (src < renderBuffer.getNumChannels() && info.buffer->getNumChannels() > 0)
+        info.buffer->copyFrom(0, info.startSample, renderBuffer, src, 0, info.numSamples);
 }
 
 void VoiceSource::waitForReadAhead (const juce::AudioSourceChannelInfo& info)
@@ -75,7 +96,7 @@ void VoiceSource::getNextAudioBlock (const juce::AudioSourceChannelInfo& info)
             AudioSourceChannelInfo infoStop1 (info);
             infoStop1.numSamples = samplesUntilStop;
             if (infoStop1.numSamples > 0)
-                channelRemapping->getNextAudioBlock(infoStop1);
+                renderChannel(infoStop1);
 
             // reached end of clip -> apply stop
             clipTransportSource->stop(false);
@@ -89,12 +110,12 @@ void VoiceSource::getNextAudioBlock (const juce::AudioSourceChannelInfo& info)
                 infoStop2.clearActiveBufferRegion();
         }
         else {
-            channelRemapping->getNextAudioBlock(info);
+            renderChannel(info);
         }
     }
     else if (startSample >= info.numSamples) {
         scheduledStartSample.store(startSample - info.numSamples);
-        channelRemapping->getNextAudioBlock(info);
+        renderChannel(info);
     }
     else
     {
@@ -103,7 +124,7 @@ void VoiceSource::getNextAudioBlock (const juce::AudioSourceChannelInfo& info)
         if (reScheduled) {
             // process 1st part (until start sample, in case we are already playing -> loop)
             AudioSourceChannelInfo infoPart1 (info.buffer, 0, startSample);
-            channelRemapping->getNextAudioBlock(infoPart1);
+            renderChannel(infoPart1);
             reScheduled = false;
         }
 
@@ -112,7 +133,7 @@ void VoiceSource::getNextAudioBlock (const juce::AudioSourceChannelInfo& info)
         // process 2nd part - from the read-ahead the jump landed in
         AudioSourceChannelInfo infoPart2 (info.buffer, startSample, info.numSamples - startSample);
         waitForReadAhead(infoPart2);
-        channelRemapping->getNextAudioBlock(infoPart2);
+        renderChannel(infoPart2);
 
         auto offset = 0;
         if (durationTimer.process(infoPart2.numSamples, offset))
@@ -129,24 +150,19 @@ void VoiceSource::applyChannelMapping(bool withChannelOffset)
     const auto totalChannels = std::max(audioResource.getAudioTrack()->getAudioTrackContainer().getNumAudioTrackChannels(),
                                         audioFileChannels);
 
-    // the number of channels the remapper asks of the transport below, not
-    // its output width: the file's channels. The whole bus width here made
-    // every voice resample, gain and fade every bus channel - O(voices x
-    // channels) per block, quadratic in the track count
-    channelRemapping->setNumberOfChannelsToProduce(audioFileChannels);
-    channelRemapping->clearAllMappings();
-
     const auto& channelMapping = audioResource.getChannelMapping();
     const auto channelOffset = withChannelOffset ? audioResource.getAudioTrack()->getChannelOffset() : 0;
     const auto srcChannel = channelMapping.getSourceChannel();
     const auto dstChannel = channelMapping.getDestinationChannel();
     jassert(srcChannel < audioFileChannels);
     jassert(dstChannel + channelOffset < totalChannels);
+    juce::ignoreUnused(audioFileChannels, totalChannels);
 
-    // the voice renders its one channel into channel 0 of a one-channel
-    // buffer; the caller adds it to the destination channel. A bus-wide
-    // render buffer cost two bus-wide clears per voice and block
-    channelRemapping->setOutputChannelMapping(srcChannel, 0);
+    // the voice renders file channel src into channel 0 of a one-channel
+    // buffer, the caller adds that to the destination channel. Rendering
+    // the whole bus width per voice made the block cost voices x channels,
+    // quadratic in the track count
+    sourceChannel.store(srcChannel);
     destinationChannel.store(dstChannel + channelOffset);
 }
 
