@@ -523,7 +523,8 @@ void PlayListItemComponent::refreshAutoEditPreview()
     const auto previewActive = ! preview.empty();
 
     autoEditPreviewView->setPreviewSegments(std::move(preview),
-                                            region->getRegionData(audium::seconds).getStart());
+                                            region->getRegionData(audium::seconds).getStart(),
+                                            playListItem->getSpeedRatio());
 
     // The previewed clip also carries the edit's control.
     autoEditOverlayControl->setTarget(audioTrack->getId(), playListItem->getId());

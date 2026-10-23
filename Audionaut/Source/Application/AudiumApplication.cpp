@@ -599,8 +599,7 @@ void AudiumApplication::askToSaveIfDirtyAndInvoke(std::function<void ()> callbac
                         NullCheckedInvocation::invoke(callback);
                 }
                 else {
-                    if (saveProjectAs())
-                        NullCheckedInvocation::invoke(callback);
+                    saveProjectAs(callback);
                 }
             }
             else if (result == 1) {
@@ -1302,7 +1301,7 @@ bool askToOverwriteFileSync (const File& newFile)
 }
 
 
-bool AudiumApplication::saveProjectAs()
+void AudiumApplication::saveProjectAs(std::function<void ()> onSaved)
 {
     chooser = std::make_unique<FileChooser> (("Save As..."),
                                              initialSaveDirectory);
@@ -1311,27 +1310,21 @@ bool AudiumApplication::saveProjectAs()
                     FileBrowserComponent::canSelectDirectories |
                     FileBrowserComponent::warnAboutOverwriting;
 
-    chooser->launchAsync (flags, [this] (const FileChooser& fc)
+    chooser->launchAsync (flags, [this, onSaved] (const FileChooser& fc)
     {
         auto file = fc.getResult();
-        if (file != File()) {
-            
-            // warn overwrite: special case where user selects an existing project (without the .audium extension)
-            auto existingProject = File(file.getFullPathName() + audium::ProjectFileStore::projectFileExtension);
-            if (existingProject.exists()) {
-                if (!askToOverwriteFileSync(existingProject))
-                    return false;
-            }
-            
-            if (file.existsAsFile())
-                return saveProjectToFile(file);
-            else
-                return saveProjectToFile(projectFileForPackage(file));
-        }
-        return false;
+        if (file == File())
+            return;
+
+        // warn overwrite: special case where user selects an existing project (without the .audium extension)
+        auto existingProject = File(file.getFullPathName() + audium::ProjectFileStore::projectFileExtension);
+        if (existingProject.exists() && !askToOverwriteFileSync(existingProject))
+            return;
+
+        auto saved = saveProjectToFile(file.existsAsFile() ? file : projectFileForPackage(file));
+        if (saved)
+            NullCheckedInvocation::invoke(onSaved);
     });
-    
-    return false;
 }
 
 bool AudiumApplication::saveProjectToFile(juce::File file)
