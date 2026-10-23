@@ -6,6 +6,7 @@
 #pragma once
 
 #include <memory>
+#include <optional>
 #include <JuceHeader.h>
 
 #include "Interface/Controls/ClipOverlayBase.h"
@@ -98,6 +99,14 @@ private:
 
     // A locked clip without a tempo takes the detected one once it exists.
     void adoptDetectedTempo();
+
+    // The plumbing every apply path shares: resolves the clip - none, a
+    // recording one, or one whose tempo lock differs from needsTempoLock
+    // (when given) only re-syncs the controls - opens the session, applies
+    // change and broadcasts the arrangement update, after announcing the
+    // clip's resize when relayout is set.
+    void editItem (std::optional<bool> needsTempoLock, bool relayout,
+                   const std::function<void (audium::PlayListItem&)>& change);
 
     // Opens the one-per-session undo action lazily; all apply paths share it.
     void ensureSessionOpen (audium::PlayListItem& item);

@@ -372,6 +372,7 @@
 		59F1471CF62375D58F2A93B4 /* include_juce_core_zlib.c */ /* include_juce_core_zlib.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; name = include_juce_core_zlib.c; path = ../../JuceLibraryCode/include_juce_core_zlib.c; sourceTree = SOURCE_ROOT; };
 		5A3D8554C8158565929D2EF0 /* CommandSession.h */ /* CommandSession.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = CommandSession.h; path = ../../Source/Cli/CommandSession.h; sourceTree = SOURCE_ROOT; };
 		5A4C35EB8D4AF8B2375EB101 /* PlayListItemExport.cpp */ /* PlayListItemExport.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = PlayListItemExport.cpp; path = ../../Source/Engine/Export/PlayListItemExport.cpp; sourceTree = SOURCE_ROOT; };
+		5A705C10792CD2D64F7FD321 /* TrackListBoxModels.h */ /* TrackListBoxModels.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = TrackListBoxModels.h; path = ../../Source/Interface/Models/TrackListBoxModels.h; sourceTree = SOURCE_ROOT; };
 		5BB5B602ECA038389B436BF7 /* PrivacySettingsComponent.h */ /* PrivacySettingsComponent.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = PrivacySettingsComponent.h; path = ../../Source/Interface/Dialogs/PrivacySettingsComponent.h; sourceTree = SOURCE_ROOT; };
 		5BCE3ADCCCB7E1FBD5769DE8 /* AudioTrackComponent.cpp */ /* AudioTrackComponent.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = AudioTrackComponent.cpp; path = ../../Source/Interface/Components/MiddlePanel/ArrangementView/AudioTrackComponent.cpp; sourceTree = SOURCE_ROOT; };
 		5D3006AC9E9B3075DD795FDD /* MelFilterbank.h */ /* MelFilterbank.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = MelFilterbank.h; path = ../../Source/Engine/Analysis/Dsp/MelFilterbank.h; sourceTree = SOURCE_ROOT; };
@@ -679,6 +680,7 @@
 		FB0750162E2E1E9CD9F14FDC /* reservoir.c */ /* reservoir.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; name = reservoir.c; path = ../../../ThirdParty/lame/libmp3lame/reservoir.c; sourceTree = SOURCE_ROOT; };
 		FB2CD60BFD48DCA05975881F /* CliDispatch.cpp */ /* CliDispatch.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = CliDispatch.cpp; path = ../../Source/Cli/CliDispatch.cpp; sourceTree = SOURCE_ROOT; };
 		FCD67B95E8ED469C52987653 /* juce_audio_basics */ /* juce_audio_basics */ = {isa = PBXFileReference; lastKnownFileType = folder; name = juce_audio_basics; path = ../../../Submodules/JUCE/modules/juce_audio_basics; sourceTree = SOURCE_ROOT; };
+		FDFE789769BCFD4E70385207 /* ClipExportMenu.h */ /* ClipExportMenu.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = ClipExportMenu.h; path = ../../Source/Interface/Controls/ClipExportMenu.h; sourceTree = SOURCE_ROOT; };
 		FE5833F96929157F7AFABDCB /* model_inference.cpp */ /* model_inference.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = model_inference.cpp; path = ../../../Submodules/demucs.cpp/src/model_inference.cpp; sourceTree = SOURCE_ROOT; };
 		FEDF9819DC6E93011CDA3EDF /* ProjectMonitor.cpp */ /* ProjectMonitor.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = ProjectMonitor.cpp; path = ../../Source/Application/ProjectMonitor.cpp; sourceTree = SOURCE_ROOT; };
 		FF84B011F672D5EAD2F51A38 /* version.c */ /* version.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; name = version.c; path = ../../../ThirdParty/lame/libmp3lame/version.c; sourceTree = SOURCE_ROOT; };
@@ -866,6 +868,7 @@
 				9292A8E7A85A45C8828834D3,
 				24F5063E15B125FCE205B79F,
 				AB7054CF560D1D97FFD59765,
+				5A705C10792CD2D64F7FD321,
 			);
 			name = Models;
 			sourceTree = "<group>";
@@ -1283,6 +1286,7 @@
 				2133E7BD10D0BFDBA72C207E,
 				7CC846E1E9F0687AC3AC09F4,
 				4DF301F0CAEBC41ABA382935,
+				FDFE789769BCFD4E70385207,
 				72EF955B126DC0797C0BA924,
 				6BBAA6DFE177CD89EB2B263E,
 				21E8218C5578FAF32AEE977E,

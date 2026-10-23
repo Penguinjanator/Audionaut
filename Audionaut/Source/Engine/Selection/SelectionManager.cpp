@@ -18,6 +18,15 @@
 
 namespace audium {
 
+std::shared_ptr<PlayListItem> SelectionManager::firstSelectedClip() const
+{
+    for (const auto& object : selectedObjects)
+        if (auto item = std::dynamic_pointer_cast<PlayListItem>(object))
+            return item;
+
+    return nullptr;
+}
+
 void SelectionManager::deselectAll() {
     auto objects = selectedObjects;
     for (auto object : objects)

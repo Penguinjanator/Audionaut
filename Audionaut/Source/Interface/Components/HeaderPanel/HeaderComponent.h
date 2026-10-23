@@ -55,6 +55,14 @@ private:
     std::unique_ptr<juce::Slider> volumeSlider;
     
     
+    /// A bars/beats/clicks slider: dragging it moves the play position by
+    /// the dragged number of units.
+    std::unique_ptr<juce::Slider> makePositionSlider (const juce::String& name,
+                                                      double maximum,
+                                                      int& lastValue,
+                                                      double (*unitsToClocks) (double),
+                                                      std::function<juce::String (double)> textFromValue);
+
     juce::Path getRightPanelButtonPath();
     juce::Path getLoopButtonPath();
 

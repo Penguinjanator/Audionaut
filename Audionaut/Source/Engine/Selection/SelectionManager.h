@@ -16,6 +16,7 @@ namespace audium {
 
 class Selectable;
 class AudiumEngine;
+class PlayListItem;
 
 /**
  * @class SelectionManager
@@ -70,6 +71,12 @@ public:
      * @return A const reference to the vector of selected objects.
      */
     const std::vector<std::shared_ptr<Selectable>>& getSelectedObjects() const { return selectedObjects; }
+
+    /**
+     * @brief Gets the first clip in selection order.
+     * @return The first selected PlayListItem, or nullptr when no clip is selected.
+     */
+    std::shared_ptr<PlayListItem> firstSelectedClip() const;
 
     /**
      * @brief Clears the selection, deselecting all objects.

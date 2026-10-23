@@ -15,7 +15,6 @@
 #include "Interface/LookAndFeel/AudiumLookAndFeel.h"
 #include "Interface/Controls/AudiumLabel.h"
 
-#include "Application/AudiumCommandIDs.h"
 
 class ChannelGroupHeaderComponent : public juce::Component,
                                     public juce::Label::Listener,
@@ -132,27 +131,6 @@ public:
     
     void paint (juce::Graphics& g) override;
     
-    static void contextMenuCallback (int result, ChannelGroupHeaderComponent* component)
-    {
-        if (component != nullptr &&
-            result != 0) {
-            
-            if (result == CommandIDs::showSegments) {
-                component->toggleAnalysisVisibility(audium::AnalysisType::Segments);
-            }
-            else if (result == CommandIDs::showOnsets) {
-                component->toggleAnalysisVisibility(audium::AnalysisType::Onsets);
-            }
-            else if (result == CommandIDs::showBeats) {
-                component->toggleAnalysisVisibility(audium::AnalysisType::Beats);
-            }
-            else {
-                auto height = result;
-                component->setChannelHeight(height);
-            }
-        }
-    }
-    
     void setMinimized(bool bMinimized)
     {
         // undo
@@ -201,30 +179,40 @@ public:
     void mouseDown (const juce::MouseEvent& e) override
     {
         if (e.mods.isPopupMenu()) {
+            auto safeThis = Component::SafePointer<ChannelGroupHeaderComponent> (this);
+
             PopupMenu m;
             m.setLookAndFeel (&getLookAndFeel());
             PopupMenu sizeMenu;
-            sizeMenu.addItem (AudiumLookAndFeel::SizeIds::micro, TRANS ("micro"), true);
-            sizeMenu.addItem (AudiumLookAndFeel::SizeIds::small, TRANS ("small"), true);
-            sizeMenu.addItem (AudiumLookAndFeel::SizeIds::medium, TRANS ("medium"), true);
-            sizeMenu.addItem (AudiumLookAndFeel::SizeIds::large, TRANS ("large"), true);
-            sizeMenu.addItem (AudiumLookAndFeel::SizeIds::huge, TRANS ("huge"), true);
+            auto addSize = [&sizeMenu, safeThis] (const String& name, int height) {
+                sizeMenu.addItem (name, [safeThis, height] {
+                    if (safeThis != nullptr)
+                        safeThis->setChannelHeight (height);
+                });
+            };
+            addSize (TRANS ("micro"), AudiumLookAndFeel::SizeIds::micro);
+            addSize (TRANS ("small"), AudiumLookAndFeel::SizeIds::small);
+            addSize (TRANS ("medium"), AudiumLookAndFeel::SizeIds::medium);
+            addSize (TRANS ("large"), AudiumLookAndFeel::SizeIds::large);
+            addSize (TRANS ("huge"), AudiumLookAndFeel::SizeIds::huge);
             
             m.addSubMenu("Waveform Size", sizeMenu);
             
             // Toggle visibility of each analysis overlay (ticked = currently shown).
             PopupMenu showMenu;
-            showMenu.addItem (CommandIDs::showSegments, TRANS ("Segments"), true,
-                              audioTrack->getViewState().isAnalysisTypeVisible (audium::AnalysisType::Segments));
-            showMenu.addItem (CommandIDs::showOnsets, TRANS ("Onsets"), true,
-                              audioTrack->getViewState().isAnalysisTypeVisible (audium::AnalysisType::Onsets));
-            showMenu.addItem (CommandIDs::showBeats, TRANS ("Beats"), true,
-                              audioTrack->getViewState().isAnalysisTypeVisible (audium::AnalysisType::Beats));
+            auto addAnalysis = [this, &showMenu, safeThis] (const String& name, audium::AnalysisType type) {
+                showMenu.addItem (name, true, audioTrack->getViewState().isAnalysisTypeVisible (type), [safeThis, type] {
+                    if (safeThis != nullptr)
+                        safeThis->toggleAnalysisVisibility (type);
+                });
+            };
+            addAnalysis (TRANS ("Segments"), audium::AnalysisType::Segments);
+            addAnalysis (TRANS ("Onsets"), audium::AnalysisType::Onsets);
+            addAnalysis (TRANS ("Beats"), audium::AnalysisType::Beats);
 
             m.addSubMenu("Show Analysis", showMenu);
             
-            m.showMenuAsync (PopupMenu::Options().withStandardItemHeight(AudiumLookAndFeel::popupMenuItemHeight),
-                             ModalCallbackFunction::forComponent (contextMenuCallback, this));
+            m.showMenuAsync (PopupMenu::Options().withStandardItemHeight(AudiumLookAndFeel::popupMenuItemHeight));
         }
         
         if (!e.mods.isAnyModifierKeyDown() && !isSelected()) {

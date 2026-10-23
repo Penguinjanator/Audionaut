@@ -21,6 +21,7 @@
 #include "Engine/Resource/AudioResourceContainer.h"
 #include "Engine/Selection/ClipOverlayTarget.h"
 #include "Engine/Selection/SelectionManager.h"
+#include "Interface/ColourIds.h"
 #include "Interface/Controls/RegionSelector.h"
 
 namespace {
@@ -32,9 +33,6 @@ constexpr int modeBoxWidth = 96;
 // ComboBox item ids (0 is reserved for "nothing selected")
 constexpr int rePitchItemId = 1;
 constexpr int timeStretchItemId = 2;
-
-// The header's Loop button accent (see HeaderComponent).
-const juce::Colour lockedColour (0xff12a4e2);
 
 } // namespace
 
@@ -72,7 +70,7 @@ StretchOverlayControl::StretchOverlayControl(std::shared_ptr<audium::AudiumEngin
 
     lockButton = makeIconButton (TRANS ("Lock"), lockIconPath());
     lockButton->setClickingTogglesState (true);
-    lockButton->setColour (juce::TextButton::buttonOnColourId, lockedColour);
+    lockButton->setColour (juce::TextButton::buttonOnColourId, juce::Colour (audium::toggledOnColour));
     addAndMakeVisible (lockButton.get());
     lockButton->onClick = [this] { applyTempoLock (lockButton->getToggleState()); };
 
@@ -244,11 +242,13 @@ void StretchOverlayControl::syncFromEngine()
     repaint();
 }
 
-void StretchOverlayControl::applyRatio (double newRatio)
+void StretchOverlayControl::editItem (std::optional<bool> needsTempoLock, bool relayout,
+                                      const std::function<void (audium::PlayListItem&)>& change)
 {
     auto item = resolveItem();
 
-    if (item == nullptr || item->isRecording() || item->isTempoLocked())
+    if (item == nullptr || item->isRecording()
+        || (needsTempoLock.has_value() && item->isTempoLocked() != *needsTempoLock))
     {
         syncFromEngine();
         return;
@@ -256,71 +256,57 @@ void StretchOverlayControl::applyRatio (double newRatio)
 
     ensureSessionOpen (*item);
 
-    item->setSpeedRatio (newRatio);
-
-    // Reflect the clamp so the readout never lies.
-    speedSlider->setValue (item->getSpeedRatio(), juce::dontSendNotification);
+    change (*item);
 
     // The relayout this triggers resizes the clip under us - follow it in
     // place instead of running the zoom fade.
-    expectParentResize();
+    if (relayout)
+        expectParentResize();
     audiumEngine->getAudioTrackContainer()->sendActionMessage (audium::updateArrangementAction);
+}
+
+void StretchOverlayControl::applyRatio (double newRatio)
+{
+    editItem (false, true, [this, newRatio] (audium::PlayListItem& item) {
+        item.setSpeedRatio (newRatio);
+
+        // Reflect the clamp so the readout never lies.
+        speedSlider->setValue (item.getSpeedRatio(), juce::dontSendNotification);
+    });
 }
 
 void StretchOverlayControl::applyClipTempo (double bpm)
 {
-    auto item = resolveItem();
-
-    if (item == nullptr || item->isRecording() || ! item->isTempoLocked())
-    {
-        syncFromEngine();
-        return;
-    }
-
-    ensureSessionOpen (*item);
-
-    item->setClipTempo (bpm);
-    speedSlider->setValue (item->getClipTempo(), juce::dontSendNotification);
-
-    expectParentResize();
-    audiumEngine->getAudioTrackContainer()->sendActionMessage (audium::updateArrangementAction);
+    editItem (true, true, [this, bpm] (audium::PlayListItem& item) {
+        item.setClipTempo (bpm);
+        speedSlider->setValue (item.getClipTempo(), juce::dontSendNotification);
+    });
 }
 
 void StretchOverlayControl::applyTempoLock (bool shouldLock)
 {
-    auto item = resolveItem();
-
-    if (item == nullptr || item->isRecording())
-    {
-        syncFromEngine();
-        return;
-    }
-
-    ensureSessionOpen (*item);
-
-    if (shouldLock)
-    {
-        auto analysisProvider = audiumEngine->getAudioTrackContainer()->getAnalysisProvider();
-        const auto tempoKnown = analysisProvider != nullptr
-                                    ? audium::ClipTempo::lockToTempo (*item, *analysisProvider)
-                                    : (item->setTempoLocked (true), item->getClipTempo() > 0.0);
-
-        // No beat analysis yet: queue it, the listener adopts the result.
-        // Until then the clip plays as recorded (ratio 1.0), locked.
-        if (! tempoKnown)
-            if (auto worker = audiumEngine->getAudioResourceContainer()->getAnalysisWorker())
-                audium::ClipTempo::requestClipTempoDetection (*item, *worker);
-    }
-    else
-    {
-        item->setTempoLocked (false);
-    }
-
-    syncFromEngine();
-
     // locking changes the clip's length (unlike the Mode box)
-    expectParentResize();
-    audiumEngine->getAudioTrackContainer()->sendActionMessage (audium::updateArrangementAction);
+    editItem (std::nullopt, true, [this, shouldLock] (audium::PlayListItem& item) {
+        if (shouldLock)
+        {
+            auto analysisProvider = audiumEngine->getAudioTrackContainer()->getAnalysisProvider();
+            const auto tempoKnown = analysisProvider != nullptr
+                                        ? audium::ClipTempo::lockToTempo (item, *analysisProvider)
+                                        : (item.setTempoLocked (true), item.getClipTempo() > 0.0);
+
+            // No beat analysis yet: queue it, the listener adopts the result.
+            // Until then the clip plays as recorded (ratio 1.0), locked.
+            if (! tempoKnown)
+                if (auto worker = audiumEngine->getAudioResourceContainer()->getAnalysisWorker())
+                    audium::ClipTempo::requestClipTempoDetection (item, *worker);
+        }
+        else
+        {
+            item.setTempoLocked (false);
+        }
+
+        syncFromEngine();
+    });
 }
 
 void StretchOverlayControl::adoptDetectedTempo()
@@ -356,22 +342,12 @@ void StretchOverlayControl::ensureSessionOpen (audium::PlayListItem& item)
 
 void StretchOverlayControl::applyMode (bool pitchPreserving)
 {
-    auto item = resolveItem();
-
-    if (item == nullptr || item->isRecording())
-    {
-        syncFromEngine();
-        return;
-    }
-
-    ensureSessionOpen (*item);
-
-    item->setStretchMode (pitchPreserving ? audium::StretchMode::Stretch
-                                          : audium::StretchMode::RePitch);
-
     // no relayout (the length is mode-independent); the broadcast keeps
     // the arrangement's readouts honest, playback switches over on Done
-    audiumEngine->getAudioTrackContainer()->sendActionMessage (audium::updateArrangementAction);
+    editItem (std::nullopt, false, [pitchPreserving] (audium::PlayListItem& item) {
+        item.setStretchMode (pitchPreserving ? audium::StretchMode::Stretch
+                                             : audium::StretchMode::RePitch);
+    });
 }
 
 void StretchOverlayControl::commitSession()
@@ -478,20 +454,17 @@ void StretchOverlayControl::changeListenerCallback (juce::ChangeBroadcaster* sou
 
     // Only an actual clip selection re-targets the session; deselecting, or
     // selecting something that is no clip, leaves it where it is.
-    for (const auto& object : container->getSelectionManager()->getSelectedObjects())
-    {
-        if (auto* item = dynamic_cast<audium::PlayListItem*>(object.get()))
-        {
-            const auto newTrackId = item->getRegion()->getAudioTrack()->getId();
-            const auto newItemId = item->getId();
+    auto item = container->getSelectionManager()->firstSelectedClip();
+    if (item == nullptr)
+        return;
 
-            if (newTrackId == trackId && newItemId == playlistItemId)
-                return;
+    const auto newTrackId = item->getRegion()->getAudioTrack()->getId();
+    const auto newItemId = item->getId();
 
-            // The broadcast hides this control (committing its session) and
-            // shows the new clip's overlay fresh.
-            container->getClipOverlayTarget()->set(newTrackId, newItemId);
-            return;
-        }
-    }
+    if (newTrackId == trackId && newItemId == playlistItemId)
+        return;
+
+    // The broadcast hides this control (committing its session) and
+    // shows the new clip's overlay fresh.
+    container->getClipOverlayTarget()->set(newTrackId, newItemId);
 }
