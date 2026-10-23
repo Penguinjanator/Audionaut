@@ -19,7 +19,6 @@
 
 namespace audium {
 
-class AudioPlayer;
 class VoiceSource;
 class ResourceGroup;
 class AudioRegion;
@@ -93,12 +92,6 @@ public:
     void setUrl(const juce::URL newUrl) { url = newUrl; }
     
     /**
-     * @brief Retrieves the URL as a string.
-     * @return The URL as a `juce::String`.
-     */
-    const juce::String getUrlAsString() const;
-
-    /**
      * @brief Retrieves the local audio file.
      * @return The file, or an invalid (empty) `juce::File` while the resource
      *         has no local URL yet - e.g. while it is still being recorded.
@@ -154,20 +147,6 @@ public:
      * @brief Load the recorded audio file. Called once recording is finished.
      */
     bool loadRecordedAudioFile();
-    
-    /**
-     * @brief Retrieves all audio resources within the same subgroup.
-     * @return A vector of shared pointers to `AudioResource` objects.
-     */
-    std::vector<std::shared_ptr<AudioResource>> getAudioResourcesWithinResourceGroup() const;
-    
-    /**
-     * @brief Checks if the resource contains the specified absolute position.
-     * @param position The position to check.
-     * @param context The time context to use.
-     * @return True if the position is within the resource, false otherwise.
-     */
-    bool containsAbsolutePosition(double position, audium::TimeContextType context) const;
     
     /**
      * @brief Writes the resource data to a JSON object.

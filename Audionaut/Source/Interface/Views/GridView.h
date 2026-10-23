@@ -88,7 +88,6 @@ public:
         {
             currentRangeClocks = snapToGridHandler->getRange();
             repaint();
-            //std::cout << "GridView " << currentRangeClocks.getStart() << " " << currentRangeClocks.getEnd() << std::endl;
         }
     }
 

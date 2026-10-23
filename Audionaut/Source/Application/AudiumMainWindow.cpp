@@ -145,7 +145,6 @@ void AudiumMainWindow::getAllCommands (Array <CommandID>& commands)
     const CommandID ids[] =
     {
         CommandIDs::playStop,
-        CommandIDs::loopPlayList,
         CommandIDs::loopSelection,
         CommandIDs::createRegion,
         CommandIDs::splitRegion,
@@ -191,9 +190,6 @@ void AudiumMainWindow::getCommandInfo (const CommandID commandID, ApplicationCom
         case CommandIDs::playStop:
             result.setInfo ("Play/Stop", "Play and stop", CommandCategories::transport, 0);
             result.defaultKeypresses.add (KeyPress (' ', ModifierKeys::noModifiers, 0));
-            break;
-        case CommandIDs::loopPlayList:
-            result.setInfo ("Loop Playlist", "Loop Playlist On/Off", CommandCategories::transport, 0);
             break;
         case CommandIDs::loopSelection:
             result.setInfo ("Loop Selection", "Sets the loop range to the selected range and turns the loop on", CommandCategories::transport, 0);
@@ -361,9 +357,6 @@ bool AudiumMainWindow::perform (const InvocationInfo& info)
                 scheduler->isPlaying() ? scheduler->stopPlaying() : scheduler->startPlaying();
             }
             mainComponent->updateUI();
-            break;
-        case CommandIDs::loopPlayList:
-            notImplemented();
             break;
         case CommandIDs::loopSelection:
             loopSelectedRange();

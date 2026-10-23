@@ -64,7 +64,6 @@ void ChannelsComponent::itemDropped (const SourceDetails &dragSourceDetails)
             auto action = std::make_unique<audium::UndoableContainerAction>(*trackContainer.get());
             auto currentIndex = channelGroupHeaderComponent->getAudioTrack()->getId();
             auto insertIndex = audiumEngine->getAudioTrackContainer()->audioTracks.size();
-            std::cout << "ChannelGroupHeaderComponent::MoveItemBefore -> currentIndex: " << currentIndex << " indexOfItemToPlaceBefore " << insertIndex << std::endl;
 
             audium::MoveItemBefore(audiumEngine->getAudioTrackContainer()->audioTracks,
                                    currentIndex,

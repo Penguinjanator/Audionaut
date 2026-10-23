@@ -220,7 +220,6 @@ void ZoomHandler::focusViewOnPlayPosition()
 {
     auto posX = clocksToX(playListScheduler->getAbsolutePosition(audium::clocks));
     auto range = getVisibleRange();
-    //std::cout << pos << " " << posX << " range: " << range.getStart() << " " << range.getEnd() << std::endl;
     
     if (!range.contains(posX))
     {
@@ -236,7 +235,6 @@ void ZoomHandler::focusView(double positionInSeconds)
     
     if(!getVisibleRange().contains(posX))
     {
-        //std::cout << "seconds " << positionInSeconds << " " << posX << std::endl;
         const auto newStart = posX - (getVisibleRange().getLength() * 0.5);
         const auto newRange = getVisibleRange().movedToStartAt(newStart);
         setVisibleRange(newRange);
@@ -247,7 +245,6 @@ void ZoomHandler::centerView(double positionInClocks, double center)
 {
     const auto posX = clocksToX(positionInClocks);
     
-    //std::cout << "seconds " << positionInSeconds << " " << posX << std::endl;
     const auto newStart = posX - (getVisibleRange().getLength() * center);
     const auto newRange = getVisibleRange().movedToStartAt(newStart);
     
@@ -264,7 +261,6 @@ void ZoomHandler::timerCallback()
         auto posX = secondsToX(playListScheduler->getAbsolutePosition(audium::seconds));
         if(!getVisibleRange().contains(posX))
         {
-            //std::cout << "seconds " << playListScheduler->getAbsolutePositionSeconds() << " " << posX << std::endl;
             auto newStart = posX;// - (getVisibleRange().getLength() / 2);
             auto newRange = getVisibleRange().movedToStartAt(newStart);
             setVisibleRange(newRange);
@@ -286,7 +282,6 @@ void ZoomHandler::pageRight()
 juce::Point<int> ZoomHandler::autoScroll(const juce::MouseEvent& e)
 {
     auto pos = e.getEventRelativeTo(getViewPort()).getPosition();
-    // std::cout << "autoScroll pos " << pos.getX() << std::endl;
     auto oldPoint = getViewPort()->getViewedComponent()->getBounds().getTopLeft();
     if (getViewPort()->autoScroll(pos.getX(), pos.getY(), 30, 20)) {
         auto newPoint = getViewPort()->getViewedComponent()->getBounds().getTopLeft();

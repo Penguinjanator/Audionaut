@@ -115,7 +115,6 @@ void MainComponent::resized()
 
 void MainComponent::actionListenerCallback (const juce::String& message)
 {
-    //std::cout << "actionListenerCallback " << message.toStdString() << std::endl;
 
     if (message == audium::scrolledVertically)
     {

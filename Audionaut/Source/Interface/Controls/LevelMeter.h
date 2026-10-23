@@ -52,7 +52,6 @@ public:
     float getDisplayPeak();
     
     void setLevel (float level);
-    void setPeakLevel (float level);
     
     int getSpacing() const { return m_iSpace; }
     
@@ -103,11 +102,6 @@ public:
         return 20.f * log10f(fVolume);
     }
     
-    static const float decebelToGain(const float fDecibel)
-    {
-        return powf(10.f, (0.05f * fDecibel));
-    }
-    
 private:
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (LevelMeter)
     
@@ -122,7 +116,6 @@ public:
     StereoMeter();
     ~StereoMeter();
     
-    //void paint(Graphics& g);
     void resized();
     void setLevel(int channel, float level);
     

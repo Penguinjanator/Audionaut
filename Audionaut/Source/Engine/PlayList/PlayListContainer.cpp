@@ -34,7 +34,6 @@ std::shared_ptr<PlayListItem> PlayListContainer::createPlayListItemAtPositionUI(
     if (items.size() > 0) {
         insertIndex = getPlayListItemIndex(items.back()) + 1;
     }
-    //std::cout << "insert index: " << insertIndex << std::endl;
     
     if (auto playListItem = createPlayListItem(audioRegion, insertIndex)) {
         playListItem->setAbsolutePosition(position, context);
@@ -386,11 +385,6 @@ std::shared_ptr<PlayListItem> PlayListContainer::findExistingItem(std::shared_pt
     return nullptr;
 }
 
-bool PlayListContainer::playListItemExists(std::shared_ptr<PlayListItem> other) const
-{
-    return findExistingItem(other) != nullptr;
-}
-
 std::shared_ptr<PlayListItem> PlayListContainer::createPlayListItemFromJson (json& input)
 {
     std::shared_ptr<PlayListItem> playListItem = nullptr;
@@ -417,30 +411,6 @@ std::shared_ptr<PlayListItem> PlayListContainer::createPlayListItemFromJson (jso
     }
     
     return playListItem;
-}
-
-double PlayListContainer::getAbsolueStartTimeByOrder(const PlayListItem* playListItem, audium::TimeContextType context) const
-{
-    double startTime = 0.0;
-    
-    for (auto item : playListItems.getObjects())
-    {
-        if (item.get() == playListItem)
-        {
-            return startTime;
-        }
-        startTime += item->getRegionData(context).getLength();
-    }
-    
-    return startTime;
-}
-
-void PlayListContainer::forcePositionByOrder()
-{
-    for (auto item : playListItems.getObjects())
-    {
-        item->setAbsolutePosition(getAbsolueStartTimeByOrder(item.get(), audium::clocks), audium::clocks);
-    }
 }
 
 void PlayListContainer::sortByPosition()
@@ -619,28 +589,5 @@ double PlayListContainer::getTotalLength(audium::TimeContextType context) const
     return totalLength;
 }
 
-
-std::vector<std::shared_ptr<PlayListItem>> PlayListContainer::getSelectedItems(bool global) const
-{
-    std::vector<std::shared_ptr<PlayListItem>> result;
-    
-    if (global) {
-        auto selectedObjects = selectionManager->getSelectedObjects();
-        for (auto object : selectedObjects) {
-            if (auto playListItem = std::dynamic_pointer_cast<PlayListItem>(object)) {
-                jassert(playListItem->isSelected());
-                result.push_back(playListItem);
-            }
-        }
-    }
-    else {
-        
-        for (auto item : playListItems.objects) {
-            if (item->isSelected())
-                result.push_back(item);
-        }
-    }
-    return result;
-}
 
 } // namespace audium

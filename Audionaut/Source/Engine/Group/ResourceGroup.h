@@ -22,7 +22,6 @@ class AudioTrack;
 class AudioResource;
 class AudioRegion;
 class VoiceSource;
-class AudioClip;
 class AudioChannel;
 class AudioRegionContainer;
 

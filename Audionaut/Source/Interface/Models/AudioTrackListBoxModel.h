@@ -23,13 +23,11 @@ public:
     AudioTrackListBoxModel(std::shared_ptr<AudioTrackListBox> owner,
                            std::shared_ptr<audium::AudiumEngine> audiumEngine,
                            std::shared_ptr<ZoomHandler> zoomHandler,
-                           std::shared_ptr<RegionSelector> regionSelector,
-                           bool arrangementMode = true) :
+                           std::shared_ptr<RegionSelector> regionSelector) :
         owner(owner),
         audiumEngine(audiumEngine),
         zoomHandler(zoomHandler),
-        regionSelector(regionSelector),
-        arrangementMode(arrangementMode)
+        regionSelector(regionSelector)
     {
     }
     
@@ -65,7 +63,5 @@ private:
     std::shared_ptr<audium::AudiumEngine> audiumEngine;
     std::shared_ptr<ZoomHandler> zoomHandler;
     std::shared_ptr<RegionSelector> regionSelector;
-    
-    bool arrangementMode = true;
 
 };

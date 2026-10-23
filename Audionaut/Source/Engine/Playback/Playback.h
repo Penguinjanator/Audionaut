@@ -121,12 +121,6 @@ private:
      */
     Voice* findVoice(const VoiceSource* source);
 
-    /**
-     * @brief Gets the total number of voices.
-     * @return The total number of voices.
-     */
-    int getNumberOfVoices() const;
-
     juce::AudioBuffer<float> processingBuffer; ///< Buffer for audio bus processing.
 
     Voice voices[MAX_VOICES]; ///< Array of voices for playback.

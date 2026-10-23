@@ -344,7 +344,6 @@
     <ClCompile Include="..\..\Source\Engine\Project\ProjectSerializer.cpp"/>
     <ClCompile Include="..\..\Source\Engine\AudiumEngine.cpp"/>
     <ClCompile Include="..\..\Source\Interface\LookAndFeel\AudiumLookAndFeel.cpp"/>
-    <ClCompile Include="..\..\Source\Interface\LookAndFeel\TrackColourLookAndFeel.cpp"/>
     <ClCompile Include="..\..\Source\Interface\Widgets\audium_ListBox.cpp"/>
     <ClCompile Include="..\..\Source\Interface\Handlers\SnapToGridHandler.cpp"/>
     <ClCompile Include="..\..\Source\Interface\Handlers\ZoomHandler.cpp"/>
@@ -3582,7 +3581,6 @@
     <ClInclude Include="..\..\Source\Engine\Resource\AudioResource.h"/>
     <ClInclude Include="..\..\Source\Engine\Resource\AudioResourceContainer.h"/>
     <ClInclude Include="..\..\Source\Engine\Resource\audium_AudioThumbnail.h"/>
-    <ClInclude Include="..\..\Source\Engine\Resource\AudioResourceData.h"/>
     <ClInclude Include="..\..\Source\Engine\Resource\ChannelMapping.h"/>
     <ClInclude Include="..\..\Source\Engine\Separation\Demucs\DemucsRunner.h"/>
     <ClInclude Include="..\..\Source\Engine\Separation\DemucsBackend.h"/>
@@ -3603,9 +3601,7 @@
     <ClInclude Include="..\..\Source\Engine\Project\ProjectSerializer.h"/>
     <ClInclude Include="..\..\Source\Engine\AudiumEngine.h"/>
     <ClInclude Include="..\..\Source\Engine\ActionMessages.h"/>
-    <ClInclude Include="..\..\Source\Interface\DragAndDrop\DragAndDropContainer.h"/>
     <ClInclude Include="..\..\Source\Interface\LookAndFeel\AudiumLookAndFeel.h"/>
-    <ClInclude Include="..\..\Source\Interface\LookAndFeel\TrackColourLookAndFeel.h"/>
     <ClInclude Include="..\..\Source\Interface\UIContext.h"/>
     <ClInclude Include="..\..\Source\Interface\Dialogs\AnalysisSettingsComponent.h"/>
     <ClInclude Include="..\..\Source\Interface\Dialogs\ModelDownloadThread.h"/>
@@ -3650,7 +3646,6 @@
     <ClInclude Include="..\..\Source\Interface\Models\ChannelGroupListBoxModel.h"/>
     <ClInclude Include="..\..\Source\Interface\Models\ChannelSubGroupListBoxModel.h"/>
     <ClInclude Include="..\..\Source\Interface\Models\AudioTrackListBoxModel.h"/>
-    <ClInclude Include="..\..\Source\Interface\Models\SubGroupListBoxModel.h"/>
     <ClInclude Include="..\..\Source\Interface\Models\PlayListTableListBoxItem.h"/>
     <ClInclude Include="..\..\Source\Interface\Models\PlayListTableListBoxModel.h"/>
     <ClInclude Include="..\..\Source\Interface\Models\RegionTableListBoxModel.h"/>

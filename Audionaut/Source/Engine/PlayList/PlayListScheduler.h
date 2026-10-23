@@ -136,14 +136,9 @@ public:
         if (isPlaying &&
             beats >= 0.0) {
             
-            auto timeContext = audium::seconds;
-            auto pos = 0.0;
-            if (timeContext == clocks)
-                pos = tempoProvider->beatsToClocks(beats);
-            else
-                pos = tempoProvider->beatsToSeconds(beats);
+            auto pos = tempoProvider->beatsToSeconds(beats);
             
-            auto loopResult = transportLoop->processLoop(pos, numSamples, timeContext);
+            auto loopResult = transportLoop->processLoop(pos, numSamples, audium::seconds);
             
             if (loopResult.context == audium::seconds)
                 data.transportPositionClocks = tempoProvider->secondsToClocks(loopResult.positionResult);
@@ -196,7 +191,6 @@ public:
     void stopRecording(const int channelNumber = -1);
     bool isRecordingArmed() const noexcept { return data.isRecordingArmed; }
     void setRecordingArmed(bool bArmed) { data.isRecordingArmed = bArmed; }
-    double getRecordingLength(audium::TimeContextType context) const;
     
     bool isRecording() const noexcept;
     
@@ -292,8 +286,6 @@ private:
     double externalSampleRate = 0.0;
     
     int bufferSize = 0;
-    
-    std::atomic<bool> forcePosition = false;
     
     std::atomic<double> totalLengthClocks = 0.0;
 

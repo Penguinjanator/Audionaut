@@ -187,7 +187,6 @@ file(GLOB SRC_AUDIUM
         ${SRC_PATH}/Interface/Handlers/*.cpp
         ${SRC_PATH}/Interface/Views/*.cpp
         ${SRC_PATH}/Interface/Widgets/*.cpp
-        ${SRC_PATH}/Interface/DragAndDrop/*.cpp
         ${SRC_PATH}/Util/*.cpp
         )
         

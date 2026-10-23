@@ -207,7 +207,6 @@ HeaderComponent::HeaderComponent (std::shared_ptr<audium::AudiumEngine> audiumEn
     loopImage.setPath(getLoopButtonPath());
     loopImage.setStrokeFill(FillType(Colours::white.withAlpha(0.8f)));
     loopImage.setStrokeThickness(1.5f);
-    //loopImage.setFill (FillType(Colours::transparentBlack));
     loopImage.setFill (Colours::white);
 
     loopButton->setImages(&loopImage);

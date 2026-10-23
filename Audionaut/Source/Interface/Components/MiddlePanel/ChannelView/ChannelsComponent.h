@@ -61,7 +61,6 @@ public:
     
     void setVerticalScrollOffset(double offset)
     {
-        // std::cout << "setVerticalScrollOffset " << offset << std::endl;
         auto range = audioChannelsListBox->getViewport()->getVerticalScrollBar().getCurrentRange().withStart(offset);
         audioChannelsListBox->getViewport()->getVerticalScrollBar().setCurrentRange(range, sendNotificationSync);
     }

@@ -66,14 +66,12 @@ void AudioClipView::resized()
 
 void AudioClipView::updateUI(std::shared_ptr<audium::AudioResource> audioResource_, int theChannel)
 {
-    //std::cout << "AudioClipView::updateUI " << playListItem->getRegion()->getName() << std::endl;
     channelNumber = theChannel;
     if (audioResource != audioResource_) {
         audioResource = audioResource_;
         createThumbnailCache();
     }
     else {
-        //std::cout << "AudioClipView::updateUI " << this << " null" << std::endl;
     }
         
     volumeSlider->setValue(LevelMeter::gainToDecebel(getClipGain()), dontSendNotification);

@@ -59,11 +59,6 @@ public:
     */
     void setResamplingRatio (double samplesInPerOutputSample);
 
-    /** Returns the current resampling ratio.
-        This is the value that was set by setResamplingRatio().
-    */
-    double getResamplingRatio() const noexcept                  { return ratio; }
-
     /** The largest ratio getNextAudioBlock has to serve without growing
         its buffer. prepareToPlay sizes the buffer for the greater of this
         and the current ratio, so set it before preparing, off the audio

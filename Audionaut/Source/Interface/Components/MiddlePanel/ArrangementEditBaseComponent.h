@@ -37,17 +37,16 @@ class ArrangementEditBaseComponent  : public juce::Component, public juce::Chang
 {
 public:
     ArrangementEditBaseComponent(std::shared_ptr<audium::AudiumEngine> audiumEngine,
-                                 std::shared_ptr<ZoomHandler> zoomHandler,
-                                 bool arrangementMode) :
+                                 std::shared_ptr<ZoomHandler> zoomHandler) :
         audiumEngine(audiumEngine),
         zoomHandler(zoomHandler)
     {
         // arragnement overview
-        arrangementOverview = std::make_unique<ArrangementOverview> (audiumEngine, arrangementMode);
+        arrangementOverview = std::make_unique<ArrangementOverview> (audiumEngine);
         addAndMakeVisible(arrangementOverview.get());
         
         // drag zoom control
-        dragZoomControl = std::make_unique<DragZoomControl> (audioTrackListBox, audiumEngine, zoomHandler, arrangementMode);
+        dragZoomControl = std::make_unique<DragZoomControl> (audioTrackListBox, audiumEngine, zoomHandler);
         addAndMakeVisible(dragZoomControl.get());
         dragZoomControl->addChangeListener(this);
         
@@ -63,8 +62,7 @@ public:
         audioTrackListBoxModel = std::make_unique<AudioTrackListBoxModel>(audioTrackListBox,
                                                                           audiumEngine,
                                                                           zoomHandler,
-                                                                          regionSelector,
-                                                                          arrangementMode);
+                                                                          regionSelector);
         audioTrackListBox->setModel(audioTrackListBoxModel.get());
         
         // transport position control
@@ -270,7 +268,6 @@ public:
     
     void setVerticalScrollOffset(double offset)
     {
-        // std::cout << "setVerticalScrollOffset " << offset << std::endl;
         auto range = audioTrackListBox->getViewport()->getVerticalScrollBar().getCurrentRange().withStart(offset);
         audioTrackListBox->getViewport()->getVerticalScrollBar().setCurrentRange(range, sendNotificationSync);
     }
@@ -282,7 +279,6 @@ public:
     
     void setHorizontalScrollOffset(double offset)
     {
-        // std::cout << "setHorizontalScrollOffset " << offset << std::endl;
         auto range = audioTrackListBox->getViewport()->getHorizontalScrollBar().getCurrentRange().withStart(offset);
         audioTrackListBox->getViewport()->getHorizontalScrollBar().setCurrentRange(range, sendNotificationSync);
     }

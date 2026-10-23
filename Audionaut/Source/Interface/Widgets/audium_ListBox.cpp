@@ -325,15 +325,12 @@ public:
         auto newY = content.getY();
         auto newW = jmax (owner.minimumRowWidth, getMaximumVisibleWidth());
         
-        // kvo
-        //auto newH = owner.totalItems * owner.getRowHeight();
+        // kvo: rows have their own heights, so sum them
         auto newH = 0;
         for (auto r = 0; r < owner.totalItems; r++)
         {
             if (auto* m = owner.getModel())
                 newH += m->getRowHeight (r);
-            
-            //newH += owner.model->getRowHeight(r);
         }
         
         if (owner.model != nullptr)
@@ -379,43 +376,6 @@ public:
                 rowComp->update (row, owner.isRowSelected (row));
             }
         }
-        
-        /* this is the original code that only updates the conent on screen
-        if (rowH > 0)
-        {
-            auto y = getViewPositionY();
-            auto w = content.getWidth();
-
-            const auto numNeeded = (size_t) (4 + getMaximumVisibleHeight() / rowH);
-            rows.resize (jmin (numNeeded, rows.size()));
-
-            while (numNeeded > rows.size())
-            {
-                rows.emplace_back (new RowComponent (owner));
-                content.addAndMakeVisible (*rows.back());
-            }
-
-            firstIndex = y / rowH;
-            firstWholeIndex = (y + rowH - 1) / rowH;
-            lastWholeIndex = (y + getMaximumVisibleHeight() - 1) / rowH;
-
-            const auto startIndex = getIndexOfFirstVisibleRow();
-            const auto lastIndex = startIndex + (int) rows.size();
-
-            for (auto row = startIndex; row < lastIndex; ++row)
-            {
-                if (auto* rowComp = getComponentForRowIfOnscreen (row))
-                {
-                    rowComp->setBounds (0, row * rowH, w, rowH);
-                    rowComp->update (row, owner.isRowSelected (row));
-                }
-                else
-                {
-                    jassertfalse;
-                }
-            }
-        }
-        */
 
         if (owner.headerComponent != nullptr)
         {
@@ -620,8 +580,7 @@ void ListBox::resized()
     viewport->setBoundsInset (BorderSize<int> (outlineThickness + (headerComponent != nullptr ? headerComponent->getHeight() : 0),
                                                outlineThickness, outlineThickness, outlineThickness));
 
-    // kvo
-    //viewport->setSingleStepSizes (20, getRowHeight());
+    // kvo: no single step sizes, the rows have their own heights
 
     viewport->updateVisibleArea (false);
 }

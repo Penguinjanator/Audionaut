@@ -114,8 +114,7 @@ public:
                                                 int width, int height, bool isMouseOver, bool isMouseDown,
                                                 int columnFlags) override;
 
-    // Header text is sized from the header height. Shared so this and the
-    // TrackColourLookAndFeel override cannot drift apart.
+    // Header text is sized from the header height.
     static juce::FontOptions getTableHeaderFontOptions (int height)
     {
         return juce::FontOptions ((float) height * 0.5f, juce::Font::bold);

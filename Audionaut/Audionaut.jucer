@@ -464,8 +464,6 @@
                 file="Source/Engine/Resource/audium_AudioThumbnail.cpp"/>
           <FILE id="iIxYr4" name="audium_AudioThumbnail.h" compile="0" resource="0"
                 file="Source/Engine/Resource/audium_AudioThumbnail.h"/>
-          <FILE id="MR7guu" name="AudioResourceData.h" compile="0" resource="0"
-                file="Source/Engine/Resource/AudioResourceData.h"/>
           <FILE id="h0LKN6" name="ChannelMapping.cpp" compile="1" resource="0"
                 file="Source/Engine/Resource/ChannelMapping.cpp"/>
           <FILE id="BMWUaX" name="ChannelMapping.h" compile="0" resource="0"
@@ -532,19 +530,11 @@
               file="Source/Engine/ActionMessages.h"/>
       </GROUP>
       <GROUP id="{744E1F4F-2D8F-31FE-0087-A2E6AC160CCB}" name="Interface">
-        <GROUP id="{D7A55DBA-57BE-B874-B2D9-6F3F79479569}" name="DragAndDrop">
-          <FILE id="sqBOif" name="DragAndDropContainer.h" compile="0" resource="0"
-                file="Source/Interface/DragAndDrop/DragAndDropContainer.h"/>
-        </GROUP>
         <GROUP id="{69575DAF-FBC2-F140-D989-B3A8608F6F55}" name="LookAndFeel">
           <FILE id="LkiqwE" name="AudiumLookAndFeel.cpp" compile="1" resource="0"
                 file="Source/Interface/LookAndFeel/AudiumLookAndFeel.cpp"/>
           <FILE id="MtAxzj" name="AudiumLookAndFeel.h" compile="0" resource="0"
                 file="Source/Interface/LookAndFeel/AudiumLookAndFeel.h"/>
-          <FILE id="ua9v92" name="TrackColourLookAndFeel.cpp" compile="1" resource="0"
-                file="Source/Interface/LookAndFeel/TrackColourLookAndFeel.cpp"/>
-          <FILE id="mCqQLl" name="TrackColourLookAndFeel.h" compile="0" resource="0"
-                file="Source/Interface/LookAndFeel/TrackColourLookAndFeel.h"/>
         </GROUP>
         <FILE id="Z0WoBP" name="UIContext.h" compile="0" resource="0" file="Source/Interface/UIContext.h"/>
         <GROUP id="{FDFCF777-912B-E242-9920-2A7DBFBDCFE8}" name="Dialogs">
@@ -680,8 +670,6 @@
                 file="Source/Interface/Models/AudioTrackListBoxModel.cpp"/>
           <FILE id="eYSeuv" name="AudioTrackListBoxModel.h" compile="0" resource="0"
                 file="Source/Interface/Models/AudioTrackListBoxModel.h"/>
-          <FILE id="JhbMbX" name="SubGroupListBoxModel.h" compile="0" resource="0"
-                file="Source/Interface/Models/SubGroupListBoxModel.h"/>
           <FILE id="eE3Tt0" name="PlayListTableListBoxItem.cpp" compile="1" resource="0"
                 file="Source/Interface/Models/PlayListTableListBoxItem.cpp"/>
           <FILE id="gXfKLs" name="PlayListTableListBoxItem.h" compile="0" resource="0"

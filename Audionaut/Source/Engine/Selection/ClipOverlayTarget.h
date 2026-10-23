@@ -53,9 +53,6 @@ public:
         return isActive() && trackId == otherTrackId && playlistItemId == otherPlaylistItemId;
     }
 
-    int getTrackId() const noexcept { return trackId; }
-    int getPlaylistItemId() const noexcept { return playlistItemId; }
-
 private:
     int trackId = -1;
     int playlistItemId = -1;

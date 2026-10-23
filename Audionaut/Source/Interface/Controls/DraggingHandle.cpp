@@ -105,7 +105,6 @@ void DraggingHandle::mouseDrag (const juce::MouseEvent& e)
 
 void DraggingHandle::mouseMove (const juce::MouseEvent& e)
 {
-    //updateMouseZone (e);
 }
 
 void DraggingHandle::mouseEnter (const MouseEvent& e)

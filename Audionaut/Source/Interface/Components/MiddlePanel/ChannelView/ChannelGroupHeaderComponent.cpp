@@ -59,8 +59,6 @@ void ChannelGroupHeaderComponent::itemDropped (const SourceDetails &dragSourceDe
         // Undo: store old state
         auto action = std::make_unique<audium::UndoableContainerAction>(getAudioTrack()->getAudioTrackContainer());
 
-        std::cout << "ChannelGroupHeaderComponent::MoveItemBefore -> currentIndex: " << channelComponent->getAudioTrack()->getId() << " indexOfItemToPlaceBefore " << audioTrack->getId() << std::endl;
-
 
         audium::MoveItemBefore(getAudioTrack()->getAudioTrackContainer().audioTracks,
                                channelComponent->getAudioTrack()->getId(),

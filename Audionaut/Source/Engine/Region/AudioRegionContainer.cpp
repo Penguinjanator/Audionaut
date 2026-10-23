@@ -69,14 +69,6 @@ std::shared_ptr<AudioRegion> AudioRegionContainer::createRegion(std::shared_ptr<
     if (track->getNumAudioTrackChannels() < otherRegion->getAudioTrack()->getNumAudioTrackChannels())
         track->ensureNumChannels(otherRegion->getAudioTrack()->getNumAudioTrackChannels());
     
-    // TODO: not sure if this assertion still makes sense
-#if 0
-    // - similar resource group must exist
-    json otherGroup;
-    otherRegion->getResourceGroup()->writeToJson(otherGroup);
-    jassert(track->findExistingResourceGroup(otherGroup));
-#endif
-    
     // - find similar region
     auto newRegion = findSimilarRegion(otherRegion);
     
@@ -132,7 +124,6 @@ void AudioRegionContainer::cleanup()
 std::shared_ptr<AudioRegion> AudioRegionContainer::getRegion(int regionId) const
 {
     if (regionId >= 0 && regionId < audioRegions.size()) {
-        //jassert(audioRegions[regionId]->data.region_id == regionId);
         return audioRegions[regionId];
     }
     return nullptr;
@@ -155,41 +146,6 @@ int AudioRegionContainer::getNumRegions() const
     return static_cast<int>(audioRegions.size());
 }
 
-std::vector<std::shared_ptr<AudioRegion>> AudioRegionContainer::getRegionsForResourceGroup(const ResourceGroup* resourceGroup) const
-{
-    std::vector<std::shared_ptr<AudioRegion>> regions;
-    for (auto region : audioRegions)
-    {
-        if (region->getResourceGroup().get() == resourceGroup)
-            regions.push_back(region);
-    }
-    return regions;
-}
-
-std::vector<std::shared_ptr<AudioRegion>> AudioRegionContainer::getSelectedRegions(bool global) const
-{
-    std::vector<std::shared_ptr<AudioRegion>> result;
-    
-    if (global) {
-        auto selectedObjects = audioTrackContainer.getSelectionManager()->getSelectedObjects();
-        
-        for (auto object : selectedObjects) {
-            if (auto region = std::dynamic_pointer_cast<AudioRegion>(object)) {
-                jassert(region->isSelected());
-                result.push_back(region);
-            }
-        }
-    }
-    else {
-        for (auto r : audioRegions) {
-            if (r->isSelected()) {
-                result.push_back(r);
-            }
-        }
-    }
-    return result;
-}
-
 std::shared_ptr<AudioRegion> AudioRegionContainer::findSimilarRegion(std::shared_ptr<AudioRegion> otherRegion) const
 {
     auto context = audium::seconds;
@@ -200,16 +156,6 @@ std::shared_ptr<AudioRegion> AudioRegionContainer::findSimilarRegion(std::shared
         }
     }
     return nullptr;
-}
-
-void AudioRegionContainer::deleteAudioRegionsForResourceGroup(std::shared_ptr<ResourceGroup> resourceGroup)
-{
-    auto regions = getRegionsForResourceGroup(resourceGroup.get());
-    
-    for (auto region : regions)
-    {
-        deleteAudioRegion(region);
-    }
 }
 
 void AudioRegionContainer::addAudioRegion(std::shared_ptr<AudioRegion> region)
@@ -271,23 +217,6 @@ void AudioRegionContainer::sortRegionIds()
     for (auto region : audioRegions) {
         region->data.region_id = counter++;
     }
-}
-
-std::vector<std::shared_ptr<AudioRegion>> AudioRegionContainer::getRegionsForResource(std::shared_ptr<AudioResource> audioResource) const
-{
-    std::vector<std::shared_ptr<AudioRegion>> result;
-    for (auto region : audioRegions)
-    {
-        auto audioResources = region->getAudioResources();
-        for (auto resource : audioResources)
-        {
-            if (resource == audioResource)
-            {
-                result.push_back(region);
-            }
-        }
-    }
-    return result;
 }
 
 

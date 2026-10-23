@@ -42,12 +42,6 @@ public:
         channelNumber(channelNumber_),
         playListItem(playListItem_)
     {
-        // this component doesn't handle mouse events
-        //setInterceptsMouseClicks(false, false);
-        
-        // use buffered image
-        // setBufferedToImage(true);
-        
         createThumbnailCache();
     }
 

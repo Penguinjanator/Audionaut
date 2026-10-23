@@ -41,7 +41,6 @@ void PlayListTableListBoxItem::updateInsertLines(const juce::DragAndDropTarget::
     
     if (auto item = dynamic_cast<PlayListTableListBoxItem*>(dragSourceDetails.sourceComponent.get()))
     {
-        //std::cout << "movePlayListItemBefore this: " << rowNumber << " item: " << item->rowNumber << " insert: " << insertIndex << std::endl;
         
         if (rowNumber == item->rowNumber ||
             item->rowNumber == insertIndex)
@@ -76,7 +75,6 @@ void PlayListTableListBoxItem::itemDropped (const SourceDetails &dragSourceDetai
     auto before = dragSourceDetails.localPosition.y < getHeight() / 2;
     auto insertIndex = rowNumber + (before ? 0 : 1);
     
-    //std::cout << "row number: " << rowNumber + (before ? 0 : 1) << std::endl;
     
     bool modified = false;
     
