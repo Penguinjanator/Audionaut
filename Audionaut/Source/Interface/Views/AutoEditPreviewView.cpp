@@ -24,7 +24,7 @@ void AutoEditPreviewView::paint (juce::Graphics& g)
 
     for (auto seconds : previewSegments)
     {
-        const auto x = static_cast<float>(zoomHandler->secondsToX(seconds - regionStartSeconds));
+        const auto x = static_cast<float>(zoomHandler->secondsToX((seconds - regionStartSeconds) / speedRatio));
 
         if (x < 0.0f || x > fWidth)
             continue;
@@ -40,10 +40,12 @@ void AutoEditPreviewView::setZoomHandler(std::shared_ptr<ZoomHandler> zoomHandle
 }
 
 void AutoEditPreviewView::setPreviewSegments(std::vector<float> previewSegments_,
-                                             double regionStartSeconds_)
+                                             double regionStartSeconds_,
+                                             double speedRatio_)
 {
     previewSegments = std::move(previewSegments_);
     regionStartSeconds = regionStartSeconds_;
+    speedRatio = speedRatio_ > 0.0 ? speedRatio_ : 1.0;
 
     if (previewSegments.empty())
         stopTimer();

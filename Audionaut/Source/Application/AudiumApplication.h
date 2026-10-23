@@ -79,7 +79,8 @@ public:
     void openFile(juce::File file);
     void openFileInternal(juce::File file, juce::File autosaveToOffer);
     
-    bool saveProjectAs();
+    // asynchronous: onSaved runs once the chosen file has been saved
+    void saveProjectAs(std::function<void ()> onSaved = nullptr);
     bool saveProject();
     bool saveProjectToFile(juce::File file);
     void askToSaveIfDirtyAndInvoke(std::function<void ()> foo);

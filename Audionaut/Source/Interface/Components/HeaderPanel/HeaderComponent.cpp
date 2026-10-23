@@ -111,7 +111,7 @@ HeaderComponent::HeaderComponent (std::shared_ptr<audium::AudiumEngine> audiumEn
     AudiumLookAndFeel::configureSlider(clicksSlider.get());
     clicksSlider->setVelocityModeParameters(1.0, 1, 0.01);
     clicksSlider->setNormalisableRange(NormalisableRange<double>(0, 16000, 1));
-    beatsSlider->onDragStart = [this]() {
+    clicksSlider->onDragStart = [this]() {
         lastClicksValue = static_cast<int>(clicksSlider->getValue());
     };
     clicksSlider->onValueChange = [this, scheduler]() {
