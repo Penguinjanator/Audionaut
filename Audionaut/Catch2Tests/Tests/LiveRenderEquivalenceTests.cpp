@@ -238,8 +238,43 @@ SCENARIO ("bouncing and then playing on one engine renders the same audio", "[en
 
                     THEN ("all three renders match")
                     {
-                        requireEquivalent (live, firstBounce, blockSize, &trace);
-                        requireEquivalent (live, secondBounce, blockSize, &trace);
+                        {
+                            INFO ("live against the first bounce");
+                            requireEquivalent (live, firstBounce, blockSize, &trace);
+                        }
+                        {
+                            INFO ("live against the second bounce");
+                            requireEquivalent (live, secondBounce, blockSize, &trace);
+                        }
+                    }
+                }
+
+                WHEN ("the span is bounced right after Stop, while Link still reports playing")
+                {
+                    const auto reference = bounceProject (*engine, c.startSeconds, c.lengthSeconds,
+                                                          blockSize, kSampleRate, kNumChannels);
+
+                    FakeAudioIODevice device (kSampleRate, blockSize, 2, kNumChannels);
+                    LiveBlockDriver driver (*engine, device);
+                    driver.play (c.startSeconds);
+                    driver.render (0.5);
+
+                    // Link's app-side state follows the audio thread's commits
+                    // a little later; wait until it has taken the Play
+                    const auto linkEngine = engine->getPlayListScheduler()->getLinkEngine();
+                    for (auto i = 0; i < 100 && ! linkEngine->isPlaying(); ++i)
+                        juce::Thread::sleep (10);
+
+                    driver.stopWithLinkLagging();
+                    REQUIRE (linkEngine->isPlaying());
+
+                    const auto bounce = bounceProject (*engine, c.startSeconds, c.lengthSeconds,
+                                                       blockSize, kSampleRate, kNumChannels);
+                    driver.stop();
+
+                    THEN ("it renders from its own start, not from where playback is")
+                    {
+                        requireEquivalent (bounce, reference, blockSize);
                     }
                 }
 
