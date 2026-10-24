@@ -33,7 +33,14 @@ nlohmann::json makeProjectSummary (AudiumEngine& engine)
         nlohmann::json trackJson;
         trackJson["id"] = track->getId();
         trackJson["name"] = track->getAudioTrackName().toStdString();
-        trackJson["numChannels"] = static_cast<int> (track->audioChannelContainer->objects.size());
+        auto numChannels = static_cast<int> (track->audioChannelContainer->objects.size());
+        trackJson["numChannels"] = numChannels;
+
+        // the channel strips' mixer state an agent can set (track-pan)
+        auto channels = nlohmann::json::array();
+        for (int channel = 0; channel < numChannels; ++channel)
+            channels.push_back ({ { "pan", track->getPan (channel) } });
+        trackJson["channels"] = channels;
 
         auto clips = nlohmann::json::array();
         for (auto& item : track->getPlayListContainer()->getPlayListItems()) {

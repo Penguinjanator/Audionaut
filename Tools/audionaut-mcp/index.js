@@ -841,6 +841,35 @@ server.registerTool(
     runCli(["remove-channel", project, "--track", String(track), "--channel", String(channel)]))
 );
 
+server.registerTool(
+  "track_pan",
+  {
+    title: "Pan a track",
+    description:
+      "Sets the pan position of a track's channel strips, -1 (hard left) to 1 (hard right), 0 centred - " +
+      "the pan slider of the channel view. Every strip of the track by default, one with channel. " +
+      "A mono stem has one strip; a stereo import's two strips start at -1 and 1. Playback and " +
+      "export_audio both follow it; get_project_info shows the current pans per track.",
+    inputSchema: {
+      project: projectParam,
+      track: z.number().int().min(0).describe("Track id"),
+      pan: z.number().min(-1).max(1).describe("Pan position, -1 left .. 0 centre .. 1 right"),
+      channel: z.number().int().min(0).optional().describe("One channel strip (0-based; default: all)"),
+      task: taskParam,
+    },
+  },
+  withTask(async ({ project, track, pan, channel }) =>
+    runCli([
+      "track-pan",
+      project,
+      "--track",
+      String(track),
+      "--pan",
+      String(pan),
+      ...(channel !== undefined ? ["--channel", String(channel)] : []),
+    ]))
+);
+
 // ---------------------------------------------------------------------------
 // Feature requests and bug reports: agents hit the edges of what the CLI
 // exposes, and its bugs, long before a human would file an issue, so give

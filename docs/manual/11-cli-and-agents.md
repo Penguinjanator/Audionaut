@@ -84,6 +84,7 @@ clip-speed      set a clip's speed (ratio, semitones or target length)
                 and mode (--mode repitch|stretch, pitch-preserving)
 remove-track    remove a whole track (channels, clips and regions)
 remove-channel  remove one channel from a track
+track-pan       pan a track's channel strips (-1 left .. 1 right)
 separate        split a clip into Drums/Bass/Other/Vocals tracks (Demucs)
 ```
 

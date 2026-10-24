@@ -274,6 +274,15 @@ const std::vector<CliCommandSpec>& getCliCommands()
           "Channel mappings and per-channel clip gains shift down; the audio files stay in the package.",
           runRemoveChannel },
 
+        { "track-pan",
+          "track-pan <project.audium> --track N --pan P [--channel C] [--json]",
+          "Pans a track's channel strips (-1 left .. 1 right).",
+          "Sets the pan position of track N's channel strips, -1 (hard left) to 1 (hard right), "
+          "0 centred - the pan slider of the channel view. Every strip of the track by default, one "
+          "with --channel C (0-based). A mono stem has one strip; a stereo import's two strips start "
+          "at -1 and 1. Playback and export both follow it.",
+          runTrackPan },
+
         { "separate",
           "separate <project.audium> [--track N] [--clip N] [--threads N] [--model PATH]\n"
           "                          [--no-mute-source] [--backend demucs|fake] [--json]",

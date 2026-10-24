@@ -99,5 +99,57 @@ int runRemoveChannel (const juce::ArgumentList& args, CliContext& context)
     });
 }
 
+int runTrackPan (const juce::ArgumentList& args, CliContext& context)
+{
+    auto working = args;
+    auto trackValue = takeOptionValue (working, "--track");
+    auto channelValue = takeOptionValue (working, "--channel");
+    auto panValue = takeOptionValue (working, "--pan");
+
+    if (trackValue.isEmpty() || panValue.isEmpty())
+        return context.fail (exitUsage, "usage", "track-pan requires --track <id> and --pan <-1..1>");
+
+    auto pan = panValue.getDoubleValue();
+    if (pan < -1.0 || pan > 1.0 || ! panValue.containsAnyOf ("0123456789"))
+        return context.fail (exitUsage, "usage", "--pan must be between -1 (left) and 1 (right)");
+
+    return runProjectEdit (working, context, "track-pan", [&] (ProjectSession& session, EditOutcome& outcome)
+    {
+        auto& trackContainer = *session->getAudioTrackContainer();
+
+        auto track = trackById (trackContainer, trackValue.getIntValue());
+        if (track == nullptr)
+            return context.fail (exitFailure, "track_not_found",
+                                 "no track with id " + trackValue.toStdString());
+
+        auto numChannels = static_cast<int> (track->audioChannelContainer->objects.size());
+        if (numChannels == 0)
+            return context.fail (exitFailure, "no_channels",
+                                 "track " + trackValue.toStdString() + " has no audio channels");
+
+        // one channel strip, or every strip of the track (a mono stem has one)
+        if (channelValue.isNotEmpty()) {
+            auto channel = channelValue.getIntValue();
+            if (channel < 0 || channel >= numChannels)
+                return context.fail (exitUsage, "usage",
+                                     "--channel must be 0.." + std::to_string (numChannels - 1));
+            track->setPan (static_cast<float> (pan), channel);
+        }
+        else {
+            for (int channel = 0; channel < numChannels; ++channel)
+                track->setPan (static_cast<float> (pan), channel);
+        }
+
+        auto pans = nlohmann::json::array();
+        for (int channel = 0; channel < numChannels; ++channel)
+            pans.push_back (track->getPan (channel));
+
+        outcome.log = "pan set on track " + juce::String (track->getId());
+        outcome.result = { { "track", track->getId() },
+                           { "pans", pans } };
+        return exitOk;
+    });
+}
+
 } // namespace cli
 } // namespace audium

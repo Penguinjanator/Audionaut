@@ -110,6 +110,7 @@ read or edit them.
 | `clip_speed` | `clip-speed` | Set a clip's speed and mode (varispeed or pitch-preserving stretch), or lock it to the project tempo |
 | `remove_track` | `remove-track` | Remove a whole track (channels, clips and regions) |
 | `remove_channel` | `remove-channel` | Remove one channel from a track |
+| `track_pan` | `track-pan` | Pan a track's channel strips, -1 left to 1 right (all strips or one) |
 | `request_feature` | — | Send a feature request to the maintainer (see below) |
 | `report_bug` | — | Send a bug report to the maintainer (see below) |
 | `separate_stems` | `separate` | Split a clip into Drums/Bass/Other/Vocals tracks (Demucs; needs the downloaded model) |
