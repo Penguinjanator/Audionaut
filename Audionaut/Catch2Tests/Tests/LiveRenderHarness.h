@@ -256,6 +256,17 @@ public:
         renderBlock (device.blockSize);
     }
 
+    /// Stop as above, but with Link left out of the callback after it: the
+    /// voices stop and fade out there as in the app, while Link's app-side
+    /// state still says playing. That is what an export meets when it starts
+    /// before Link's io thread has folded the stop in, which on a busy
+    /// machine takes longer than starting one.
+    void stopWithLinkLagging()
+    {
+        scheduler->stopPlaying();
+        renderBlock (device.blockSize, false);
+    }
+
     /// Runs whole device blocks until `seconds` of output are captured and
     /// returns them (trimmed to the exact sample count).
     juce::AudioBuffer<float> render (double seconds)
@@ -312,7 +323,7 @@ public:
     LiveTrace trace;
 
 private:
-    void renderBlock (int numSamples)
+    void renderBlock (int numSamples, bool withLink = true)
     {
         using namespace std::chrono;
         const auto blockWallStart = juce::Time::getMillisecondCounterHiRes();
@@ -323,8 +334,16 @@ private:
             + microseconds (std::llround (static_cast<double> (sampleTime) * 1.0e6 / device.sampleRate));
         const auto bufferBeginAtOutput = hostTime + linkEngine->mOutputLatency.load();
 
-        isPlaying = linkEngine->audioCallback (bufferBeginAtOutput, static_cast<std::size_t> (numSamples));
-        beats = linkEngine->beatAtTime (bufferBeginAtOutput, linkEngine->quantum());
+        if (withLink)
+        {
+            isPlaying = linkEngine->audioCallback (bufferBeginAtOutput, static_cast<std::size_t> (numSamples));
+            beats = linkEngine->beatAtTime (bufferBeginAtOutput, linkEngine->quantum());
+        }
+        else
+        {
+            // what the audio callback reports once it has taken the stop
+            isPlaying = false;
+        }
 
         // the device callback clears its output before rendering into it
         output.clear();

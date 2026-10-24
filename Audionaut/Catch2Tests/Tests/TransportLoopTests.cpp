@@ -354,6 +354,11 @@ SCENARIO("loop range changes reach the audio thread whole", "[engine][transport]
 
         WHEN("the audio thread processes a few thousand blocks meanwhile")
         {
+            // the blocks below take a few milliseconds; on a busy machine the
+            // writer may not have run yet when they are done
+            while (writes.load() == 0)
+                std::this_thread::yield();
+
             const auto samples = 512;
             const auto blockClocks = tempoProvider->secondsToClocks(samples / 44100.0);
             auto transportPos = 0.0;

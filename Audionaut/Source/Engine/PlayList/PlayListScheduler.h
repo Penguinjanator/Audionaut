@@ -232,6 +232,10 @@ public:
     
 private:
     
+    /** Puts the transport, its start and the loop's notion of being inside
+        it at positionClocks, whatever Link reports about playing. */
+    void moveTransportTo(double positionClocks);
+
     /** Audio thread, stopped transport: takes over the committed voice and
         clip snapshots without rendering, so retired voice sources can be
         released at the next commit (see VoiceSourceContainer::commit). */

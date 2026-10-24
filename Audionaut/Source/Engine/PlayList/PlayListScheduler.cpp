@@ -570,11 +570,15 @@ void PlayListScheduler::setAbsoluteStartPosition(double newPosition, audium::Tim
     
     data.startPositionClocks = positionClocks;
     
-    if (!isPlaying()) {
-        data.transportPositionClocks = positionClocks;
-        
-        transportLoop->setAbsoluteStartPosition(newPosition, context);
-    }
+    if (!isPlaying())
+        moveTransportTo(positionClocks);
+}
+
+void PlayListScheduler::moveTransportTo(double positionClocks)
+{
+    data.startPositionClocks = positionClocks;
+    data.transportPositionClocks = positionClocks;
+    transportLoop->setAbsoluteStartPosition(positionClocks, audium::clocks);
 }
 
 double PlayListScheduler::getAbsoluteStartPosition(audium::TimeContextType context) const
@@ -733,9 +737,12 @@ bool PlayListScheduler::bounceProject(juce::AudioFormatWriter* writer,
     // so this thread is the only one draining the queue.
     audioBusInterface->invokeCommands();
 
-    // remember last position
-    auto lastPosition = getAbsolutePosition(audium::seconds);
-    setAbsoluteStartPosition(config->positionSeconds, audium::seconds);
+    // remember last position. The bounce bypasses the device, so whether
+    // Link reports playing says nothing about it - and right after a Stop
+    // Link still does for a moment, which would keep setAbsoluteStartPosition
+    // from moving the transport and render from where playback stopped
+    auto lastPosition = getAbsolutePosition(audium::clocks);
+    moveTransportTo(tempoProvider->secondsToClocks(std::max(0.0, config->positionSeconds)));
 
     // multichannel bounce wants one file channel per bus channel, not the live
     // output routing; mono/stereo bounce renders the routed mix as heard live
@@ -785,7 +792,7 @@ bool PlayListScheduler::bounceProject(juce::AudioFormatWriter* writer,
     
     audioBusInterface->setStemExport(false);
 
-    setAbsoluteStartPosition(lastPosition, audium::seconds);
+    moveTransportTo(lastPosition);
     stopPlaying();
 
     return written;
