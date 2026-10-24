@@ -22,9 +22,10 @@ void Playback::prepareToPlay (int samplesPerBlockExpected, double sampleRate)
 {
     DBG("Playback::prepareToPlay " << samplesPerBlockExpected << " " << sampleRate);
 
-    // the mix buffer is sized here, once; process() then only shrinks the
-    // view (avoidReallocating) and never allocates for blocks up to this size
-    processingBuffer.setSize(MAX_AUDIO_CHANNELS, samplesPerBlockExpected);
+    // the voice buffer is sized here, once; process() then only shrinks the
+    // view (avoidReallocating) and never allocates for blocks up to this size.
+    // One channel: a voice renders one channel (VoiceSource::getNextAudioBlock)
+    processingBuffer.setSize(1, samplesPerBlockExpected);
 }
 
 bool Playback::startVoice(VoiceSource* voiceSource)

@@ -658,8 +658,17 @@ bool PlayListScheduler::bouncePlayListItem(juce::AudioFormatWriter* writer,
     AudioBuffer<float> buffer(config->numChannels, config->blockSize);
     AudioSourceChannelInfo info (&buffer, 0, config->blockSize);
 
-    AudioBuffer<float> audioBusBuffer(config->numChannels, config->blockSize);
+    // one channel: a voice renders its channel into channel 0
+    // (VoiceSource::getNextAudioBlock), addVoice puts it where it belongs
+    AudioBuffer<float> audioBusBuffer(1, config->blockSize);
     juce::AudioSourceChannelInfo audioBusInfo (&audioBusBuffer, info.startSample, info.numSamples);
+
+    const auto addVoice = [&info, &audioBusBuffer] (const VoiceSource& source)
+    {
+        const auto channel = source.getDestinationChannel();
+        if (channel >= 0 && channel < info.buffer->getNumChannels())
+            info.buffer->addFrom(channel, info.startSample, audioBusBuffer.getReadPointer(0), info.numSamples);
+    };
 
     for (auto source : config->playListItem->getVoiceSources()) {
         source->prepareToPlay(config->blockSize, config->sampleRate);
@@ -697,9 +706,7 @@ bool PlayListScheduler::bouncePlayListItem(juce::AudioFormatWriter* writer,
         audioBusInfo.clearActiveBufferRegion();
         for (auto source : config->playListItem->getVoiceSources()) {
             source->getNextAudioBlock(audioBusInfo);
-            for (auto c = 0; c < info.buffer->getNumChannels(); c++) {
-                info.buffer->addFrom(c, info.startSample, audioBusBuffer.getReadPointer(c), info.numSamples);
-            }
+            addVoice(*source);
         }
 
         written &= writer->writeFromAudioSampleBuffer(*info.buffer, info.startSample, info.numSamples);
