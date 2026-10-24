@@ -13,44 +13,37 @@ namespace {
 // One attempt per day on the automatic path.
 constexpr juce::int64 throttleSeconds = 24 * 60 * 60;
 
-// The macOS build normally ships through the Mac App Store, and the lookup
-// reports the version actually approved there (which can lag a GitHub tag).
-// The GitHub release workflow builds the same sources with
-// AUDIONAUT_GITHUB_CHANNEL defined, and that build asks GitHub instead - a
-// DMG user must not be sent to the store for an update.
-#ifndef AUDIONAUT_GITHUB_CHANNEL
- #define AUDIONAUT_GITHUB_CHANNEL 0
-#endif
-
-#if JUCE_MAC && ! AUDIONAUT_GITHUB_CHANNEL
- #define AUDIONAUT_APP_STORE_CHANNEL 1
-#else
- #define AUDIONAUT_APP_STORE_CHANNEL 0
-#endif
-
-#if AUDIONAUT_APP_STORE_CHANNEL
-const char* const endpointUrl =
-    "https://itunes.apple.com/lookup?bundleId=com.voltmer-systems.audionaut";
-const char* const fallbackPageUrl = "https://apps.apple.com/app/id6743627933";
-#else
-const char* const endpointUrl =
-    "https://api.github.com/repos/kvoltmer/Audionaut/releases/latest";
-const char* const fallbackPageUrl = "https://github.com/kvoltmer/Audionaut/releases/latest";
-#endif
-
-juce::String openButtonText()
+// Each channel reports the version it actually ships - the App Store's can
+// lag a GitHub tag - and a DMG user must not be sent to the store for an
+// update. The running app's channel (the store's receipt tells the two
+// macOS builds apart, see DistributionChannel.h) picks the endpoint.
+struct Endpoints
 {
-#if AUDIONAUT_APP_STORE_CHANNEL
-    return TRANS ("View in App Store");
-#else
-    return TRANS ("Download");
-#endif
+    const char* lookupUrl;
+    const char* fallbackPageUrl;
+};
+
+Endpoints endpointsFor (DistributionChannel channel)
+{
+    if (channel == DistributionChannel::appStore)
+        return { "https://itunes.apple.com/lookup?bundleId=com.voltmer-systems.audionaut",
+                 "https://apps.apple.com/app/id6743627933" };
+
+    return { "https://api.github.com/repos/kvoltmer/Audionaut/releases/latest",
+             "https://github.com/kvoltmer/Audionaut/releases/latest" };
+}
+
+juce::String openButtonText (DistributionChannel channel)
+{
+    return channel == DistributionChannel::appStore ? TRANS ("View in App Store")
+                                                    : TRANS ("Download");
 }
 
 } // namespace
 
 UpdateChecker::UpdateChecker (Preferences& preferences_) :
-    preferences (preferences_)
+    preferences (preferences_),
+    channel (currentDistributionChannel())
 {
 }
 
@@ -79,8 +72,8 @@ void UpdateChecker::checkNow (bool userRequested)
                               .toStdString());
     preferences.synchronize();
 
-    juce::Thread::launch ([safeThis = juce::WeakReference<UpdateChecker> (this), userRequested] {
-        const auto result = fetchLatest();
+    juce::Thread::launch ([safeThis = juce::WeakReference<UpdateChecker> (this), userRequested, channel = channel] {
+        const auto result = fetchLatest (channel);
 
         juce::MessageManager::callAsync ([safeThis, result, userRequested] {
             if (safeThis == nullptr)
@@ -92,15 +85,17 @@ void UpdateChecker::checkNow (bool userRequested)
     });
 }
 
-UpdateChecker::Result UpdateChecker::fetchLatest()
+UpdateChecker::Result UpdateChecker::fetchLatest (DistributionChannel channel)
 {
     Result result;
 
+    const bool appStore = channel == DistributionChannel::appStore;
+    const auto endpoints = endpointsFor (channel);
+
     // GitHub rejects requests without a User-Agent; Apple doesn't mind one.
     juce::String headers ("User-Agent: Audionaut/" + juce::String (ProjectInfo::versionString));
-#if ! AUDIONAUT_APP_STORE_CHANNEL
-    headers << "\r\nAccept: application/vnd.github+json";
-#endif
+    if (! appStore)
+        headers << "\r\nAccept: application/vnd.github+json";
 
     int statusCode = 0;
     const auto options = juce::URL::InputStreamOptions (juce::URL::ParameterHandling::inAddress)
@@ -109,7 +104,7 @@ UpdateChecker::Result UpdateChecker::fetchLatest()
                              .withExtraHeaders (headers)
                              .withStatusCode (&statusCode);
 
-    const auto stream = juce::URL (endpointUrl).createInputStream (options);
+    const auto stream = juce::URL (endpoints.lookupUrl).createInputStream (options);
 
     if (stream == nullptr)
     {
@@ -127,14 +122,17 @@ UpdateChecker::Result UpdateChecker::fetchLatest()
 
     const auto parsed = juce::JSON::parse (body);
 
-#if AUDIONAUT_APP_STORE_CHANNEL
-    const auto entry = parsed.getProperty ("results", {})[0];
-    result.latestVersion = entry.getProperty ("version", {}).toString();
-    result.pageUrl = entry.getProperty ("trackViewUrl", {}).toString();
-#else
-    result.latestVersion = parsed.getProperty ("tag_name", {}).toString();
-    result.pageUrl = parsed.getProperty ("html_url", {}).toString();
-#endif
+    if (appStore)
+    {
+        const auto entry = parsed.getProperty ("results", {})[0];
+        result.latestVersion = entry.getProperty ("version", {}).toString();
+        result.pageUrl = entry.getProperty ("trackViewUrl", {}).toString();
+    }
+    else
+    {
+        result.latestVersion = parsed.getProperty ("tag_name", {}).toString();
+        result.pageUrl = parsed.getProperty ("html_url", {}).toString();
+    }
 
     if (result.latestVersion.isEmpty())
     {
@@ -143,7 +141,7 @@ UpdateChecker::Result UpdateChecker::fetchLatest()
     }
 
     if (result.pageUrl.isEmpty())
-        result.pageUrl = fallbackPageUrl;
+        result.pageUrl = endpoints.fallbackPageUrl;
 
     result.fetched = true;
     return result;
@@ -191,7 +189,7 @@ void UpdateChecker::presentResult (const Result& result, bool userRequested)
         juce::MessageBoxIconType::InfoIcon,
         TRANS ("Update available"),
         TRANS ("Audionaut ") + displayVersion + TRANS (" is available - you have ") + current + ".",
-        openButtonText(),
+        openButtonText (channel),
         TRANS ("Later"));
 
     const auto pageUrl = result.pageUrl;

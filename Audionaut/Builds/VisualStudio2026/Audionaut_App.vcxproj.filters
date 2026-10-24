@@ -4872,6 +4872,9 @@
     <ClInclude Include="..\..\Source\Util\Preferences.h">
       <Filter>Audionaut\Source\Util</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\Source\Util\DistributionChannel.h">
+      <Filter>Audionaut\Source\Util</Filter>
+    </ClInclude>
     <ClInclude Include="..\..\Source\Util\VersionCompare.h">
       <Filter>Audionaut\Source\Util</Filter>
     </ClInclude>

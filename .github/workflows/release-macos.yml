@@ -109,9 +109,8 @@ jobs:
         echo "identity=$IDENTITY" >> "$GITHUB_OUTPUT"
 
     - name: Build, sign and package
-      # package.sh compiles Release with AUDIONAUT_GITHUB_CHANNEL (update
-      # check against GitHub, not the App Store), signs with the hardened
-      # runtime and builds the disk image next to itself.
+      # package.sh compiles Release, signs with the hardened runtime and
+      # builds the disk image next to itself.
       env:
         SIGN_IDENTITY: ${{ steps.cert.outputs.identity }}
       run: |
