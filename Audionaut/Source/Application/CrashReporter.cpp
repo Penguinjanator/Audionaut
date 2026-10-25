@@ -27,10 +27,7 @@
  #endif
 #endif
 
-// See UpdateChecker.cpp: the macOS DMG is built with AUDIONAUT_GITHUB_CHANNEL.
-#ifndef AUDIONAUT_GITHUB_CHANNEL
- #define AUDIONAUT_GITHUB_CHANNEL 0
-#endif
+#include "Util/DistributionChannel.h"
 
 namespace audium {
 
@@ -289,7 +286,7 @@ void handleCrash (int signum, siginfo_t* info, void*)
 juce::String channelName()
 {
 #if JUCE_MAC
-    return AUDIONAUT_GITHUB_CHANNEL ? "GitHub (DMG)" : "Mac App Store";
+    return currentDistributionChannel() == DistributionChannel::appStore ? "Mac App Store" : "GitHub (DMG)";
 #elif JUCE_LINUX
     return juce::SystemStats::getEnvironmentVariable ("FLATPAK_ID", {}).isNotEmpty() ? "Flatpak" : "GitHub";
 #else

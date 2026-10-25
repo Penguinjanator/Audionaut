@@ -3486,6 +3486,7 @@
     <ClInclude Include="..\..\Source\Application\GuiUserPrompter.h"/>
     <ClInclude Include="..\..\Source\Util\EngineAccess.h"/>
     <ClInclude Include="..\..\Source\Util\Preferences.h"/>
+    <ClInclude Include="..\..\Source\Util\DistributionChannel.h"/>
     <ClInclude Include="..\..\Source\Util\VersionCompare.h"/>
     <ClInclude Include="..\..\Source\Engine\Analysis\Dsp\Stft.h"/>
     <ClInclude Include="..\..\Source\Engine\Analysis\Dsp\MelFilterbank.h"/>

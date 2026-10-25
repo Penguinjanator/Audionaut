@@ -275,6 +275,7 @@
 		1F75F8C95B03ABD496FB0DC6 /* TempoEstimator.h */ /* TempoEstimator.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = TempoEstimator.h; path = ../../Source/Engine/Analysis/Dsp/TempoEstimator.h; sourceTree = SOURCE_ROOT; };
 		2015F92C1A2B77E0B9815740 /* AnalysisAbort.h */ /* AnalysisAbort.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = AnalysisAbort.h; path = ../../Source/Engine/Analysis/AnalysisAbort.h; sourceTree = SOURCE_ROOT; };
 		20337587A016A2258CC20537 /* AutoEditCommand.cpp */ /* AutoEditCommand.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = AutoEditCommand.cpp; path = ../../Source/Cli/Commands/AutoEditCommand.cpp; sourceTree = SOURCE_ROOT; };
+		20443A95EB39817BAEDB217E /* DistributionChannel.h */ /* DistributionChannel.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = DistributionChannel.h; path = ../../Source/Util/DistributionChannel.h; sourceTree = SOURCE_ROOT; };
 		2133E7BD10D0BFDBA72C207E /* DragZoomControl.h */ /* DragZoomControl.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = DragZoomControl.h; path = ../../Source/Interface/Controls/DragZoomControl.h; sourceTree = SOURCE_ROOT; };
 		21E8218C5578FAF32AEE977E /* LevelMeter.h */ /* LevelMeter.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = LevelMeter.h; path = ../../Source/Interface/Controls/LevelMeter.h; sourceTree = SOURCE_ROOT; };
 		22AD7FAA33DF69C2DCCA4667 /* DiscRecording.framework */ /* DiscRecording.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = DiscRecording.framework; path = System/Library/Frameworks/DiscRecording.framework; sourceTree = SDKROOT; };
@@ -880,6 +881,7 @@
 				84484F21C03C97F770F1A3FE,
 				352338A322365BD5C3C74D37,
 				ECB46507DAEC7211AEAFD67D,
+				20443A95EB39817BAEDB217E,
 				08D15EC77B29FD7238398DD7,
 			);
 			name = Util;
