@@ -64,8 +64,22 @@ int runSplit (const juce::ArgumentList& args, CliContext& context)
         auto& adapter = session->getAudioTrackContainer()->getAudioRegionAdapter();
 
         if (! adapter.canSplitAnyRegionAtPosition (positionClocks, audium::clocks))
+        {
+            // Echo the position as given plus its other readings, so a
+            // caller can see at once whether it aimed where it meant to.
+            const auto plain = [] (double value) {
+                auto text = juce::String (value, 3);
+                return text.contains (".") ? text.trimCharactersAtEnd ("0").trimCharactersAtEnd (".") : text;
+            };
+            const auto seconds = tempoProvider->clocksToSeconds (positionClocks);
+            const auto bar = TempoProvider::clocksToBars (positionClocks) + 1.0;
+
             return context.fail (exitFailure, "nothing_to_split",
-                                 "no clip spans the given position on any track");
+                                 "no clip spans " + atValue.toStdString() + " " + unit.toStdString()
+                                     + " (" + plain (seconds).toStdString() + " s, bar "
+                                     + plain (bar).toStdString() + ") on any track; a cut exactly on a "
+                                       "clip's start or end does nothing");
+        }
 
         auto baseline = regionNames (adapter);
         adapter.splitRegions (positionClocks, audium::clocks);

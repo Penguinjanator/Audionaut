@@ -213,12 +213,40 @@ SCENARIO ("cli split and create-region", "[cli][region]")
         }
 
         WHEN ("split targets a position outside every clip") {
+            nlohmann::json envelope;
+            context.envelopeSink = [&envelope] (const nlohmann::json& produced) { envelope = produced; };
+            auto exitCode = cli::runSplit (makeArgs ("split " + project.getFullPathName()
+                                                     + " --at 10 --unit seconds"),
+                                           context);
+            context.envelopeSink = nullptr;
+
             THEN ("it fails without touching the project") {
-                REQUIRE (cli::runSplit (makeArgs ("split " + project.getFullPathName()
-                                                  + " --at 10 --unit seconds"),
-                                        context)
-                         == cli::exitFailure);
+                REQUIRE (exitCode == cli::exitFailure);
                 REQUIRE (countPlayListItems (readProjectJson (project)) == baselineItems);
+            }
+
+            THEN ("the error names the position as given and in the other units") {
+                REQUIRE (envelope["error"]["code"] == "nothing_to_split");
+                auto message = envelope["error"]["message"].get<std::string>();
+                REQUIRE (message.find ("10 seconds") != std::string::npos);
+                REQUIRE (message.find ("10 s") != std::string::npos);
+                REQUIRE (message.find ("bar 6") != std::string::npos); // 10 s at 120 BPM = 5 bars past bar 1
+            }
+        }
+
+        WHEN ("split targets the clip's exact start") {
+            nlohmann::json envelope;
+            context.envelopeSink = [&envelope] (const nlohmann::json& produced) { envelope = produced; };
+            auto exitCode = cli::runSplit (makeArgs ("split " + project.getFullPathName() + " --at 1"),
+                                           context);
+            context.envelopeSink = nullptr;
+
+            THEN ("there is nothing to cut, and the error says so") {
+                REQUIRE (exitCode == cli::exitFailure);
+                REQUIRE (countPlayListItems (readProjectJson (project)) == baselineItems);
+                auto message = envelope["error"]["message"].get<std::string>();
+                REQUIRE (message.find ("1 bars (0 s, bar 1)") != std::string::npos);
+                REQUIRE (message.find ("start or end") != std::string::npos);
             }
         }
 
