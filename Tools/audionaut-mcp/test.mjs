@@ -203,13 +203,13 @@ try {
   const { tools } = await client.listTools();
   const names = tools.map((tool) => tool.name).sort();
   check(
-    "all twenty-two tools listed",
+    "all twenty-three tools listed",
     JSON.stringify(names) ===
       JSON.stringify(["analyze", "assemble", "auto_edit", "cleanup_regions", "clip_fades", "clip_gain",
                       "clip_speed", "create_project", "create_region", "export_audio", "get_project_info",
                       "import_audio", "move_clip", "place_clip", "remove_channel", "remove_clip",
                       "remove_track", "report_bug", "request_feature", "separate_stems", "set_region",
-                      "split"]),
+                      "split", "track_pan"]),
     names.join(",")
   );
 
@@ -399,6 +399,12 @@ try {
     !cleaned.isError && cleaned.content[0].text.includes("smoke-lead"),
     cleaned.content?.[0]?.text
   );
+
+  const panned = await client.callTool({
+    name: "track_pan",
+    arguments: { project, track: 0, pan: -0.5 },
+  });
+  check("track_pan", !panned.isError && panned.content[0].text.includes("pans"), panned.content?.[0]?.text);
 
   // Structure edits last: they remove the strips the flow above worked on.
   const channelGone = await client.callTool({
