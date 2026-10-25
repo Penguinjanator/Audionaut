@@ -9,12 +9,12 @@
     "source": "github",
     "subfolder": "Tools/audionaut-mcp"
   },
-  "version": "0.4.1",
+  "version": "0.5.0",
   "packages": [
     {
       "registryType": "npm",
       "identifier": "audionaut-mcp",
-      "version": "0.4.1",
+      "version": "0.5.0",
       "transport": {
         "type": "stdio"
       },
