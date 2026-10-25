@@ -14,10 +14,9 @@ const char* AnalysisCache::fileName = "AnalysisData.json";
 std::string analysisTypeToString(AnalysisType analysisType)
 {
     switch (analysisType) {
-        case AnalysisType::SBic:       return "sbic";
-        case AnalysisType::Onset:      return "onset";
-        case AnalysisType::Beat:       return "beat";
-        case AnalysisType::BeatDegara: return "beat_degara";
+        case AnalysisType::Segments: return "segments";
+        case AnalysisType::Onsets:   return "onsets";
+        case AnalysisType::Beats:    return "beats";
     }
     jassertfalse;
     return "unknown";
@@ -25,10 +24,16 @@ std::string analysisTypeToString(AnalysisType analysisType)
 
 std::optional<AnalysisType> analysisTypeFromString(const std::string& name)
 {
-    if (name == "sbic")        return AnalysisType::SBic;
-    if (name == "onset")       return AnalysisType::Onset;
-    if (name == "beat")        return AnalysisType::Beat;
-    if (name == "beat_degara") return AnalysisType::BeatDegara;
+    if (name == "segments") return AnalysisType::Segments;
+    if (name == "onsets")   return AnalysisType::Onsets;
+    if (name == "beats")    return AnalysisType::Beats;
+
+    // the names from the Essentia days
+    if (name == "sbic")        return AnalysisType::Segments;
+    if (name == "onset")       return AnalysisType::Onsets;
+    if (name == "beat_degara") return AnalysisType::Beats;
+    if (name == "beat")        return AnalysisType::Beats;
+
     return std::nullopt;
 }
 
@@ -278,7 +283,9 @@ bool AnalysisCache::saveToFolder(const juce::File& projectFolder)
     bool wrote = false;
     juce::TemporaryFile temp(file);
     if (auto out = std::unique_ptr<juce::FileOutputStream>(temp.getFile().createOutputStream())) {
-        if (! out->failedToOpen() && writeToStream(*out)) {
+        json content;
+        if (! out->failedToOpen() && writeToJson(content)) {
+            writeJsonText(*out, content);
             out->flush();
             wrote = true;
         }
@@ -308,7 +315,12 @@ bool AnalysisCache::loadFromFolder(const juce::File& projectFolder)
     bool success = false;
     try
     {
-        success = readFromStream(in);
+        const auto text = readJsonText(in);
+        if (text.empty())
+            throw std::runtime_error("empty input string");
+
+        auto content = json::parse(text);
+        success = readFromJson(content, true);
     }
     catch (const std::exception& ex)
     {

@@ -113,6 +113,28 @@ int resolveClips (juce::ArgumentList& working,
     return exitOk;
 }
 
+/** resolveClips for the verbs that act on one clip: several matches are ambiguous. */
+int resolveSingleClip (juce::ArgumentList& working,
+                       CliContext& context,
+                       const AudioTrackContainer& tracks,
+                       const TempoProvider& tempoProvider,
+                       const juce::String& verb,
+                       const juce::String& unit,
+                       ClipMatch& match)
+{
+    std::vector<ClipMatch> matches;
+    if (auto code = resolveClips (working, context, tracks, tempoProvider, verb, unit, matches);
+        code != exitOk)
+        return code;
+
+    if (matches.size() > 1)
+        return context.fail (exitFailure, "ambiguous_clip",
+                             "several clips match; pass --track or address by --at");
+
+    match = matches.front();
+    return exitOk;
+}
+
 /**
  * A resource group on `track` playing the same files, channel for channel, as
  * `source` - reused if there is one, cloned otherwise. Moving several clips
@@ -146,6 +168,7 @@ std::shared_ptr<ResourceGroup> resourceGroupOn (AudioTrack& track,
     return track.createNewResourceGroup (source);
 }
 
+
 } // namespace
 
 int runRemoveClip (const juce::ArgumentList& args, CliContext& context)
@@ -155,57 +178,45 @@ int runRemoveClip (const juce::ArgumentList& args, CliContext& context)
     bool byPosition = working.containsOption ("--at");
     auto unit = takeOptionValue (working, "--unit", "bars");
 
-    auto projectFile = resolveProjectFile (working);
-    if (projectFile == juce::File())
-        return context.fail (exitUsage, "usage", "remove-clip requires an existing <project.audium>");
+    return runProjectEdit (working, context, "remove-clip", [&] (ProjectSession& session, EditOutcome& outcome)
+    {
+        auto& trackContainer = *session->getAudioTrackContainer();
+        auto tempoProvider = trackContainer.getTempoProvider();
 
-    ScopedCoutToStderr guard (context.json);
-    int openFailure = exitFailure;
-    auto session = openProjectSession (projectFile, CommandAccess::mutating, context, openFailure);
-    if (! session)
-        return openFailure;
+        std::vector<ClipMatch> matches;
+        if (auto code = resolveClips (working, context, trackContainer, *tempoProvider,
+                                      "remove-clip", unit, matches);
+            code != exitOk)
+            return code;
 
-    std::string error;
-    auto captureError = [&error] (std::string message) { error = message; };
+        // By position, only one clip may be removed per invocation - a position
+        // hitting clips on several tracks needs --track. By region name, every
+        // placement of that region goes (that is the point of the address).
+        if (byPosition && matches.size() > 1)
+            return context.fail (exitFailure, "ambiguous_clip",
+                                 "clips on several tracks span that position; pass --track");
 
-    auto& trackContainer = *session->getAudioTrackContainer();
-    auto tempoProvider = trackContainer.getTempoProvider();
+        if (deleteRegion) {
+            // The engine does not check for other users of the region; a save
+            // with a dangling playlist reference would corrupt the project.
+            auto region = matches.front().item->getRegion();
+            auto placements = clipsWithRegionName (trackContainer, region->getName(), -1);
+            if (placements.size() > matches.size())
+                return context.fail (exitFailure, "region_in_use",
+                                     "--delete-region refused: other clips still use this region");
+        }
 
-    std::vector<ClipMatch> matches;
-    if (auto code = resolveClips (working, context, trackContainer, *tempoProvider,
-                                  "remove-clip", unit, matches);
-        code != exitOk)
-        return code;
+        auto removed = nlohmann::json::array();
+        for (auto& match : matches) {
+            removed.push_back (clipJson (match, *tempoProvider));
+            match.track->getPlayListContainer()->deletePlayListItem (match.item, deleteRegion);
+        }
 
-    // By position, only one clip may be removed per invocation - a position
-    // hitting clips on several tracks needs --track. By region name, every
-    // placement of that region goes (that is the point of the address).
-    if (byPosition && matches.size() > 1)
-        return context.fail (exitFailure, "ambiguous_clip",
-                             "clips on several tracks span that position; pass --track");
-
-    if (deleteRegion) {
-        // The engine does not check for other users of the region; a save
-        // with a dangling playlist reference would corrupt the project.
-        auto region = matches.front().item->getRegion();
-        auto placements = clipsWithRegionName (trackContainer, region->getName(), -1);
-        if (placements.size() > matches.size())
-            return context.fail (exitFailure, "region_in_use",
-                                 "--delete-region refused: other clips still use this region");
-    }
-
-    auto removed = nlohmann::json::array();
-    for (auto& match : matches) {
-        removed.push_back (clipJson (match, *tempoProvider));
-        match.track->getPlayListContainer()->deletePlayListItem (match.item, deleteRegion);
-    }
-
-    if (! session.commit (error))
-        return context.fail (exitFailure, "save_failed", error.empty() ? "failed to save project" : error);
-
-    context.log ("removed " + juce::String (removed.size()) + " clip(s)");
-    return context.ok ({ { "removedClips", removed },
-                         { "regionDeleted", deleteRegion } });
+        outcome.log = "removed " + juce::String (removed.size()) + " clip(s)";
+        outcome.result = { { "removedClips", removed },
+                           { "regionDeleted", deleteRegion } };
+        return exitOk;
+    });
 }
 
 int runMoveClip (const juce::ArgumentList& args, CliContext& context)
@@ -222,111 +233,95 @@ int runMoveClip (const juce::ArgumentList& args, CliContext& context)
         && ! toTrackValue.containsOnly ("0123456789"))
         return context.fail (exitUsage, "usage", "--to-track must be a track id or \"new\"");
 
-    auto projectFile = resolveProjectFile (working);
-    if (projectFile == juce::File())
-        return context.fail (exitUsage, "usage", "move-clip requires an existing <project.audium>");
+    return runProjectEdit (working, context, "move-clip", [&] (ProjectSession& session, EditOutcome& outcome)
+    {
+        auto& trackContainer = *session->getAudioTrackContainer();
+        auto tempoProvider = trackContainer.getTempoProvider();
 
-    ScopedCoutToStderr guard (context.json);
-    int openFailure = exitFailure;
-    auto session = openProjectSession (projectFile, CommandAccess::mutating, context, openFailure);
-    if (! session)
-        return openFailure;
+        double toClocks = 0.0;
+        std::string error;
+        if (toValue.isNotEmpty()
+            && ! parseMusicalPosition (toValue, unit, *tempoProvider, toClocks, error))
+            return context.fail (exitUsage, "usage", error);
 
-    std::string error;
-    auto captureError = [&error] (std::string message) { error = message; };
+        ClipMatch match;
+        if (auto code = resolveSingleClip (working, context, trackContainer, *tempoProvider,
+                                           "move-clip", unit, match);
+            code != exitOk)
+            return code;
 
-    auto& trackContainer = *session->getAudioTrackContainer();
-    auto tempoProvider = trackContainer.getTempoProvider();
+        auto fromClocks = match.item->getAbsolutePosition (audium::clocks);
+        auto fromTrackId = match.track->getId();
+        auto regionName = match.item->getRegion()->getName().toStdString();
 
-    double toClocks = 0.0;
-    if (toValue.isNotEmpty()
-        && ! parseMusicalPosition (toValue, unit, *tempoProvider, toClocks, error))
-        return context.fail (exitUsage, "usage", error);
+        // without --to the clip keeps its timeline position
+        if (toValue.isEmpty())
+            toClocks = fromClocks;
 
-    std::vector<ClipMatch> matches;
-    if (auto code = resolveClips (working, context, trackContainer, *tempoProvider,
-                                  "move-clip", unit, matches);
-        code != exitOk)
-        return code;
+        auto targetTrack = match.track;
+        bool createdTrack = false;
 
-    if (matches.size() > 1)
-        return context.fail (exitFailure, "ambiguous_clip",
-                             "several clips match; pass --track or address by --at");
-
-    auto& match = matches.front();
-    auto fromClocks = match.item->getAbsolutePosition (audium::clocks);
-    auto fromTrackId = match.track->getId();
-    auto regionName = match.item->getRegion()->getName().toStdString();
-
-    // without --to the clip keeps its timeline position
-    if (toValue.isEmpty())
-        toClocks = fromClocks;
-
-    auto targetTrack = match.track;
-    bool createdTrack = false;
-
-    if (toTrackValue == "new") {
-        targetTrack = trackContainer.createNewAudioTrack ({});
-        targetTrack->getViewState().setColour (trackContainer.getNewAudioTrackColour());
-        createdTrack = true;
-    }
-    else if (toTrackValue.isNotEmpty()) {
-        targetTrack = nullptr;
-        for (auto& track : trackContainer.getAudioTracks())
-            if (track->getId() == toTrackValue.getIntValue())
-                targetTrack = track;
-        if (targetTrack == nullptr)
-            return context.fail (exitFailure, "track_not_found",
-                                 "no track with id " + toTrackValue.toStdString());
-    }
-
-    if (targetTrack == match.track) {
-        match.item->setAbsolutePosition (toClocks, audium::clocks);
-        match.track->getPlayListContainer()->sortByPosition();
-    }
-    else {
-        // Regions live in a track's resource group, so the clip needs a copy
-        // of its region on the target track - what dragging a clip onto
-        // another track does in the GUI (AudioTrack::dropPlayListItem).
-        auto region = match.item->getRegion();
-        auto resourceGroup = resourceGroupOn (*targetTrack, region->getResourceGroup());
-        auto newRegion = resourceGroup->getAudioRegionContainer()->createRegion (targetTrack,
-                                                                                 resourceGroup,
-                                                                                 region);
-        // createRegion added the channels; a track made for this clip starts
-        // centred, so give it the source's panning (a stereo import is L/R)
-        if (createdTrack) {
-            auto sharedChannels = std::min (match.track->getNumAudioTrackChannels(),
-                                            targetTrack->getNumAudioTrackChannels());
-            for (int channel = 0; channel < sharedChannels; ++channel)
-                targetTrack->setPan (match.track->getPan (channel), channel);
+        if (toTrackValue == "new") {
+            targetTrack = trackContainer.createNewAudioTrack ({});
+            targetTrack->getViewState().setColour (trackContainer.getNewAudioTrackColour());
+            createdTrack = true;
+        }
+        else if (toTrackValue.isNotEmpty()) {
+            targetTrack = nullptr;
+            for (auto& track : trackContainer.getAudioTracks())
+                if (track->getId() == toTrackValue.getIntValue())
+                    targetTrack = track;
+            if (targetTrack == nullptr)
+                return context.fail (exitFailure, "track_not_found",
+                                     "no track with id " + toTrackValue.toStdString());
         }
 
-        auto targetPlayList = targetTrack->getPlayListContainer();
-        auto newItem = newRegion != nullptr
-                           ? targetPlayList->createPlayListItemAtPositionUI (newRegion, toClocks, audium::clocks)
-                           : nullptr;
-        if (newItem == nullptr)
-            return context.fail (exitFailure, "move_failed", "could not place the clip on the target track");
+        if (targetTrack == match.track) {
+            match.item->setAbsolutePosition (toClocks, audium::clocks);
+            match.track->getPlayListContainer()->sortByPosition();
+        }
+        else {
+            // Regions live in a track's resource group, so the clip needs a copy
+            // of its region on the target track - what dragging a clip onto
+            // another track does in the GUI (AudioTrack::dropPlayListItem).
+            auto region = match.item->getRegion();
+            auto resourceGroup = resourceGroupOn (*targetTrack, region->getResourceGroup());
+            auto newRegion = resourceGroup->getAudioRegionContainer()->createRegion (targetTrack,
+                                                                                     resourceGroup,
+                                                                                     region);
+            // createRegion added the channels; a track made for this clip starts
+            // centred, so give it the source's panning (a stereo import is L/R)
+            if (createdTrack) {
+                auto sharedChannels = std::min (match.track->getNumAudioTrackChannels(),
+                                                targetTrack->getNumAudioTrackChannels());
+                for (int channel = 0; channel < sharedChannels; ++channel)
+                    targetTrack->setPan (match.track->getPan (channel), channel);
+            }
 
-        newItem->getDynamics().copyFrom (match.item->getDynamics());
-        newItem->copySpeedFrom (*match.item);
-        targetPlayList->sortByPosition();
+            auto targetPlayList = targetTrack->getPlayListContainer();
+            auto newItem = newRegion != nullptr
+                               ? targetPlayList->createPlayListItemAtPositionUI (newRegion, toClocks, audium::clocks)
+                               : nullptr;
+            if (newItem == nullptr)
+                return context.fail (exitFailure, "move_failed", "could not place the clip on the target track");
 
-        match.track->getPlayListContainer()->deletePlayListItem (match.item, false);
-    }
+            newItem->getDynamics().copyFrom (match.item->getDynamics());
+            newItem->copySpeedFrom (*match.item);
+            targetPlayList->sortByPosition();
 
-    if (! session.commit (error))
-        return context.fail (exitFailure, "save_failed", error.empty() ? "failed to save project" : error);
+            match.track->getPlayListContainer()->deletePlayListItem (match.item, false);
+        }
 
-    context.log ("moved clip to track " + juce::String (targetTrack->getId()) + " at "
-                 + juce::String (toClocks) + " clocks");
-    return context.ok ({ { "region", regionName },
-                         { "track", targetTrack->getId() },
-                         { "fromTrack", fromTrackId },
-                         { "trackCreated", createdTrack },
-                         { "fromSeconds", tempoProvider->clocksToSeconds (fromClocks) },
-                         { "toSeconds", tempoProvider->clocksToSeconds (toClocks) } });
+        outcome.log = "moved clip to track " + juce::String (targetTrack->getId()) + " at "
+                      + juce::String (toClocks) + " clocks";
+        outcome.result = { { "region", regionName },
+                           { "track", targetTrack->getId() },
+                           { "fromTrack", fromTrackId },
+                           { "trackCreated", createdTrack },
+                           { "fromSeconds", tempoProvider->clocksToSeconds (fromClocks) },
+                           { "toSeconds", tempoProvider->clocksToSeconds (toClocks) } };
+        return exitOk;
+    });
 }
 
 int runPlaceClip (const juce::ArgumentList& args, CliContext& context)
@@ -340,54 +335,43 @@ int runPlaceClip (const juce::ArgumentList& args, CliContext& context)
     if (regionName.isEmpty() || atValue.isEmpty())
         return context.fail (exitUsage, "usage", "place-clip requires --region and --at");
 
-    auto projectFile = resolveProjectFile (working);
-    if (projectFile == juce::File())
-        return context.fail (exitUsage, "usage", "place-clip requires an existing <project.audium>");
+    return runProjectEdit (working, context, "place-clip", [&] (ProjectSession& session, EditOutcome& outcome)
+    {
+        auto& trackContainer = *session->getAudioTrackContainer();
+        auto tempoProvider = trackContainer.getTempoProvider();
 
-    ScopedCoutToStderr guard (context.json);
-    int openFailure = exitFailure;
-    auto session = openProjectSession (projectFile, CommandAccess::mutating, context, openFailure);
-    if (! session)
-        return openFailure;
+        double positionClocks = 0.0;
+        std::string error;
+        if (! parseMusicalPosition (atValue, unit, *tempoProvider, positionClocks, error))
+            return context.fail (exitUsage, "usage", error);
 
-    std::string error;
-    auto captureError = [&error] (std::string message) { error = message; };
+        auto regions = findRegionsByName (trackContainer, regionName, trackId);
+        if (regions.empty())
+            return context.fail (exitFailure, "region_not_found",
+                                 "no region named \"" + regionName.toStdString() + "\"");
+        if (regions.size() > 1)
+            return context.fail (exitFailure, "ambiguous_region",
+                                 "multiple regions named \"" + regionName.toStdString()
+                                     + "\"; pass --track to disambiguate");
 
-    auto& trackContainer = *session->getAudioTrackContainer();
-    auto tempoProvider = trackContainer.getTempoProvider();
+        // The clip lands on the track that owns the region - regions live in a
+        // track's resource group and cannot play on another track.
+        auto track = regions.front().first;
+        auto region = regions.front().second;
 
-    double positionClocks = 0.0;
-    if (! parseMusicalPosition (atValue, unit, *tempoProvider, positionClocks, error))
-        return context.fail (exitUsage, "usage", error);
+        auto playList = track->getPlayListContainer();
+        auto item = playList->createPlayListItemAtPositionUI (region, positionClocks, audium::clocks);
+        if (item == nullptr)
+            return context.fail (exitFailure, "place_failed", "could not place the region");
+        playList->sortByPosition();
 
-    auto regions = findRegionsByName (trackContainer, regionName, trackId);
-    if (regions.empty())
-        return context.fail (exitFailure, "region_not_found",
-                             "no region named \"" + regionName.toStdString() + "\"");
-    if (regions.size() > 1)
-        return context.fail (exitFailure, "ambiguous_region",
-                             "multiple regions named \"" + regionName.toStdString()
-                                 + "\"; pass --track to disambiguate");
-
-    // The clip lands on the track that owns the region - regions live in a
-    // track's resource group and cannot play on another track.
-    auto track = regions.front().first;
-    auto region = regions.front().second;
-
-    auto playList = track->getPlayListContainer();
-    auto item = playList->createPlayListItemAtPositionUI (region, positionClocks, audium::clocks);
-    if (item == nullptr)
-        return context.fail (exitFailure, "place_failed", "could not place the region");
-    playList->sortByPosition();
-
-    if (! session.commit (error))
-        return context.fail (exitFailure, "save_failed", error.empty() ? "failed to save project" : error);
-
-    context.log ("placed \"" + regionName + "\" at " + juce::String (positionClocks) + " clocks");
-    return context.ok ({ { "region", regionName.toStdString() },
-                         { "track", track->getId() },
-                         { "positionSeconds", tempoProvider->clocksToSeconds (positionClocks) },
-                         { "durationSeconds", region->getRegionData (audium::seconds).getLength() } });
+        outcome.log = "placed \"" + regionName + "\" at " + juce::String (positionClocks) + " clocks";
+        outcome.result = { { "region", regionName.toStdString() },
+                           { "track", track->getId() },
+                           { "positionSeconds", tempoProvider->clocksToSeconds (positionClocks) },
+                           { "durationSeconds", region->getRegionData (audium::seconds).getLength() } };
+        return exitOk;
+    });
 }
 
 int runClipGain (const juce::ArgumentList& args, CliContext& context)
@@ -407,66 +391,49 @@ int runClipGain (const juce::ArgumentList& args, CliContext& context)
     if (gain < 0.0)
         return context.fail (exitUsage, "usage", "gain must not be negative");
 
-    auto projectFile = resolveProjectFile (working);
-    if (projectFile == juce::File())
-        return context.fail (exitUsage, "usage", "clip-gain requires an existing <project.audium>");
+    return runProjectEdit (working, context, "clip-gain", [&] (ProjectSession& session, EditOutcome& outcome)
+    {
+        auto& trackContainer = *session->getAudioTrackContainer();
+        auto tempoProvider = trackContainer.getTempoProvider();
 
-    ScopedCoutToStderr guard (context.json);
-    int openFailure = exitFailure;
-    auto session = openProjectSession (projectFile, CommandAccess::mutating, context, openFailure);
-    if (! session)
-        return openFailure;
+        ClipMatch match;
+        if (auto code = resolveSingleClip (working, context, trackContainer, *tempoProvider,
+                                           "clip-gain", unit, match);
+            code != exitOk)
+            return code;
 
-    std::string error;
-    auto captureError = [&error] (std::string message) { error = message; };
+        auto& dynamics = match.item->getDynamics();
+        auto numChannels = static_cast<int> (match.track->audioChannelContainer->objects.size());
 
-    auto& trackContainer = *session->getAudioTrackContainer();
-    auto tempoProvider = trackContainer.getTempoProvider();
+        // projects saved before the import channel check could hold tracks past
+        // the project's channel limit with no channels: there is nothing to set
+        if (numChannels == 0)
+            return context.fail (exitFailure, "no_channels",
+                                 "the clip's track has no audio channels (the project reached its channel "
+                                 "limit when it was created); move the clip to a track with channels");
 
-    std::vector<ClipMatch> matches;
-    if (auto code = resolveClips (working, context, trackContainer, *tempoProvider,
-                                  "clip-gain", unit, matches);
-        code != exitOk)
-        return code;
-
-    if (matches.size() > 1)
-        return context.fail (exitFailure, "ambiguous_clip",
-                             "several clips match; pass --track or address by --at");
-
-    auto& match = matches.front();
-    auto& dynamics = match.item->getDynamics();
-    auto numChannels = static_cast<int> (match.track->audioChannelContainer->objects.size());
-
-    // projects saved before the import channel check could hold tracks past
-    // the project's channel limit with no channels: there is nothing to set
-    if (numChannels == 0)
-        return context.fail (exitFailure, "no_channels",
-                             "the clip's track has no audio channels (the project reached its channel "
-                             "limit when it was created); move the clip to a track with channels");
-
-    if (channelValue.isNotEmpty()) {
-        auto channel = channelValue.getIntValue();
-        if (channel < 0 || channel >= numChannels)
-            return context.fail (exitUsage, "usage",
-                                 "--channel must be 0.." + std::to_string (numChannels - 1));
-        dynamics.setGain (channel, gain);
-    }
-    else {
-        for (int channel = 0; channel < numChannels; ++channel)
+        if (channelValue.isNotEmpty()) {
+            auto channel = channelValue.getIntValue();
+            if (channel < 0 || channel >= numChannels)
+                return context.fail (exitUsage, "usage",
+                                     "--channel must be 0.." + std::to_string (numChannels - 1));
             dynamics.setGain (channel, gain);
-    }
+        }
+        else {
+            for (int channel = 0; channel < numChannels; ++channel)
+                dynamics.setGain (channel, gain);
+        }
 
-    if (! session.commit (error))
-        return context.fail (exitFailure, "save_failed", error.empty() ? "failed to save project" : error);
+        auto gains = nlohmann::json::array();
+        for (int channel = 0; channel < numChannels; ++channel)
+            gains.push_back (dynamics.getGain (channel));
 
-    auto gains = nlohmann::json::array();
-    for (int channel = 0; channel < numChannels; ++channel)
-        gains.push_back (dynamics.getGain (channel));
-
-    context.log ("clip gain set");
-    return context.ok ({ { "region", match.item->getRegion()->getName().toStdString() },
-                         { "track", match.track->getId() },
-                         { "gains", gains } });
+        outcome.log = "clip gain set";
+        outcome.result = { { "region", match.item->getRegion()->getName().toStdString() },
+                           { "track", match.track->getId() },
+                           { "gains", gains } };
+        return exitOk;
+    });
 }
 
 int runClipSpeed (const juce::ArgumentList& args, CliContext& context)
@@ -504,117 +471,103 @@ int runClipSpeed (const juce::ArgumentList& args, CliContext& context)
                              + juce::String (ClipSpeed::minClipTempo).toStdString() + " and "
                              + juce::String (ClipSpeed::maxClipTempo).toStdString() + " BPM");
 
-    auto projectFile = resolveProjectFile (working);
-    if (projectFile == juce::File())
-        return context.fail (exitUsage, "usage", "clip-speed requires an existing <project.audium>");
+    // where the analysis cache is saved when --lock-tempo on has to run one
+    const auto projectFile = resolveProjectFile (working);
 
-    ScopedCoutToStderr guard (context.json);
-    int openFailure = exitFailure;
-    auto session = openProjectSession (projectFile, CommandAccess::mutating, context, openFailure);
-    if (! session)
-        return openFailure;
-
-    std::string error;
-    auto captureError = [&error] (std::string message) { error = message; };
-
-    auto& trackContainer = *session->getAudioTrackContainer();
-    auto tempoProvider = trackContainer.getTempoProvider();
-
-    std::vector<ClipMatch> matches;
-    if (auto code = resolveClips (working, context, trackContainer, *tempoProvider,
-                                  "clip-speed", unit, matches);
-        code != exitOk)
-        return code;
-
-    if (matches.size() > 1)
-        return context.fail (exitFailure, "ambiguous_clip",
-                             "several clips match; pass --track or address by --at");
-
-    auto& match = matches.front();
-
-    // release first, so a ratio can follow in the same call
-    if (lockValue == "off")
-        match.item->setTempoLocked (false);
-
-    if (optionsGiven == 1 && match.item->isTempoLocked())
-        return context.fail (exitUsage, "usage",
-                             "the clip is locked to the project tempo; pass --lock-tempo off first, or --tempo");
-
-    if (optionsGiven == 1)
+    return runProjectEdit (working, context, "clip-speed", [&] (ProjectSession& session, EditOutcome& outcome)
     {
-        auto ratio = 1.0;
+        auto& trackContainer = *session->getAudioTrackContainer();
+        auto tempoProvider = trackContainer.getTempoProvider();
 
-        if (ratioValue.isNotEmpty()) {
-            ratio = ratioValue.getDoubleValue();
-        }
-        else if (semitonesValue.isNotEmpty()) {
-            ratio = std::pow (2.0, semitonesValue.getDoubleValue() / 12.0);
-        }
-        else {
-            // --length: the timeline duration the clip should occupy
-            double lengthClocks = 0.0;
-            std::string parseError;
-            if (! parseMusicalDuration (lengthValue, unit, *tempoProvider, lengthClocks, parseError))
-                return context.fail (exitUsage, "usage", parseError);
-            if (lengthClocks <= 0.0)
-                return context.fail (exitUsage, "usage", "--length must be positive");
+        ClipMatch match;
+        if (auto code = resolveSingleClip (working, context, trackContainer, *tempoProvider,
+                                           "clip-speed", unit, match);
+            code != exitOk)
+            return code;
 
-            ratio = match.item->getRegionData (audium::clocks).getLength() / lengthClocks;
-        }
+        // release first, so a ratio can follow in the same call
+        if (lockValue == "off")
+            match.item->setTempoLocked (false);
 
-        if (ratio < PlayListItem::minSpeedRatio || ratio > PlayListItem::maxSpeedRatio)
+        if (optionsGiven == 1 && match.item->isTempoLocked())
             return context.fail (exitUsage, "usage",
-                                 "the speed ratio must be between "
-                                 + juce::String (PlayListItem::minSpeedRatio).toStdString() + " and "
-                                 + juce::String (PlayListItem::maxSpeedRatio).toStdString()
-                                 + " (got " + juce::String (ratio, 4).toStdString() + ")");
+                                 "the clip is locked to the project tempo; pass --lock-tempo off first, or --tempo");
 
-        match.item->setSpeedRatio (ratio);
-    }
-
-    if (modeValue.isNotEmpty())
-        match.item->setStretchMode (modeValue == "stretch" ? StretchMode::Stretch
-                                                           : StretchMode::RePitch);
-
-    if (tempoValue.isNotEmpty())
-    {
-        match.item->setClipTempo (tempoValue.getDoubleValue());
-        match.item->setTempoLocked (true);
-    }
-    else if (lockValue == "on")
-    {
-        // Seed the clip tempo from the beat analysis, running it now when
-        // the source has none yet (a build without Essentia leaves the
-        // tempo unknown: the clip stays locked at ratio 1.0 until --tempo).
-        auto provider = trackContainer.getAnalysisProvider();
-
-        if (provider != nullptr && ! ClipTempo::lockToTempo (*match.item, *provider))
+        if (optionsGiven == 1)
         {
-            if (auto file = ClipTempo::sourceFile (*match.item); file.existsAsFile())
-            {
-                provider->analyzeFile (file, AnalysisType::BeatDegara);
-                ClipTempo::lockToTempo (*match.item, *provider);
-                provider->getCache()->saveToFolder (projectFile.getParentDirectory());
+            auto ratio = 1.0;
+
+            if (ratioValue.isNotEmpty()) {
+                ratio = ratioValue.getDoubleValue();
             }
+            else if (semitonesValue.isNotEmpty()) {
+                ratio = std::pow (2.0, semitonesValue.getDoubleValue() / 12.0);
+            }
+            else {
+                // --length: the timeline duration the clip should occupy
+                double lengthClocks = 0.0;
+                std::string parseError;
+                if (! parseMusicalDuration (lengthValue, unit, *tempoProvider, lengthClocks, parseError))
+                    return context.fail (exitUsage, "usage", parseError);
+                if (lengthClocks <= 0.0)
+                    return context.fail (exitUsage, "usage", "--length must be positive");
+
+                ratio = match.item->getRegionData (audium::clocks).getLength() / lengthClocks;
+            }
+
+            if (ratio < PlayListItem::minSpeedRatio || ratio > PlayListItem::maxSpeedRatio)
+                return context.fail (exitUsage, "usage",
+                                     "the speed ratio must be between "
+                                     + juce::String (PlayListItem::minSpeedRatio).toStdString() + " and "
+                                     + juce::String (PlayListItem::maxSpeedRatio).toStdString()
+                                     + " (got " + juce::String (ratio, 4).toStdString() + ")");
+
+            match.item->setSpeedRatio (ratio);
         }
-        else if (provider == nullptr)
+
+        if (modeValue.isNotEmpty())
+            match.item->setStretchMode (modeValue == "stretch" ? StretchMode::Stretch
+                                                               : StretchMode::RePitch);
+
+        if (tempoValue.isNotEmpty())
         {
+            match.item->setClipTempo (tempoValue.getDoubleValue());
             match.item->setTempoLocked (true);
         }
-    }
+        else if (lockValue == "on")
+        {
+            // Seed the clip tempo from the beat analysis, running it now when
+            // the source has none yet (a file the tracker finds no beats in
+            // leaves the tempo unknown: the clip stays locked at ratio 1.0
+            // until --tempo).
+            auto provider = trackContainer.getAnalysisProvider();
 
-    if (! session.commit (error))
-        return context.fail (exitFailure, "save_failed", error.empty() ? "failed to save project" : error);
+            if (provider != nullptr && ! ClipTempo::lockToTempo (*match.item, *provider))
+            {
+                if (auto file = ClipTempo::sourceFile (*match.item); file.existsAsFile())
+                {
+                    provider->analyzeFile (file, AnalysisType::Beats);
+                    ClipTempo::lockToTempo (*match.item, *provider);
+                    provider->getCache()->saveToFolder (projectFile.getParentDirectory());
+                }
+            }
+            else if (provider == nullptr)
+            {
+                match.item->setTempoLocked (true);
+            }
+        }
 
-    context.log ("clip speed set");
-    return context.ok ({ { "region", match.item->getRegion()->getName().toStdString() },
-                         { "track", match.track->getId() },
-                         { "speedRatio", match.item->getSpeedRatio() },
-                         { "stretchMode", match.item->getStretchMode() == StretchMode::Stretch
-                                              ? "stretch" : "repitch" },
-                         { "tempoLocked", match.item->isTempoLocked() },
-                         { "clipTempo", match.item->getClipTempo() },
-                         { "durationSeconds", match.item->getDurationTime (audium::seconds) } });
+        outcome.log = "clip speed set";
+        outcome.result = { { "region", match.item->getRegion()->getName().toStdString() },
+                           { "track", match.track->getId() },
+                           { "speedRatio", match.item->getSpeedRatio() },
+                           { "stretchMode", match.item->getStretchMode() == StretchMode::Stretch
+                                                ? "stretch" : "repitch" },
+                           { "tempoLocked", match.item->isTempoLocked() },
+                           { "clipTempo", match.item->getClipTempo() },
+                           { "durationSeconds", match.item->getDurationTime (audium::seconds) } };
+        return exitOk;
+    });
 }
 
 int runClipFades (const juce::ArgumentList& args, CliContext& context)
@@ -634,107 +587,80 @@ int runClipFades (const juce::ArgumentList& args, CliContext& context)
                              "clip-fades needs at least one of --fade-in, --fade-out, "
                              "--fade-in-start, --fade-out-end, --fade-in-curve, --fade-out-curve");
 
-    auto projectFile = resolveProjectFile (working);
-    if (projectFile == juce::File())
-        return context.fail (exitUsage, "usage", "clip-fades requires an existing <project.audium>");
+    return runProjectEdit (working, context, "clip-fades", [&] (ProjectSession& session, EditOutcome& outcome)
+    {
+        auto& trackContainer = *session->getAudioTrackContainer();
+        auto tempoProvider = trackContainer.getTempoProvider();
 
-    ScopedCoutToStderr guard (context.json);
-    int openFailure = exitFailure;
-    auto session = openProjectSession (projectFile, CommandAccess::mutating, context, openFailure);
-    if (! session)
-        return openFailure;
+        ClipMatch match;
+        if (auto code = resolveSingleClip (working, context, trackContainer, *tempoProvider,
+                                           "clip-fades", unit, match);
+            code != exitOk)
+            return code;
 
-    std::string error;
-    auto captureError = [&error] (std::string message) { error = message; };
+        auto& dynamics = match.item->getDynamics();
 
-    auto& trackContainer = *session->getAudioTrackContainer();
-    auto tempoProvider = trackContainer.getTempoProvider();
+        auto regionLengthClocks = match.item->getRegionData (audium::clocks).getLength();
+        if (regionLengthClocks <= 0.0)
+            return context.fail (exitFailure, "empty_clip", "the clip has no length");
 
-    std::vector<ClipMatch> matches;
-    if (auto code = resolveClips (working, context, trackContainer, *tempoProvider,
-                                  "clip-fades", unit, matches);
-        code != exitOk)
-        return code;
+        // Durations here may be zero (clear a fade) or negative (ramp offsets
+        // reaching outside the clip), hence no sign check. The engine stores
+        // fades as fractions of the region length and clamps them against
+        // each other.
+        std::string error;
+        auto toFraction = [&] (const juce::String& value, double& outFraction) {
+            double clocks = 0.0;
+            if (! musicalDurationToClocks (value, unit, *tempoProvider, clocks, error))
+                return false;
+            outFraction = clocks / regionLengthClocks;
+            return true;
+        };
 
-    if (matches.size() > 1)
-        return context.fail (exitFailure, "ambiguous_clip",
-                             "several clips match; pass --track or address by --at");
+        bool valuesPushed = false;
+        double fraction = 0.0;
 
-    auto& match = matches.front();
-    auto& dynamics = match.item->getDynamics();
-
-    auto regionLengthClocks = match.item->getRegionData (audium::clocks).getLength();
-    if (regionLengthClocks <= 0.0)
-        return context.fail (exitFailure, "empty_clip", "the clip has no length");
-
-    // Durations here may be zero (clear a fade) or negative (ramp offsets
-    // reaching outside the clip), so this converts without the sign checks of
-    // parseMusicalDuration. The engine stores fades as fractions of the
-    // region length and clamps them against each other.
-    auto toFraction = [&] (const juce::String& value, double& outFraction) {
-        double clocks = 0.0;
-        const auto numeric = value.getDoubleValue();
-        if (unit == "bars")
-            clocks = numeric * clocksPerBar;
-        else if (unit == "beats")
-            clocks = numeric * clocksPerBeat;
-        else if (unit == "seconds")
-            clocks = tempoProvider->secondsToClocks (numeric);
-        else if (unit == "clocks")
-            clocks = numeric;
-        else {
-            error = "--unit must be bars, beats, seconds or clocks";
-            return false;
+        if (fadeIn.isNotEmpty()) {
+            if (! toFraction (fadeIn, fraction))
+                return context.fail (exitUsage, "usage", error);
+            if (fraction < 0.0)
+                return context.fail (exitUsage, "usage", "--fade-in must not be negative");
+            valuesPushed |= dynamics.setFadeIn (fraction);
         }
-        outFraction = clocks / regionLengthClocks;
-        return true;
-    };
+        if (fadeOut.isNotEmpty()) {
+            if (! toFraction (fadeOut, fraction))
+                return context.fail (exitUsage, "usage", error);
+            if (fraction < 0.0)
+                return context.fail (exitUsage, "usage", "--fade-out must not be negative");
+            valuesPushed |= dynamics.setFadeOut (fraction);
+        }
+        if (fadeInStart.isNotEmpty()) {
+            if (! toFraction (fadeInStart, fraction))
+                return context.fail (exitUsage, "usage", error);
+            valuesPushed |= dynamics.setFadeInStart (fraction);
+        }
+        if (fadeOutEnd.isNotEmpty()) {
+            if (! toFraction (fadeOutEnd, fraction))
+                return context.fail (exitUsage, "usage", error);
+            valuesPushed |= dynamics.setFadeOutEnd (fraction);
+        }
+        if (fadeInCurve.isNotEmpty())
+            dynamics.setFadeInCurve (fadeInCurve.getDoubleValue());
+        if (fadeOutCurve.isNotEmpty())
+            dynamics.setFadeOutCurve (fadeOutCurve.getDoubleValue());
 
-    bool valuesPushed = false;
-    double fraction = 0.0;
-
-    if (fadeIn.isNotEmpty()) {
-        if (! toFraction (fadeIn, fraction))
-            return context.fail (exitUsage, "usage", error);
-        if (fraction < 0.0)
-            return context.fail (exitUsage, "usage", "--fade-in must not be negative");
-        valuesPushed |= dynamics.setFadeIn (fraction);
-    }
-    if (fadeOut.isNotEmpty()) {
-        if (! toFraction (fadeOut, fraction))
-            return context.fail (exitUsage, "usage", error);
-        if (fraction < 0.0)
-            return context.fail (exitUsage, "usage", "--fade-out must not be negative");
-        valuesPushed |= dynamics.setFadeOut (fraction);
-    }
-    if (fadeInStart.isNotEmpty()) {
-        if (! toFraction (fadeInStart, fraction))
-            return context.fail (exitUsage, "usage", error);
-        valuesPushed |= dynamics.setFadeInStart (fraction);
-    }
-    if (fadeOutEnd.isNotEmpty()) {
-        if (! toFraction (fadeOutEnd, fraction))
-            return context.fail (exitUsage, "usage", error);
-        valuesPushed |= dynamics.setFadeOutEnd (fraction);
-    }
-    if (fadeInCurve.isNotEmpty())
-        dynamics.setFadeInCurve (fadeInCurve.getDoubleValue());
-    if (fadeOutCurve.isNotEmpty())
-        dynamics.setFadeOutCurve (fadeOutCurve.getDoubleValue());
-
-    if (! session.commit (error))
-        return context.fail (exitFailure, "save_failed", error.empty() ? "failed to save project" : error);
-
-    context.log ("clip fades set");
-    return context.ok ({ { "region", match.item->getRegion()->getName().toStdString() },
-                         { "track", match.track->getId() },
-                         { "fadeInSeconds", dynamics.getFadeIn (audium::seconds) },
-                         { "fadeOutSeconds", dynamics.getFadeOut (audium::seconds) },
-                         { "fadeInStartSeconds", dynamics.getFadeInStart (audium::seconds) },
-                         { "fadeOutEndSeconds", dynamics.getFadeOutEnd (audium::seconds) },
-                         { "fadeInCurve", dynamics.getFadeInCurve() },
-                         { "fadeOutCurve", dynamics.getFadeOutCurve() },
-                         { "otherValuesAdjusted", valuesPushed } });
+        outcome.log = "clip fades set";
+        outcome.result = { { "region", match.item->getRegion()->getName().toStdString() },
+                           { "track", match.track->getId() },
+                           { "fadeInSeconds", dynamics.getFadeIn (audium::seconds) },
+                           { "fadeOutSeconds", dynamics.getFadeOut (audium::seconds) },
+                           { "fadeInStartSeconds", dynamics.getFadeInStart (audium::seconds) },
+                           { "fadeOutEndSeconds", dynamics.getFadeOutEnd (audium::seconds) },
+                           { "fadeInCurve", dynamics.getFadeInCurve() },
+                           { "fadeOutCurve", dynamics.getFadeOutCurve() },
+                           { "otherValuesAdjusted", valuesPushed } };
+        return exitOk;
+    });
 }
 
 } // namespace cli

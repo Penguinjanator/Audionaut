@@ -23,6 +23,35 @@
 #include "Engine/Region/AudioRegion.h"
 #include "Engine/Resource/AudioResource.h"
 
+struct PlayListItemComponent::FadeHandleSpec
+{
+    std::unique_ptr<DraggingHandle> PlayListItemComponent::* control;
+    DraggingHandle::FadeType type;
+    bool (*apply) (audium::ClipDynamics&, double value); // true: pushed another fade
+    bool movesRamp;   // a ramp end: the bend handles follow every edit
+    bool onLane;      // parented to the lane's fade overlay (attachHandlesToLane)
+};
+
+std::array<PlayListItemComponent::FadeHandleSpec, 6> PlayListItemComponent::fadeHandleSpecs()
+{
+    using Dynamics = audium::ClipDynamics;
+    return {{
+        { &PlayListItemComponent::fadeInControl, DraggingHandle::FadeIn,
+          [] (Dynamics& d, double v) { return d.setFadeIn(v); }, true, false },
+        { &PlayListItemComponent::fadeOutControl, DraggingHandle::FadeOut,
+          [] (Dynamics& d, double v) { return d.setFadeOut(v); }, true, false },
+        { &PlayListItemComponent::fadeInStartControl, DraggingHandle::FadeInStart,
+          [] (Dynamics& d, double v) { return d.setFadeInStart(v); }, true, true },
+        { &PlayListItemComponent::fadeOutEndControl, DraggingHandle::FadeOutEnd,
+          [] (Dynamics& d, double v) { return d.setFadeOutEnd(v); }, true, true },
+        // the bend handles set the curve exponents - no pushes
+        { &PlayListItemComponent::curveInControl, DraggingHandle::CurveIn,
+          [] (Dynamics& d, double v) { d.setFadeInCurve(v); return false; }, false, true },
+        { &PlayListItemComponent::curveOutControl, DraggingHandle::CurveOut,
+          [] (Dynamics& d, double v) { d.setFadeOutCurve(v); return false; }, false, true },
+    }};
+}
+
 PlayListItemComponent::PlayListItemComponent(std::shared_ptr<audium::AudiumEngine> audiumEngine,
                                              std::shared_ptr<audium::AudioTrack> audioTrack,
                                              std::shared_ptr<audium::PlayListContainer> playListContainer,
@@ -59,47 +88,15 @@ PlayListItemComponent::PlayListItemComponent(std::shared_ptr<audium::AudiumEngin
     playListItemListBox->addMouseListener (this, true);
     
     
-    // FADE IN
-    fadeInControl = std::make_unique<DraggingHandle>(DraggingHandle::FadeIn,
-                                                       playListItem,
-                                                       regionSelector);
-    addAndMakeVisible(fadeInControl.get());
-    fadeInControl->setVisible(false);
-
-    
-    // FADE OUT
-    fadeOutControl = std::make_unique<DraggingHandle>(DraggingHandle::FadeOut,
-                                                       playListItem,
-                                                       regionSelector);
-    addAndMakeVisible(fadeOutControl.get());
-    fadeOutControl->setVisible(false);
-
-    // FADE IN START (silence boundary, bottom edge)
-    fadeInStartControl = std::make_unique<DraggingHandle>(DraggingHandle::FadeInStart,
-                                                            playListItem,
-                                                            regionSelector);
-    addAndMakeVisible(fadeInStartControl.get());
-    fadeInStartControl->setVisible(false);
-
-    // FADE OUT END (silence boundary, bottom edge)
-    fadeOutEndControl = std::make_unique<DraggingHandle>(DraggingHandle::FadeOutEnd,
-                                                           playListItem,
-                                                           regionSelector);
-    addAndMakeVisible(fadeOutEndControl.get());
-    fadeOutEndControl->setVisible(false);
-
-    // CURVE BEND HANDLES (on each ramp's midpoint, vertical drag)
-    curveInControl = std::make_unique<DraggingHandle>(DraggingHandle::CurveIn,
-                                                      playListItem,
-                                                      regionSelector);
-    addAndMakeVisible(curveInControl.get());
-    curveInControl->setVisible(false);
-
-    curveOutControl = std::make_unique<DraggingHandle>(DraggingHandle::CurveOut,
-                                                       playListItem,
-                                                       regionSelector);
-    addAndMakeVisible(curveOutControl.get());
-    curveOutControl->setVisible(false);
+    // FADE HANDLES (ramp ends on the top strip, silence boundaries on the
+    // bottom edge, bend handles on each ramp's midpoint)
+    for (const auto& spec : fadeHandleSpecs())
+    {
+        auto& handle = this->*spec.control;
+        handle = std::make_unique<DraggingHandle>(spec.type, playListItem, regionSelector);
+        addAndMakeVisible(handle.get());
+        handle->setVisible(false);
+    }
 
     // OVERLAY CONTAINER (topmost; transparent itself, children may take clicks)
     overlayContainer = std::make_unique<juce::Component>("PlayListItemOverlay");
@@ -195,91 +192,31 @@ void PlayListItemComponent::setPlayListItem(std::shared_ptr<audium::PlayListItem
     playListItem = item;
     
     
-    fadeInControl->setPlayListItem(item);
-    fadeOutControl->setPlayListItem(item);
-    fadeInStartControl->setPlayListItem(item);
-    fadeOutEndControl->setPlayListItem(item);
-    curveInControl->setPlayListItem(item);
-    curveOutControl->setPlayListItem(item);
+    for (const auto& spec : fadeHandleSpecs())
+    {
+        auto* handle = (this->*spec.control).get();
+        handle->setPlayListItem(item);
 
-    // mouseExit must reach this clip component - the bottom handles are
-    // parented to the lane overlay, not to us
-    fadeInControl->setExitTarget(this);
-    fadeOutControl->setExitTarget(this);
-    fadeInStartControl->setExitTarget(this);
-    fadeOutEndControl->setExitTarget(this);
-    curveInControl->setExitTarget(this);
-    curveOutControl->setExitTarget(this);
+        // mouseExit must reach this clip component - the bottom handles are
+        // parented to the lane overlay, not to us
+        handle->setExitTarget(this);
 
-    // function pointer setup; a pushed fade value can cascade through the
-    // other three, so re-sync every handle whenever the setter reports one
-    fadeInControl->onValueChange = [this, item] {
-        if (item->getDynamics().setFadeIn(fadeInControl->getValue()))
-            syncFadeControls();
-        syncCurveControls();
+        // a pushed fade value can cascade through the other three, so re-sync
+        // every handle whenever the setter reports one; any ramp edit moves
+        // the bend handles
+        handle->onValueChange = [this, item, handle, spec] {
+            if (spec.apply(item->getDynamics(), handle->getValue()))
+                syncFadeControls();
+            if (spec.movesRamp)
+                syncCurveControls();
 
-        playListItemListBox->updateContent();
-        repaintClipRows();
-        repaintFadeOverlay();
-    };
-    fadeInControl->onDragStart = [item] { item->onDragStart(); };
-    fadeInControl->onDragEnd = [item] { item->onDragEnd(); };
-
-    // function pointer setup:
-    fadeOutControl->onValueChange = [this, item] {
-        if (item->getDynamics().setFadeOut(fadeOutControl->getValue()))
-            syncFadeControls();
-        syncCurveControls();
-        playListItemListBox->updateContent();
-        repaintClipRows();
-        repaintFadeOverlay();
-    };
-    fadeOutControl->onDragStart = [item] { item->onDragStart(); };
-    fadeOutControl->onDragEnd = [item] { item->onDragEnd(); };
-
-    // function pointer setup:
-    fadeInStartControl->onValueChange = [this, item] {
-        if (item->getDynamics().setFadeInStart(fadeInStartControl->getValue()))
-            syncFadeControls();
-        syncCurveControls();
-        playListItemListBox->updateContent();
-        repaintClipRows();
-        repaintFadeOverlay();
-    };
-    fadeInStartControl->onDragStart = [item] { item->onDragStart(); };
-    fadeInStartControl->onDragEnd = [item] { item->onDragEnd(); };
-
-    // function pointer setup:
-    fadeOutEndControl->onValueChange = [this, item] {
-        if (item->getDynamics().setFadeOutEnd(fadeOutEndControl->getValue()))
-            syncFadeControls();
-        syncCurveControls();
-        playListItemListBox->updateContent();
-        repaintClipRows();
-        repaintFadeOverlay();
-    };
-    fadeOutEndControl->onDragStart = [item] { item->onDragStart(); };
-    fadeOutEndControl->onDragEnd = [item] { item->onDragEnd(); };
-
-    // function pointer setup: the bend handles set the curve exponents -
-    // no pushes, so no re-sync needed
-    curveInControl->onValueChange = [this, item] {
-        item->getDynamics().setFadeInCurve(curveInControl->getValue());
-        playListItemListBox->updateContent();
-        repaintClipRows();
-        repaintFadeOverlay();
-    };
-    curveInControl->onDragStart = [item] { item->onDragStart(); };
-    curveInControl->onDragEnd = [item] { item->onDragEnd(); };
-
-    curveOutControl->onValueChange = [this, item] {
-        item->getDynamics().setFadeOutCurve(curveOutControl->getValue());
-        playListItemListBox->updateContent();
-        repaintClipRows();
-        repaintFadeOverlay();
-    };
-    curveOutControl->onDragStart = [item] { item->onDragStart(); };
-    curveOutControl->onDragEnd = [item] { item->onDragEnd(); };
+            playListItemListBox->updateContent();
+            repaintClipRows();
+            repaintFadeOverlay();
+        };
+        handle->onDragStart = [item] { item->onDragStart(); };
+        handle->onDragEnd = [item] { item->onDragEnd(); };
+    }
 }
 
 void PlayListItemComponent::syncFadeControls()
@@ -368,14 +305,9 @@ void PlayListItemComponent::attachHandlesToLane()
         return;
 
     auto overlay = lane->getFadeOverlay();
-    if (fadeInStartControl->getParentComponent() != overlay)
-        overlay->addChildComponent(fadeInStartControl.get());
-    if (fadeOutEndControl->getParentComponent() != overlay)
-        overlay->addChildComponent(fadeOutEndControl.get());
-    if (curveInControl->getParentComponent() != overlay)
-        overlay->addChildComponent(curveInControl.get());
-    if (curveOutControl->getParentComponent() != overlay)
-        overlay->addChildComponent(curveOutControl.get());
+    for (const auto& spec : fadeHandleSpecs())
+        if (auto* handle = (this->*spec.control).get(); spec.onLane && handle->getParentComponent() != overlay)
+            overlay->addChildComponent(handle);
 
     if (observedClipRect != clipRect) {
         if (observedClipRect != nullptr)
@@ -421,12 +353,10 @@ void PlayListItemComponent::componentVisibilityChanged (juce::Component& compone
 {
     // mirror the lane's culling: an offscreen clip must not leave its
     // lane-parented handles floating
-    if (&component == observedClipRect && ! component.isVisible()) {
-        fadeInStartControl->setVisible(false);
-        fadeOutEndControl->setVisible(false);
-        curveInControl->setVisible(false);
-        curveOutControl->setVisible(false);
-    }
+    if (&component == observedClipRect && ! component.isVisible())
+        for (const auto& spec : fadeHandleSpecs())
+            if (spec.onLane)
+                (this->*spec.control)->setVisible(false);
 }
 
 void PlayListItemComponent::updateUI(std::shared_ptr<audium::PlayListItem> item)
@@ -523,7 +453,8 @@ void PlayListItemComponent::refreshAutoEditPreview()
     const auto previewActive = ! preview.empty();
 
     autoEditPreviewView->setPreviewSegments(std::move(preview),
-                                            region->getRegionData(audium::seconds).getStart());
+                                            region->getRegionData(audium::seconds).getStart(),
+                                            playListItem->getSpeedRatio());
 
     // The previewed clip also carries the edit's control.
     autoEditOverlayControl->setTarget(audioTrack->getId(), playListItem->getId());

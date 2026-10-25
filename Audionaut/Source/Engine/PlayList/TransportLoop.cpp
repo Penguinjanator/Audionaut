@@ -147,7 +147,6 @@ const TransportLoop::LoopResult TransportLoop::processLoop(double thePosition,
     
     // subtract previous loops
     thePosition -= (static_cast<double>(loopCount) * loopRange.getLength());
-    // jassert(thePosition >= 0.0);
 
     if (processedLoopData.loopActive) {
         if (withinLoop &&

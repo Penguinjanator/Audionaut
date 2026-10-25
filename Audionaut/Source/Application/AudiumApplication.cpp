@@ -228,7 +228,6 @@ void AudiumApplication::handleAsyncUpdate()
 
 #if JUCE_MAC
     rebuildAppleMenu();
-    appleMenuRebuildListener = std::make_unique<AppleMenuRebuildListener>();
 #endif
     mainWindow.reset (new AudiumMainWindow (getApplicationName(), audiumEngine));
 
@@ -600,8 +599,7 @@ void AudiumApplication::askToSaveIfDirtyAndInvoke(std::function<void ()> callbac
                         NullCheckedInvocation::invoke(callback);
                 }
                 else {
-                    if (saveProjectAs())
-                        NullCheckedInvocation::invoke(callback);
+                    saveProjectAs(callback);
                 }
             }
             else if (result == 1) {
@@ -756,7 +754,6 @@ PopupMenu AudiumApplication::createFileMenu()
     {
         PopupMenu recentFilesMenu;
         recentFiles.createPopupMenuItems (recentFilesMenu, recentProjectsBaseID, true, true);
-        // std::cout << "recentFiles.createPopupMenuItems" << std::endl;
         if (recentFilesMenu.getNumItems() > 0) {
             recentFilesMenu.addSeparator();
             recentFilesMenu.addCommandItem (commandManager.get(), CommandIDs::clearRecentFiles);
@@ -818,9 +815,6 @@ PopupMenu AudiumApplication::createEditMenu()
     menu.addSeparator();
     menu.addCommandItem(commandManager.get(), CommandIDs::separateStems);
     menu.addCommandItem(commandManager.get(), CommandIDs::stretchClip);
-
-    //menu.addSeparator();
-    //menu.addCommandItem(commandManager.get(), CommandIDs::loopPlayList);
     return menu;
 }
 
@@ -1221,7 +1215,6 @@ void AudiumApplication::openFileInternal(juce::File file, juce::File autosaveToO
     if (success) {
 
         initialOpenDirectory = file.getParentDirectory();
-        std::cout << "initialOpenDirectory = " << initialOpenDirectory.getFullPathName() << std::endl;
         RecentlyOpenedFilesList::registerRecentFileNatively (file);
         recentFiles.addFile (file);
         if (isProjectFile)
@@ -1308,7 +1301,7 @@ bool askToOverwriteFileSync (const File& newFile)
 }
 
 
-bool AudiumApplication::saveProjectAs()
+void AudiumApplication::saveProjectAs(std::function<void ()> onSaved)
 {
     chooser = std::make_unique<FileChooser> (("Save As..."),
                                              initialSaveDirectory);
@@ -1317,27 +1310,21 @@ bool AudiumApplication::saveProjectAs()
                     FileBrowserComponent::canSelectDirectories |
                     FileBrowserComponent::warnAboutOverwriting;
 
-    chooser->launchAsync (flags, [this] (const FileChooser& fc)
+    chooser->launchAsync (flags, [this, onSaved] (const FileChooser& fc)
     {
         auto file = fc.getResult();
-        if (file != File()) {
-            
-            // warn overwrite: special case where user selects an existing project (without the .audium extension)
-            auto existingProject = File(file.getFullPathName() + audium::ProjectFileStore::projectFileExtension);
-            if (existingProject.exists()) {
-                if (!askToOverwriteFileSync(existingProject))
-                    return false;
-            }
-            
-            if (file.existsAsFile())
-                return saveProjectToFile(file);
-            else
-                return saveProjectToFile(projectFileForPackage(file));
-        }
-        return false;
+        if (file == File())
+            return;
+
+        // warn overwrite: special case where user selects an existing project (without the .audium extension)
+        auto existingProject = File(file.getFullPathName() + audium::ProjectFileStore::projectFileExtension);
+        if (existingProject.exists() && !askToOverwriteFileSync(existingProject))
+            return;
+
+        auto saved = saveProjectToFile(file.existsAsFile() ? file : projectFileForPackage(file));
+        if (saved)
+            NullCheckedInvocation::invoke(onSaved);
     });
-    
-    return false;
 }
 
 bool AudiumApplication::saveProjectToFile(juce::File file)
@@ -1355,9 +1342,8 @@ bool AudiumApplication::saveProjectToFile(juce::File file)
     if (success) {
         // foo.audium/Project.json -> ../../
         initialSaveDirectory = file.getParentDirectory().getParentDirectory();
-        std::cout << "file saved: " << file.getFullPathName() << std::endl;
+        DBG("file saved: " << file.getFullPathName());
         fileStore->deleteObsoleteAudioFiles();
-        std::cout << "initialSaveDirectory: " << initialSaveDirectory.getFullPathName() << std::endl;
         
         if (file.getFileName() == audium::ProjectFileStore::projectFileName)
             file = file.getParentDirectory();

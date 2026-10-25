@@ -15,6 +15,7 @@
 #include "Engine/Region/AudioRegion.h"
 #include "Engine/Region/AudioRegionContainer.h"
 
+#include "TestEngine.h"
 #include "TestUtils.h"
 
 using namespace audium;
@@ -25,9 +26,7 @@ using namespace audium;
 // region.
 SCENARIO("play list items are created from regions and keep their order", "[engine][playlist]")
 {
-    MessageManager::getInstance();
-    MessageManagerLock mmLock(Thread::getCurrentThread());
-    auto engine = AudiumFactory::createAudiumEngine();
+    TestEngine engine;
 
     auto inFile = File(String(CURRENT_SOURCE_DIR) + String("/TestFiles/120-funk-1-sec.wav"));
     REQUIRE(inFile.existsAsFile());
@@ -117,15 +116,7 @@ SCENARIO("play list items are created from regions and keep their order", "[engi
             }
         }
     }
-
-    engine = nullptr;
-    DeletedAtShutdown::deleteAll();
-    MessageManager::deleteInstance();
 }
-
-
-
-
 
 // A play list item whose region_id points at no region (hand-edited project,
 // or left behind by an older bug) used to be kept with a null region and
@@ -135,9 +126,7 @@ SCENARIO("play list items with a dangling region_id are dropped on load", "[engi
 {
     GIVEN("a project with one clip on one track")
     {
-        MessageManager::getInstance();
-
-        auto engine = AudiumFactory::createAudiumEngine();
+        TestEngine engine;
         const auto audioFile = createSlowSawTwoSecondsAudioFile();
         REQUIRE(audioFile.existsAsFile());
         REQUIRE(engine->getProjectFileStore()->open(audioFile, nullptr));
@@ -203,13 +192,5 @@ SCENARIO("play list items with a dangling region_id are dropped on load", "[engi
                 REQUIRE(item->getVoiceSources().empty());
             }
         }
-
-        item = nullptr;
-        playList = nullptr;
-        container = nullptr;
-        engine = nullptr;
     }
-
-    DeletedAtShutdown::deleteAll();
-    MessageManager::deleteInstance();
 }

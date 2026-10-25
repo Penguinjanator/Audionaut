@@ -13,59 +13,37 @@
 #include "Interface/Handlers/ZoomHandler.h"
 #include "Interface/Widgets/audium_ListBox.h"
 #include "Interface/Controls/AudioTrackListBox.h"
+#include "Interface/Models/TrackListBoxModels.h"
 
 class AudioTrackContainer;
 
-class AudioTrackListBoxModel : public audium::ListBoxModel {
+class AudioTrackListBoxModel : public TrackRowsListBoxModel {
     
 public:
     
     AudioTrackListBoxModel(std::shared_ptr<AudioTrackListBox> owner,
                            std::shared_ptr<audium::AudiumEngine> audiumEngine,
                            std::shared_ptr<ZoomHandler> zoomHandler,
-                           std::shared_ptr<RegionSelector> regionSelector,
-                           bool arrangementMode = true) :
+                           std::shared_ptr<RegionSelector> regionSelector) :
+        TrackRowsListBoxModel(audiumEngine),
         owner(owner),
-        audiumEngine(audiumEngine),
         zoomHandler(zoomHandler),
-        regionSelector(regionSelector),
-        arrangementMode(arrangementMode)
+        regionSelector(regionSelector)
     {
     }
-    
-    ~AudioTrackListBoxModel() override
-    {
-    }
-    
-    int getNumRows() override;
-
-    void paintListBoxItem ( int rowNumber,
-                            juce::Graphics& g,
-                            int width, int height,
-                            bool rowIsSelected) override;
     
     juce::Component* refreshComponentForRow (   int rowNumber, bool isRowSelected,
                                                 juce::Component* existingComponentToUpdate) override;
 
-    
-    int getRowHeight (int rowNumber) const override;
-    
-    void deleteKeyPressed (int lastRowSelected) override;
-    
     void backgroundClicked (const juce::MouseEvent&) override;
     
     void listWasScrolled() override;
     
     void selectedRowsChanged (int lastRowSelected) override;
-    
-    int getExtraSpaceAtBottom() const override;
         
 private:
     std::shared_ptr<AudioTrackListBox> owner;
-    std::shared_ptr<audium::AudiumEngine> audiumEngine;
     std::shared_ptr<ZoomHandler> zoomHandler;
     std::shared_ptr<RegionSelector> regionSelector;
-    
-    bool arrangementMode = true;
 
 };

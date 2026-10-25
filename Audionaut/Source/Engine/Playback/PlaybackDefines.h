@@ -9,7 +9,7 @@ namespace audium
 {
 
 #ifndef MAX_VOICES
-    #define MAX_VOICES 64
+    #define MAX_VOICES (MAX_AUDIO_CHANNELS * 2) // every channel of a full project, twice for crossfade overlaps
 #endif
 
 #ifndef MAX_AUDIO_CHANNELS

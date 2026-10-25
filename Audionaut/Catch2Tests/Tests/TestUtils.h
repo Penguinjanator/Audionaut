@@ -2,6 +2,26 @@
 
 #include <JuceHeader.h>
 
+/// Where the tests write what nobody reads back from the repository:
+/// generated input audio, bounces, scratch projects. One directory per run
+/// of the test binary under the temp location, removed when the run exits
+/// (a crashed run leaves it behind in temp). CI fails a run that leaves
+/// files under TestFiles, so outputs never go there.
+inline const File& testOutputDirectory()
+{
+    struct RunDirectory
+    {
+        File directory = File::getSpecialLocation(File::tempDirectory)
+                             .getChildFile("AudionautTests-" + Uuid().toDashedString());
+
+        RunDirectory()  { directory.createDirectory(); }
+        ~RunDirectory() { directory.deleteRecursively(); }
+    };
+
+    static RunDirectory run;
+    return run.directory;
+}
+
 static float genSaw(int s, int w)
 {
     return (static_cast<float>(s) / static_cast<float>(w - 1) * 2.f) - 1.f;
@@ -11,7 +31,7 @@ static const File createSlowSawAudioFile(int numSaws = 1,
                                          bool addSilenceAtStart = true,
                                          bool addSilenceAtEmd = true)
 {
-    auto targetFile = File(String(CURRENT_SOURCE_DIR) + String("/TestFiles/slow-saw.wav"));
+    auto targetFile = testOutputDirectory().getChildFile("slow-saw.wav");
     TemporaryFile tempFile (targetFile);
 
     std::unique_ptr<OutputStream> stream (tempFile.getFile().createOutputStream());
@@ -61,7 +81,7 @@ static const File createSlowSawAudioFile(int numSaws = 1,
 
 static const File createSlowSawTwoSecondsAudioFile()
 {
-    auto targetFile = File(String(CURRENT_SOURCE_DIR) + String("/TestFiles/slow-saw-2-seconds.wav"));
+    auto targetFile = testOutputDirectory().getChildFile("slow-saw-2-seconds.wav");
     TemporaryFile tempFile (targetFile);
     
     std::unique_ptr<OutputStream> stream (tempFile.getFile().createOutputStream());
@@ -107,7 +127,7 @@ static const File createSineAudioFile(double frequencyHz, double lengthInSeconds
                                       double leadingSilenceSeconds = 0.0,
                                       double sampleRate = 44100.0)
 {
-    auto targetFile = File(String(CURRENT_SOURCE_DIR) + String("/TestFiles/sine-gen.wav"));
+    auto targetFile = testOutputDirectory().getChildFile("sine-gen.wav");
     TemporaryFile tempFile (targetFile);
 
     std::unique_ptr<OutputStream> stream (tempFile.getFile().createOutputStream());
@@ -145,7 +165,7 @@ static const File createSineAudioFile(double frequencyHz, double lengthInSeconds
 /// 44.1 kHz the tests usually bounce at).
 static const File generateDcOffsetAudioFile(double lengthInSeconds, double sampleRate = 44100.0)
 {
-    auto targetFile = File(String(CURRENT_SOURCE_DIR) + String("/TestFiles/dc-offset.wav"));
+    auto targetFile = testOutputDirectory().getChildFile("dc-offset.wav");
     TemporaryFile tempFile (targetFile);
     
     std::unique_ptr<OutputStream> stream (tempFile.getFile().createOutputStream());
@@ -185,7 +205,7 @@ static const File generateDcOffsetAudioFile(double lengthInSeconds, double sampl
 /// where.
 static const File createRampAudioFile(double lengthInSeconds, double sampleRate = 44100.0)
 {
-    auto targetFile = File(String(CURRENT_SOURCE_DIR) + String("/TestFiles/ramp-gen.wav"));
+    auto targetFile = testOutputDirectory().getChildFile("ramp-gen.wav");
     TemporaryFile tempFile (targetFile);
 
     std::unique_ptr<OutputStream> stream (tempFile.getFile().createOutputStream());

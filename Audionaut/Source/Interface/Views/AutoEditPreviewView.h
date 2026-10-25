@@ -40,9 +40,12 @@ public:
      *        and stops the animation.
      * @param previewSegments    Boundary timestamps (seconds).
      * @param regionStartSeconds The region's source offset into the file (seconds).
+     * @param speedRatio         The clip's playback speed; boundaries are source
+     *                           time, so they sit at source delta / speed.
      */
     void setPreviewSegments(std::vector<float> previewSegments,
-                            double regionStartSeconds);
+                            double regionStartSeconds,
+                            double speedRatio = 1.0);
 
 private:
     // Advances the dash phase; only running while a preview is shown.
@@ -51,6 +54,7 @@ private:
     std::shared_ptr<ZoomHandler> zoomHandler;
     std::vector<float> previewSegments;
     double regionStartSeconds = 0.0;
+    double speedRatio = 1.0;
     float dashPhase = 0.0f;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (AutoEditPreviewView)

@@ -4,16 +4,52 @@ description: >
   `submodules: 'recursive'` on actions/checkout, which has no retry: the
   nested demucs.cpp/vendor/eigen submodule lives on gitlab.com, which
   intermittently refuses clones ("GitLab is currently unable to handle this
-  request due to load") and would otherwise fail the whole run.
+  request due to load") and would otherwise fail the whole run. Eigen's git
+  directory is therefore cached, keyed on the commit demucs.cpp pins, so
+  after its first clone a job checks it out without asking GitLab at all.
 
 runs:
   using: composite
   steps:
-    - name: Update submodules (with retry)
+    # actions/checkout skips LFS smudge by default; keep that for the
+    # submodules, none of which needs its LFS content here. Our own LFS test
+    # wavs come from the workflows' `git lfs pull` step.
+    - name: Update top-level submodules (with retry)
       shell: bash
-      # actions/checkout skips LFS smudge by default; keep that, or the
-      # essentia/test/models submodule fails (its LFS is disabled upstream).
-      # Our own LFS test wavs come from the workflows' `git lfs pull` step.
+      env:
+        GIT_LFS_SKIP_SMUDGE: "1"
+      run: |
+        for attempt in 1 2 3 4; do
+          git submodule update --init && exit 0
+          [ "$attempt" = 4 ] && break
+          delay=$((attempt * 30))
+          echo "::warning::submodule update failed (attempt $attempt), retrying in ${delay}s"
+          sleep "$delay"
+        done
+        echo "::error::submodule update failed after 4 attempts"
+        exit 1
+
+    - name: Find the Eigen commit demucs.cpp pins
+      id: eigen
+      shell: bash
+      run: |
+        sha=$(git -C Submodules/demucs.cpp ls-tree HEAD vendor/eigen | awk '{print $3}')
+        echo "sha=$sha" >> "$GITHUB_OUTPUT"
+
+    # A git directory already under .git/modules is reused by
+    # `git submodule update`, which then checks out the pinned commit from
+    # it and fetches nothing. Its core.worktree is relative, so the cached
+    # directory fits any checkout location.
+    - name: Restore Eigen's git directory
+      id: eigen-cache
+      if: steps.eigen.outputs.sha != ''
+      uses: actions/cache/restore@v4
+      with:
+        path: .git/modules/Submodules/demucs.cpp/modules/vendor/eigen
+        key: eigen-gitdir-${{ steps.eigen.outputs.sha }}
+
+    - name: Update nested submodules (with retry)
+      shell: bash
       env:
         GIT_LFS_SKIP_SMUDGE: "1"
       run: |
@@ -28,3 +64,12 @@ runs:
         done
         echo "::error::submodule update failed after 4 attempts"
         exit 1
+
+    # Saved right away, not at the end of the job, so a later failing step
+    # doesn't keep the next run going back to GitLab.
+    - name: Save Eigen's git directory
+      if: steps.eigen.outputs.sha != '' && steps.eigen-cache.outputs.cache-hit != 'true'
+      uses: actions/cache/save@v4
+      with:
+        path: .git/modules/Submodules/demucs.cpp/modules/vendor/eigen
+        key: eigen-gitdir-${{ steps.eigen.outputs.sha }}

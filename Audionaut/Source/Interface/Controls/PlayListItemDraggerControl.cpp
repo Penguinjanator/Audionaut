@@ -4,7 +4,6 @@
 //    Audionaut uses a GPL/commercial licence - see LICENCE.md for details.
 
 #include "PlayListItemDraggerControl.h"
-#include "Application/AudiumCommandIDs.h"
 #include "Interface/LookAndFeel/AudiumLookAndFeel.h"
 #include "Engine/Region/AudioRegion.h"
 #include "Engine/Group/AudioTrack.h"
@@ -12,6 +11,8 @@
 #include "Engine/Resource/AudioResourceContainer.h"
 #include "Engine/Analysis/AnalysisProvider.h"
 #include "Engine/Analysis/AnalysisWorker.h"
+
+#include <cmath>
 
 
 const juce::String PlayListItemDraggerControl::getLabelSuffix() const
@@ -68,18 +69,30 @@ int PlayListItemDraggerControl::getAnalysisRemainingCount() const
 
 juce::String PlayListItemDraggerControl::getAnalysisProgressSuffix() const
 {
-    const auto remaining = getAnalysisRemainingCount();
-    if (remaining == 0)
+    if (getAnalysisRemainingCount() == 0)
         return {};
 
     // The footer status line's sweep animation, advanced one frame per
-    // timerCallback(); the count ticks down as the clip's analyses finish.
+    // timerCallback(). One pass serves all of a file's analyses, so while
+    // this clip's file is the one running, the pass's own progress is shown;
+    // until then the clip is waiting its turn.
     static constexpr const char* sweepFrames[] = { "[=   ]", "[ =  ]", "[  = ]", "[   =]",
                                                    "[  = ]", "[ =  ]" };
     constexpr auto numFrames = (int) (sizeof(sweepFrames) / sizeof(sweepFrames[0]));
     const auto* frame = sweepFrames[analysisAnimationTick % numFrames];
 
-    return juce::String(frame) + " Analysing (" + juce::String(remaining) + ")";
+    auto resourceContainer = audiumEngine->getAudioResourceContainer();
+    auto analysisWorker = (resourceContainer != nullptr) ? resourceContainer->getAnalysisWorker() : nullptr;
+    if (analysisWorker != nullptr)
+    {
+        const auto current = analysisWorker->getCurrentFile();
+        for (const auto& resource : playListItem->getRegion()->getAudioResources())
+            if (resource != nullptr && current != juce::File() && resource->getLocalFile() == current)
+                return juce::String(frame) + " Analysing "
+                     + juce::String((int) std::lround(100.0f * analysisWorker->getCurrentProgress())) + "%";
+    }
+
+    return juce::String(frame) + " Analysing (queued)";
 }
 
 void PlayListItemDraggerControl::timerCallback()
@@ -181,12 +194,12 @@ void PlayListItemDraggerControl::updateAnalysisPaintCache() const
             continue;
 
         const auto audioFile = resource->getLocalFile();
-        const auto bpm = analysisProvider->getBpm(audium::AnalysisType::BeatDegara, audioFile);
+        const auto bpm = analysisProvider->getBpm(audium::AnalysisType::Beats, audioFile);
 
         if (bpm > 0.0f)
             bpms.add(juce::String(bpm, 1));
 
-        const auto beats = analysisProvider->getSegments(audium::AnalysisType::BeatDegara, audioFile);
+        const auto beats = analysisProvider->getSegments(audium::AnalysisType::Beats, audioFile);
 
         if (bpm <= 0.0f || beats.empty())
             continue;
@@ -369,38 +382,12 @@ void PlayListItemDraggerControl::shiftSelect()
     }
 }
 
-static void contextMenuCallback (int result, PlayListItemDraggerControl* component)
-{
-    if (component != nullptr &&
-        result != 0) {
-        switch (result) {
-            case CommandIDs::exportSelectedItemsId:
-                component->exportSelectedPlayListItem();
-                break;
-            default:
-                break;
-        }
-    }
-}
-
 void PlayListItemDraggerControl::mouseDown (const juce::MouseEvent& e)
 {
-    if (e.mods.isPopupMenu()) {
-        PopupMenu m;
-        m.addItem (CommandIDs::exportSelectedItemsId, TRANS ("Export..."), true);
-        m.setLookAndFeel (&getLookAndFeel());
-        m.showMenuAsync (PopupMenu::Options().withStandardItemHeight(AudiumLookAndFeel::popupMenuItemHeight),
-                         ModalCallbackFunction::forComponent (contextMenuCallback, this));
-    }
+    if (e.mods.isPopupMenu())
+        exportMenu.show (*this, audiumEngine, [this] { return playListItem; });
     
     // call base class
     DraggerControl::mouseDown(e);
 }
 
-void PlayListItemDraggerControl::exportSelectedPlayListItem()
-{
-    exporter = std::make_unique<audium::PlayListItemExport>(audiumEngine,
-                                                            playListItem,
-                                                            true);
-    exporter->exportItem();
-}

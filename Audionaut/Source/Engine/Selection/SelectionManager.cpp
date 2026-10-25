@@ -13,10 +13,19 @@
 #include "Engine/PlayList/PlayListContainer.h"
 #include "Engine/AudiumEngine.h"
 #include "Engine/PlayList/PlayListScheduler.h"
-#include "Engine/Undo/UndoableContainerAction.h"
+#include "Engine/Undo/UndoableEdit.h"
 #include "Engine/Region/AudioRegionContainer.h"
 
 namespace audium {
+
+std::shared_ptr<PlayListItem> SelectionManager::firstSelectedClip() const
+{
+    for (const auto& object : selectedObjects)
+        if (auto item = std::dynamic_pointer_cast<PlayListItem>(object))
+            return item;
+
+    return nullptr;
+}
 
 void SelectionManager::deselectAll() {
     auto objects = selectedObjects;
@@ -55,9 +64,6 @@ const SelectionContextType SelectionManager::getSelectionContext() const {
 void SelectionManager::copySelectedToClipboard() {
         
     json jout, json_lola;
-    
-//        if (ResourceGroup* subgroup = dynamic_cast<ResourceGroup*>(object.get())) {
-//        if (AudioChannel* channel = dynamic_cast<AudioChannel*>(object.get())) {
     
     switch (auto context = getSelectionContext()) {
         case play_list_item:
@@ -143,56 +149,53 @@ void SelectionManager::pasteFromJson(const json& data,
     try {
         if (data.contains("lola")) {
             auto lolaData = data["lola"];
-            // undo
-            auto action = std::make_unique<UndoableContainerAction>(*audiumEngine->getAudioTrackContainer().get());
-            
-            if (lolaData.contains("play_list_items")) {
-                pastePlayListItems(lolaData, audiumEngine, duplicateAction);
-            }
-            else if (lolaData.contains("audio_tracks")) {
-                auto jsonTracks = lolaData["audio_tracks"];
-                
-                for (auto& jsonTrack : jsonTracks) {
-                    auto audioTrack = audiumEngine->getAudioTrackContainer()->createNewAudioTrack(juce::String());
-                    
-                    if (audioTrack->readFromJson(jsonTrack, true)) {
-                        audioTrack->getViewState().setColour(audiumEngine->getAudioTrackContainer()->getNewAudioTrackColour());
-                        audioTrack->setAudioTrackName(audioTrack->getAudioTrackName() + "-cpy");
+            applyAsUndoableEdit(*audiumEngine->getAudioTrackContainer(), [&]
+            {
+                if (lolaData.contains("play_list_items")) {
+                    pastePlayListItems(lolaData, audiumEngine, duplicateAction);
+                }
+                else if (lolaData.contains("audio_tracks")) {
+                    auto jsonTracks = lolaData["audio_tracks"];
+
+                    for (auto& jsonTrack : jsonTracks) {
+                        auto audioTrack = audiumEngine->getAudioTrackContainer()->createNewAudioTrack(juce::String());
+
+                        if (audioTrack->readFromJson(jsonTrack, true)) {
+                            audioTrack->getViewState().setColour(audiumEngine->getAudioTrackContainer()->getNewAudioTrackColour());
+                            audioTrack->setAudioTrackName(audioTrack->getAudioTrackName() + "-cpy");
+                        }
                     }
                 }
-            }
-            else if (lolaData.contains("audio_regions")) {
-                auto jsonRegions = lolaData["audio_regions"];
-                
-                for (auto& jsonRegion : jsonRegions) {
-                    if (jsonRegion.contains("track_id") &&
-                        jsonRegion.contains("resource_group_id")) {
-                        // the source track/group may be gone since the copy - skip, don't crash
-                        auto track_id = jsonRegion.at("track_id").get<int>();
-                        auto audioTrack = audiumEngine->getAudioTrackContainer()->getAudioTrack(track_id);
-                        if (audioTrack != nullptr) {
-                            auto resourceGroupId = jsonRegion.at("resource_group_id").get<int>();
-                            std::shared_ptr<ResourceGroup> resourceGroup;
-                            if (audioTrack->resourceGroupContainer->objectExistsAtIndex(resourceGroupId))
-                                resourceGroup = audioTrack->resourceGroupContainer->getObjects()[(size_t) resourceGroupId];
-                            if (resourceGroup != nullptr) {
-                                std::string name;
-                                if (jsonRegion.contains("name"))
-                                    name = jsonRegion.at("name").get<std::string>();
-                                auto newName = resourceGroup->getAudioRegionContainer()->getUniqueName(name);
-                                auto region = resourceGroup->getAudioRegionContainer()->createRegion(audioTrack, resourceGroup);
-                                region->readFromJson(jsonRegion, false);
-                                region->setName(newName);
+                else if (lolaData.contains("audio_regions")) {
+                    auto jsonRegions = lolaData["audio_regions"];
+
+                    for (auto& jsonRegion : jsonRegions) {
+                        if (jsonRegion.contains("track_id") &&
+                            jsonRegion.contains("resource_group_id")) {
+                            // the source track/group may be gone since the copy - skip, don't crash
+                            auto track_id = jsonRegion.at("track_id").get<int>();
+                            auto audioTrack = audiumEngine->getAudioTrackContainer()->getAudioTrack(track_id);
+                            if (audioTrack != nullptr) {
+                                auto resourceGroupId = jsonRegion.at("resource_group_id").get<int>();
+                                std::shared_ptr<ResourceGroup> resourceGroup;
+                                if (audioTrack->resourceGroupContainer->objectExistsAtIndex(resourceGroupId))
+                                    resourceGroup = audioTrack->resourceGroupContainer->getObjects()[(size_t) resourceGroupId];
+                                if (resourceGroup != nullptr) {
+                                    std::string name;
+                                    if (jsonRegion.contains("name"))
+                                        name = jsonRegion.at("name").get<std::string>();
+                                    auto newName = resourceGroup->getAudioRegionContainer()->getUniqueName(name);
+                                    auto region = resourceGroup->getAudioRegionContainer()->createRegion(audioTrack, resourceGroup);
+                                    region->readFromJson(jsonRegion, false);
+                                    region->setName(newName);
+                                }
                             }
                         }
                     }
                 }
-            }
-            
-            // undo
-            action->storeNewState();
-            audiumEngine->getUndoManager()->perform(action.release(), "Paste Objects(s)");
-            audiumEngine->getUndoManager()->beginNewTransaction();
+                return true;
+            },
+            "Paste Objects(s)");
         }
     }
     catch (std::exception &e) {

@@ -12,6 +12,7 @@
 #include "Engine/Group/AudioTrack.h"
 #include "Engine/Group/AudioTrackContainer.h"
 #include "Engine/Selection/SelectionManager.h"
+#include "Interface/ColourIds.h"
 #include "Interface/Controls/RegionSelector.h"
 
 #if !defined(AUDIONAUT_HEADLESS)
@@ -58,7 +59,7 @@ AutoEditOverlayControl::AutoEditOverlayControl(std::shared_ptr<audium::AudiumEng
 #else
     xfadeButton->setToggleState (true, juce::dontSendNotification);
 #endif
-    xfadeButton->setColour (juce::TextButton::buttonOnColourId, juce::Colour (toggledOnColour));
+    xfadeButton->setColour (juce::TextButton::buttonOnColourId, juce::Colour (audium::toggledOnColour));
     addAndMakeVisible (xfadeButton.get());
 
     applyButton = makeIconButton (TRANS ("Apply"), checkIconPath());
@@ -135,8 +136,6 @@ void AutoEditOverlayControl::stepMeasures(bool longer)
         return;
 
     measures = stepped;
-
-    std::cout << "AutoEdit measures: " << measures << std::endl;
 
     updateStepButtons();
     updatePreview();

@@ -147,10 +147,11 @@ const std::vector<CliCommandSpec>& getCliCommands()
           runExport },
 
         { "analyze",
-          "analyze <project.audium|audio-file> [--types sbic,beat_degara] [--json]",
-          "Runs audio analysis (Essentia) and caches the results.",
+          "analyze <project.audium|audio-file> [--types segments,beats,onsets] [--json]",
+          "Runs audio analysis and caches the results.",
           "Analyses the project's audio files (or one given file) and persists the results next to the "
-          "project so auto-edit/assemble and the GUI can reuse them. Exits 3 in builds without Essentia.",
+          "project so auto-edit/assemble and the GUI can reuse them. --types defaults to the pair "
+          "auto-edit needs (segments,beats).",
           runAnalyze },
 
         { "auto-edit",
@@ -272,6 +273,15 @@ const std::vector<CliCommandSpec>& getCliCommands()
           "Removes channel C (0-based) from track N, like deleting a channel strip in the GUI. "
           "Channel mappings and per-channel clip gains shift down; the audio files stay in the package.",
           runRemoveChannel },
+
+        { "track-pan",
+          "track-pan <project.audium> --track N --pan P [--channel C] [--json]",
+          "Pans a track's channel strips (-1 left .. 1 right).",
+          "Sets the pan position of track N's channel strips, -1 (hard left) to 1 (hard right), "
+          "0 centred - the pan slider of the channel view. Every strip of the track by default, one "
+          "with --channel C (0-based). A mono stem has one strip; a stereo import's two strips start "
+          "at -1 and 1. Playback and export both follow it.",
+          runTrackPan },
 
         { "separate",
           "separate <project.audium> [--track N] [--clip N] [--threads N] [--model PATH]\n"

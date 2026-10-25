@@ -23,8 +23,8 @@ namespace ClipTempo {
 /// resource); an invalid File when there is none.
 juce::File sourceFile (const PlayListItem& item);
 
-/// The BPM the beat tracking found for the item's source (the multi-feature
-/// result first, then Degara's); 0 when the source has not been analysed.
+/// The BPM the beat tracking found for the item's source; 0 when the source
+/// has not been analysed.
 float detectedClipTempo (const PlayListItem& item, const AnalysisProvider& provider);
 
 /// Queues the beat analysis for the item's source explicitly (it runs even

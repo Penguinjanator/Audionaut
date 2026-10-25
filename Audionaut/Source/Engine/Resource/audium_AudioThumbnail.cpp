@@ -598,7 +598,6 @@ private:
         ++numRefills;
 
         ensureSize (numSamples);
-        // std::cout << "refillCache: timePerPixel * rate = " << (timePerPixel * rate) << std::endl;
         
         if (timePerPixel * rate <= sampsPerThumbSample && levelData != nullptr)
         {
@@ -861,11 +860,6 @@ void AudioThumbnail::setSource (const AudioBuffer<float>* newSource, double rate
     setReader (new AudioBufferReader<float> (newSource, rate), hash);
 }
 
-void AudioThumbnail::setSource (const AudioBuffer<int>* newSource, double rate, int64 hash)
-{
-    setReader (new AudioBufferReader<int> (newSource, rate), hash);
-}
-
 int64 AudioThumbnail::getHashCode() const
 {
     return source == nullptr ? 0 : source->hashCode;
@@ -941,12 +935,6 @@ bool AudioThumbnail::isFullyLoaded() const noexcept
 {
     const ScopedLock sl (lock);
     return numSamplesFinished >= totalSamples - samplesPerThumbSample;
-}
-
-double AudioThumbnail::getProportionComplete() const noexcept
-{
-    const ScopedLock sl (lock);
-    return jlimit (0.0, 1.0, (double) numSamplesFinished / (double) jmax ((int64) 1, totalSamples));
 }
 
 int64 AudioThumbnail::getNumSamplesFinished() const noexcept

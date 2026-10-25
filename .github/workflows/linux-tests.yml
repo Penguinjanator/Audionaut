@@ -1,0 +1,38 @@
+name: Linux tests
+
+# The Catch2 suite on Linux, as a Debug build: the only leg that runs the
+# tests on Linux (Makefile CI builds the app and runs the MCP smoke test), and
+# the only one where JUCE's assertions are live (macOS and Windows build
+# Release). The CLI target is built too, so its smoke test runs here as well.
+# Coverage is a manual run of its own (coverage.yml).
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+  pull_request:
+    branches:
+      - main
+      - develop
+
+jobs:
+  test:
+    runs-on: ubuntu-22.04
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Checkout submodules
+      uses: ./.github/actions/checkout-submodules
+
+    - name: Install JUCE build dependencies
+      uses: ./.github/actions/install-linux-deps
+      with:
+        extra-packages: xvfb
+
+    - name: Build and run the tests
+      uses: ./.github/actions/run-catch2-tests
+      with:
+        build-type: Debug
+        wrapper: xvfb-run -a

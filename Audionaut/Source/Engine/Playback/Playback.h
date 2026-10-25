@@ -88,15 +88,18 @@ public:
         // allocation-free for blocks within what prepareToPlay sized
         // (avoidReallocating keeps the larger allocation). No clear: each
         // voice clears the block before it renders into it.
-        processingBuffer.setSize(numChannels, numSamples, false, false, true);
-        
-        juce::dsp::AudioBlock<float> processingBlock(processingBuffer);
-        
+        processingBuffer.setSize(1, numSamples, false, false, true);
+
+        // a voice renders its one channel into channel 0: add that to the
+        // voice's bus channel, not the whole bus width (O(voices x channels))
         for (auto i = 0; i < MAX_VOICES; ++i) {
             if (voices[i].processing.load()) {
                 juce::AudioSourceChannelInfo info (&processingBuffer, 0, numSamples);
-                voices[i].processAudioBlock(info);
-                outputBlock.add ( processingBlock );
+                const auto channel = voices[i].processAudioBlock(info);
+                if (channel >= 0 && channel < numChannels)
+                    juce::FloatVectorOperations::add (outputBlock.getChannelPointer(static_cast<size_t>(channel)),
+                                                      processingBuffer.getReadPointer(0),
+                                                      numSamples);
             }
         }
     }
@@ -120,12 +123,6 @@ private:
      * @return Pointer to the associated `Voice`, or nullptr if not found.
      */
     Voice* findVoice(const VoiceSource* source);
-
-    /**
-     * @brief Gets the total number of voices.
-     * @return The total number of voices.
-     */
-    int getNumberOfVoices() const;
 
     juce::AudioBuffer<float> processingBuffer; ///< Buffer for audio bus processing.
 

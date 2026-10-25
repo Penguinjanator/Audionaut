@@ -18,9 +18,23 @@
 #include "Engine/Resource/ChannelMapping.h"
 #include "Engine/Analysis/AnalysisProvider.h"
 #include "Engine/Undo/UndoableChannelAction.h"
+#include "Engine/Undo/UndoableEdit.h"
 
 namespace audium {
 
+namespace {
+
+// The track's resource groups; projects from before the rename call them "sub_groups".
+json resourceGroupsFromJson(const json& input)
+{
+    if (input.contains("resource_groups"))
+        return input["resource_groups"];
+    if (input.contains("sub_groups"))
+        return input["sub_groups"]; // legacy support
+    return json();
+}
+
+} // namespace
 
 // Out of line: the pending undo step is only forward-declared in the header.
 AudioTrack::AudioTrack(AudioTrackContainer &owner_,
@@ -96,30 +110,13 @@ bool AudioTrack::writeToJson (json& output)
     output["name"] = name;
     viewState.writeToJson(output);
 
-    for (auto channel : audioChannelContainer->getObjects())
-    {
-        output["channels"] += channel->data;
-    }
-    
-    for (auto resourceGroup : resourceGroupContainer->getObjects())
-    {
-        json j;
-        resourceGroup->writeToJson(j);
-        output["resource_groups"] += j;
-    }
-    
-    
-    playListContainer->writeToJson(output);
-    
-    //std::cout << output.dump(4) << std::endl;
-    
-    return true;
+    return writeChannelToJson(output, nullptr);
 }
 
 bool AudioTrack::writeChannelToJson (json& output, AudioChannel* audioChannel)
 {
     for (auto channel : audioChannelContainer->getObjects()) {
-        if (channel.get() == audioChannel)
+        if (audioChannel == nullptr || channel.get() == audioChannel)
             output["channels"] += channel->data;
     }
     
@@ -131,7 +128,6 @@ bool AudioTrack::writeChannelToJson (json& output, AudioChannel* audioChannel)
 
     playListContainer->writeChannelToJson(output, audioChannel);
 
-    //std::cout << output.dump(4) << std::endl;
 
     return true;
 }
@@ -151,17 +147,9 @@ void AudioTrack::mergeChannelFromJson(json& input)
     jassert(destChannel != -1);
     
     // merge resource groups
-    json jsonResourceGroups;
-    if (input.contains("resource_groups")) {
-        jsonResourceGroups = input["resource_groups"];
-    }
-    else if (input.contains("sub_groups")) {
-        jsonResourceGroups = input["sub_groups"]; // legacy support
-    }
-    else {
-        jassertfalse;
-    }
-    
+    jassert(input.contains("resource_groups") || input.contains("sub_groups"));
+    auto jsonResourceGroups = resourceGroupsFromJson(input);
+
     for (auto& jsonResourceGroup : jsonResourceGroups) {
         auto resourceGroup = findExistingResourceGroup(jsonResourceGroup);
         if (resourceGroup == nullptr) {
@@ -173,21 +161,14 @@ void AudioTrack::mergeChannelFromJson(json& input)
     getPlayListContainer()->mergeFromJson(input, destChannel);
 }
 
-bool AudioTrack::writeToStream (juce::OutputStream& outputStream)
-{
-    return audium::Streamable::writeToStream(outputStream);
-}
-
 bool AudioTrack::readFromJson (json& input, bool rebuild)
 {
-    //std::cout << input.dump(4) << std::endl;
     lastReadRebuiltChannels = false;
 
     json output;
     writeToJson(output);
     if (input == output)
     {
-        //std::cout << "skip AudioTrack::readFromJson" << std::endl;
         return true;
     }
 
@@ -229,13 +210,7 @@ bool AudioTrack::readFromJson (json& input, bool rebuild)
     }
     
     // ResourceGroups
-    json jsonResourceGroups;
-    if (input.contains("resource_groups")) {
-        jsonResourceGroups = input["resource_groups"];
-    }
-    else if (input.contains("sub_groups")) {
-        jsonResourceGroups = input["sub_groups"]; // legacy support
-    }
+    auto jsonResourceGroups = resourceGroupsFromJson(input);
     
     auto rebuildGroups = rebuild;
     if (!rebuildGroups && jsonResourceGroups.size() != resourceGroupContainer->size()) {
@@ -265,16 +240,6 @@ bool AudioTrack::readFromJson (json& input, bool rebuild)
     
     // PlayList
     return playListContainer->readFromJson(input, rebuild);
-}
-
-bool AudioTrack::readFromStream (juce::InputStream& inputStream, bool rebuild)
-{
-    if (audium::Streamable::readFromStream(inputStream))
-    {
-        getAudioTrackContainer().sendActionMessage(rebuildAll);
-        return true;
-    }
-    return false;
 }
 
 int AudioTrack::getNumAudioTrackChannels() const
@@ -662,62 +627,59 @@ bool AudioTrack::addAudioFiles(const juce::StringArray& filenames,
                                std::function<void (std::string)> callback,
                                bool undo)
 {
-    // Undo: store old state
-    auto action = undo ? std::make_unique<audium::UndoableContainerAction>(getAudioTrackContainer()) : nullptr;
-    
-    int destChannel = 0;
-    std::shared_ptr<ResourceGroup> resourceGroup = nullptr;
-    
-    bool subGroupCreated = false;
+    auto addFiles = [&]
+    {
+        int destChannel = 0;
+        std::shared_ptr<ResourceGroup> resourceGroup = nullptr;
 
-    if (auto playListItem = getPlayListContainer()->itemAtAbsolutePosition(position,
-                                                                           audium::clocks)) {
-        resourceGroup = playListItem->getRegion()->getResourceGroup();
-    }
- 
-    if (resourceGroup == nullptr) {
-        resourceGroup = createNewResourceGroup();
-        subGroupCreated = true;
-    }
-    else {
-        destChannel = getNumAudioTrackChannels();
-    }
-    
-    std::vector<std::shared_ptr<AudioResource>> resources;
-    
-    juce::String errors;
-    
-    for (auto i = 0; i < filenames.size(); i++) {
-        juce::String fileError;
-        auto audioFileResources = addAudioFile(resourceGroup, filenames[i], destChannel, fileError);
-        if (audioFileResources.size() > 0) {
-            for (auto resource : audioFileResources)
-                resources.push_back(resource);
+        bool subGroupCreated = false;
+
+        if (auto playListItem = getPlayListContainer()->itemAtAbsolutePosition(position,
+                                                                               audium::clocks)) {
+            resourceGroup = playListItem->getRegion()->getResourceGroup();
+        }
+
+        if (resourceGroup == nullptr) {
+            resourceGroup = createNewResourceGroup();
+            subGroupCreated = true;
         }
         else {
-            if (errors.isNotEmpty())
-                errors += "; ";
-            errors += fileError.isNotEmpty() ? fileError : filenames[i];
+            destChannel = getNumAudioTrackChannels();
         }
-    }
-    
-    if (resources.size() == 0)
-    {
-        NullCheckedInvocation::invoke (callback, errors.toStdString());
-        return false;
-    }
-    
-    if (subGroupCreated)
-    {
-        createDefaultPlayListItem(resources.front(), resourceGroup, position, audium::clocks);
-    }
-        
-    if (action != nullptr) {
-        action->storeNewState();
-        getAudioTrackContainer().getUndoManager()->perform(action.release(), "File(s) added");
-        getAudioTrackContainer().getUndoManager()->beginNewTransaction();
-    }
-    return resources.size() > 0;
+
+        std::vector<std::shared_ptr<AudioResource>> resources;
+
+        juce::String errors;
+
+        for (auto i = 0; i < filenames.size(); i++) {
+            juce::String fileError;
+            auto audioFileResources = addAudioFile(resourceGroup, filenames[i], destChannel, fileError);
+            if (audioFileResources.size() > 0) {
+                for (auto resource : audioFileResources)
+                    resources.push_back(resource);
+            }
+            else {
+                if (errors.isNotEmpty())
+                    errors += "; ";
+                errors += fileError.isNotEmpty() ? fileError : filenames[i];
+            }
+        }
+
+        if (resources.size() == 0)
+        {
+            NullCheckedInvocation::invoke (callback, errors.toStdString());
+            return false;
+        }
+
+        if (subGroupCreated)
+        {
+            createDefaultPlayListItem(resources.front(), resourceGroup, position, audium::clocks);
+        }
+
+        return resources.size() > 0;
+    };
+
+    return undo ? applyAsUndoableEdit(getAudioTrackContainer(), addFiles, "File(s) added") : addFiles();
 }
 
 std::vector<std::shared_ptr<AudioResource>> AudioTrack::addAudioFile (std::shared_ptr<ResourceGroup> resourceGroup,

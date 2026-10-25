@@ -11,11 +11,11 @@
 #include "Engine/Group/AudioTrackContainer.h"
 #include "Engine/ActionMessages.h"
 #include "Engine/Analysis/AnalysisProvider.h"
+#include "Engine/Undo/UndoableEdit.h"
 
 #include "Interface/LookAndFeel/AudiumLookAndFeel.h"
 #include "Interface/Controls/AudiumLabel.h"
 
-#include "Application/AudiumCommandIDs.h"
 
 class ChannelGroupHeaderComponent : public juce::Component,
                                     public juce::Label::Listener,
@@ -107,15 +107,12 @@ public:
     {
         if (labelThatHasChanged == audioTrackNameLabel.get())
         {
-            // undo
-            auto action = std::make_unique<audium::UndoableContainerAction>(audioTrack->getAudioTrackContainer(), false);
-            
-            audioTrack->setAudioTrackName(audioTrackNameLabel->getText());
-            
-            // undo
-            action->storeNewState();
-            audioTrack->getAudioTrackContainer().getUndoManager()->perform(action.release(), "Set audio track name");
-            audioTrack->getAudioTrackContainer().getUndoManager()->beginNewTransaction();
+            audium::applyAsUndoableEdit(audioTrack->getAudioTrackContainer(), [this]
+            {
+                audioTrack->setAudioTrackName(audioTrackNameLabel->getText());
+                return true;
+            },
+            "Set audio track name", false);
         }
     }
     
@@ -132,54 +129,24 @@ public:
     
     void paint (juce::Graphics& g) override;
     
-    static void contextMenuCallback (int result, ChannelGroupHeaderComponent* component)
-    {
-        if (component != nullptr &&
-            result != 0) {
-            
-            if (result == CommandIDs::showSBic) {
-                component->toggleAnalysisVisibility(audium::AnalysisType::SBic);
-            }
-            else if (result == CommandIDs::showOnsets) {
-                component->toggleAnalysisVisibility(audium::AnalysisType::Onset);
-            }
-            else if (result == CommandIDs::showBeats) {
-                component->toggleAnalysisVisibility(audium::AnalysisType::Beat);
-            }
-            else if (result == CommandIDs::showBeatsDegara) {
-                component->toggleAnalysisVisibility(audium::AnalysisType::BeatDegara);
-            }
-            else {
-                auto height = result;
-                component->setChannelHeight(height);
-            }
-        }
-    }
-    
     void setMinimized(bool bMinimized)
     {
-        // undo
-        auto action = std::make_unique<audium::UndoableContainerAction>(audioTrack->getAudioTrackContainer(), false);
-        
-        audioTrack->getViewState().setMinimized(bMinimized);
-        
-        // undo
-        action->storeNewState();
-        audioTrack->getAudioTrackContainer().getUndoManager()->perform(action.release(), "minimize audio track");
-        audioTrack->getAudioTrackContainer().getUndoManager()->beginNewTransaction();
+        audium::applyAsUndoableEdit(audioTrack->getAudioTrackContainer(), [this, bMinimized]
+        {
+            audioTrack->getViewState().setMinimized(bMinimized);
+            return true;
+        },
+        "minimize audio track", false);
     }
     
     void toggleAnalysisVisibility(audium::AnalysisType analysisType)
     {
-        // undo
-        auto action = std::make_unique<audium::UndoableContainerAction>(audioTrack->getAudioTrackContainer(), false);
-
-        audioTrack->getViewState().setAnalysisTypeVisible(analysisType, !audioTrack->getViewState().isAnalysisTypeVisible(analysisType));
-
-        // undo
-        action->storeNewState();
-        audioTrack->getAudioTrackContainer().getUndoManager()->perform(action.release(), "toggle analysis visibility");
-        audioTrack->getAudioTrackContainer().getUndoManager()->beginNewTransaction();
+        audium::applyAsUndoableEdit(audioTrack->getAudioTrackContainer(), [this, analysisType]
+        {
+            audioTrack->getViewState().setAnalysisTypeVisible(analysisType, !audioTrack->getViewState().isAnalysisTypeVisible(analysisType));
+            return true;
+        },
+        "toggle analysis visibility", false);
 
         // refresh the arrangement so the clips redraw with the new visibility
         audioTrack->getAudioTrackContainer().sendActionMessage(audium::updateArrangementAction);
@@ -187,49 +154,54 @@ public:
 
     void setChannelHeight(int height)
     {
-        // undo
-        auto action = std::make_unique<audium::UndoableContainerAction>(audioTrack->getAudioTrackContainer(), false);
-        
-        jassert(height > 0);
-        audioTrack->getViewState().setMinimized(false);
-        audioTrack->getViewState().setChannelHeight(height);
-        
-        // undo
-        action->storeNewState();
-        audioTrack->getAudioTrackContainer().getUndoManager()->perform(action.release(), "Set audio track height");
-        audioTrack->getAudioTrackContainer().getUndoManager()->beginNewTransaction();
+        audium::applyAsUndoableEdit(audioTrack->getAudioTrackContainer(), [this, height]
+        {
+            jassert(height > 0);
+            audioTrack->getViewState().setMinimized(false);
+            audioTrack->getViewState().setChannelHeight(height);
+            return true;
+        },
+        "Set audio track height", false);
     }
     
     
     void mouseDown (const juce::MouseEvent& e) override
     {
         if (e.mods.isPopupMenu()) {
+            auto safeThis = Component::SafePointer<ChannelGroupHeaderComponent> (this);
+
             PopupMenu m;
             m.setLookAndFeel (&getLookAndFeel());
             PopupMenu sizeMenu;
-            sizeMenu.addItem (AudiumLookAndFeel::SizeIds::micro, TRANS ("micro"), true);
-            sizeMenu.addItem (AudiumLookAndFeel::SizeIds::small, TRANS ("small"), true);
-            sizeMenu.addItem (AudiumLookAndFeel::SizeIds::medium, TRANS ("medium"), true);
-            sizeMenu.addItem (AudiumLookAndFeel::SizeIds::large, TRANS ("large"), true);
-            sizeMenu.addItem (AudiumLookAndFeel::SizeIds::huge, TRANS ("huge"), true);
+            auto addSize = [&sizeMenu, safeThis] (const String& name, int height) {
+                sizeMenu.addItem (name, [safeThis, height] {
+                    if (safeThis != nullptr)
+                        safeThis->setChannelHeight (height);
+                });
+            };
+            addSize (TRANS ("micro"), AudiumLookAndFeel::SizeIds::micro);
+            addSize (TRANS ("small"), AudiumLookAndFeel::SizeIds::small);
+            addSize (TRANS ("medium"), AudiumLookAndFeel::SizeIds::medium);
+            addSize (TRANS ("large"), AudiumLookAndFeel::SizeIds::large);
+            addSize (TRANS ("huge"), AudiumLookAndFeel::SizeIds::huge);
             
             m.addSubMenu("Waveform Size", sizeMenu);
             
             // Toggle visibility of each analysis overlay (ticked = currently shown).
             PopupMenu showMenu;
-            showMenu.addItem (CommandIDs::showSBic, TRANS ("SBic"), true,
-                              audioTrack->getViewState().isAnalysisTypeVisible (audium::AnalysisType::SBic));
-            showMenu.addItem (CommandIDs::showOnsets, TRANS ("Onsets"), true,
-                              audioTrack->getViewState().isAnalysisTypeVisible (audium::AnalysisType::Onset));
-            showMenu.addItem (CommandIDs::showBeats, TRANS ("Beats"), true,
-                              audioTrack->getViewState().isAnalysisTypeVisible (audium::AnalysisType::Beat));
-            showMenu.addItem (CommandIDs::showBeatsDegara, TRANS ("Beats (Degara)"), true,
-                              audioTrack->getViewState().isAnalysisTypeVisible (audium::AnalysisType::BeatDegara));
+            auto addAnalysis = [this, &showMenu, safeThis] (const String& name, audium::AnalysisType type) {
+                showMenu.addItem (name, true, audioTrack->getViewState().isAnalysisTypeVisible (type), [safeThis, type] {
+                    if (safeThis != nullptr)
+                        safeThis->toggleAnalysisVisibility (type);
+                });
+            };
+            addAnalysis (TRANS ("Segments"), audium::AnalysisType::Segments);
+            addAnalysis (TRANS ("Onsets"), audium::AnalysisType::Onsets);
+            addAnalysis (TRANS ("Beats"), audium::AnalysisType::Beats);
 
             m.addSubMenu("Show Analysis", showMenu);
             
-            m.showMenuAsync (PopupMenu::Options().withStandardItemHeight(AudiumLookAndFeel::popupMenuItemHeight),
-                             ModalCallbackFunction::forComponent (contextMenuCallback, this));
+            m.showMenuAsync (PopupMenu::Options().withStandardItemHeight(AudiumLookAndFeel::popupMenuItemHeight));
         }
         
         if (!e.mods.isAnyModifierKeyDown() && !isSelected()) {

@@ -7,18 +7,7 @@
 #include "Engine/Project/ProjectFileStore.h"
 #include "Cli/CommandSession.h"
 
-// Same auto-detection as the segmenters (see SBicSegmenter.cpp): the CMake
-// builds define ESSENTIA_ENABLED globally, but the Projucer app build relies
-// on per-file header detection - without this block the in-app CLI would
-// report analysis unavailable even though the app links Essentia.
-#ifndef ESSENTIA_ENABLED
- #if __has_include(<essentia/algorithmfactory.h>) && __has_include(<unsupported/Eigen/CXX11/Tensor>)
-  #define ESSENTIA_ENABLED 1
- #else
-  #define ESSENTIA_ENABLED 0
- #endif
-#endif
-
+#include "Engine/Analysis/AnalysisAudioLoader.h"
 #include "Engine/Analysis/AnalysisCache.h"
 #include "Engine/Analysis/AnalysisProvider.h"
 #include "Engine/Group/AudioTrack.h"
@@ -33,19 +22,30 @@ namespace cli {
 
 int runAnalyze (const juce::ArgumentList& args, CliContext& context)
 {
-#if ! ESSENTIA_ENABLED
-    juce::ignoreUnused (args);
-    return context.fail (exitUnavailable, "essentia_unavailable",
-                         "this build was made without Essentia, so analysis is unavailable");
-#else
     auto working = args;
     auto typesValue = takeOptionValue (working, "--types");
 
-    auto types = typesValue.isNotEmpty()
-                     ? analysisTypesFromString (typesValue.toStdString())
-                     : AnalysisProvider::getMergeAnalysisTypes();
-    if (types.empty())
+    // The names as the caller wrote them, each with the type it names: the
+    // results are reported under those names, so a script asking for the
+    // old "sbic" finds its result under "sbic". Unknown names are skipped,
+    // as analysisTypesFromString does.
+    std::vector<std::pair<std::string, AnalysisType>> requested;
+    if (typesValue.isNotEmpty()) {
+        for (auto token : juce::StringArray::fromTokens (typesValue, ",", {}))
+            if (auto type = analysisTypeFromString (token.trim().toStdString()))
+                requested.emplace_back (token.trim().toStdString(), *type);
+    }
+    else {
+        for (auto type : AnalysisProvider::getMergeAnalysisTypes())
+            requested.emplace_back (analysisTypeToString (type), type);
+    }
+    if (requested.empty())
         return context.fail (exitUsage, "usage", "--types matched no known analysis type");
+
+    std::vector<AnalysisType> types;
+    for (const auto& [name, type] : requested)
+        if (std::find (types.begin(), types.end(), type) == types.end())
+            types.push_back (type);
 
     auto projectFile = resolveProjectFile (working);
     auto plain = getPlainArguments (working);
@@ -86,31 +86,38 @@ int runAnalyze (const juce::ArgumentList& args, CliContext& context)
     if (audioFiles.empty())
         return context.fail (exitFailure, "no_audio", "the project references no audio files");
 
+    // A file the decoder cannot open would come back as empty analyses that
+    // look like results; say so instead.
+    for (auto& file : audioFiles)
+        if (auto problem = AnalysisAudioLoader::describeProblem (file); problem.isNotEmpty())
+            return context.fail (exitFailure, "decode_failed",
+                                 "cannot decode " + file.getFileName().toStdString() + ": " + problem.toStdString());
+
     auto provider = session->getAudioTrackContainer()->getAnalysisProvider();
 
-    // Essentia runs each analysis in one go, so progress counts finished
-    // (file, type) runs - coarse for one long file, but never silent between
-    // them.
+    // One pass per file produces every requested type; the pass reports
+    // its own progress, which is scaled into the file's share of the whole.
     ProgressSteps steps (context);
-    const auto totalRuns = static_cast<double> (audioFiles.size() * types.size());
-    auto finishedRuns = 0;
+    const auto totalFiles = static_cast<double> (audioFiles.size());
+    auto finishedFiles = 0;
 
     auto files = nlohmann::json::array();
     for (auto& file : audioFiles) {
+        const auto message = "Analyzing " + file.getFileName();
+        steps (finishedFiles / totalFiles, message);
+        auto results = provider->analyzeFile (file, types, nullptr, [&] (double fraction)
+        {
+            steps ((finishedFiles + fraction) / totalFiles, message);
+        });
+        ++finishedFiles;
 
         nlohmann::json analyses;
-        for (auto type : types) {
-            steps (finishedRuns / totalRuns,
-                   "Analyzing " + file.getFileName() + " (" + analysisTypeToString (type) + ")");
-            auto segments = provider->analyzeFile (file, type);
-            ++finishedRuns;
-
+        for (const auto& [name, type] : requested) {
             nlohmann::json entry;
-            entry["segments"] = segments;
+            entry["segments"] = results.count (type) > 0 ? results.at (type) : std::vector<float>{};
             if (auto bpm = provider->getBpm (type, file); bpm > 0.0f)
                 entry["bpm"] = bpm;
-
-            analyses[analysisTypeToString (type)] = entry;
+            analyses[name] = entry;
         }
 
         files.push_back ({ { "file", file.getFullPathName().toStdString() },
@@ -130,7 +137,6 @@ int runAnalyze (const juce::ArgumentList& args, CliContext& context)
 
     std::cout << result.dump (2) << std::endl;
     return exitOk;
-#endif
 }
 
 } // namespace cli

@@ -377,16 +377,15 @@ server.registerTool(
   {
     title: "Analyze audio",
     description:
-      "Runs Essentia audio analysis (segment boundaries, beats, BPM) on the project's audio files - or one " +
+      "Runs audio analysis (segment boundaries, beats with BPM, onsets) on the project's audio files - or one " +
       "standalone audio file - and caches the results next to the project for auto_edit/assemble to use. " +
-      "Fails with essentia_unavailable in builds without Essentia. Reports progress as each file and type " +
-      "finishes when the call carries a progressToken.",
+      "Reports progress as each file and type finishes when the call carries a progressToken.",
     inputSchema: {
       target: z.string().describe("A .audium project package or a single audio file"),
       types: z
         .string()
         .optional()
-        .describe("Comma-separated analysis types, e.g. \"sbic,beat_degara\" (default: the merge set)"),
+        .describe("Comma-separated analysis types from segments, beats, onsets (default: segments,beats, what auto_edit needs)"),
     },
   },
   async ({ target, types }, extra) => runCli(["analyze", target, ...(types ? ["--types", types] : [])], [], extra)
@@ -840,6 +839,35 @@ server.registerTool(
   },
   withTask(async ({ project, track, channel }) =>
     runCli(["remove-channel", project, "--track", String(track), "--channel", String(channel)]))
+);
+
+server.registerTool(
+  "track_pan",
+  {
+    title: "Pan a track",
+    description:
+      "Sets the pan position of a track's channel strips, -1 (hard left) to 1 (hard right), 0 centred - " +
+      "the pan slider of the channel view. Every strip of the track by default, one with channel. " +
+      "A mono stem has one strip; a stereo import's two strips start at -1 and 1. Playback and " +
+      "export_audio both follow it; get_project_info shows the current pans per track.",
+    inputSchema: {
+      project: projectParam,
+      track: z.number().int().min(0).describe("Track id"),
+      pan: z.number().min(-1).max(1).describe("Pan position, -1 left .. 0 centre .. 1 right"),
+      channel: z.number().int().min(0).optional().describe("One channel strip (0-based; default: all)"),
+      task: taskParam,
+    },
+  },
+  withTask(async ({ project, track, pan, channel }) =>
+    runCli([
+      "track-pan",
+      project,
+      "--track",
+      String(track),
+      "--pan",
+      String(pan),
+      ...(channel !== undefined ? ["--channel", String(channel)] : []),
+    ]))
 );
 
 // ---------------------------------------------------------------------------

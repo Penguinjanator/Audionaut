@@ -53,7 +53,6 @@ void Recording::recordChannel(bool start,
     if (auto recorder = getAudioRecorder(channelNumber)) {
         if (start) {
             recordingStartPositionClocks[channelNumber] = positionClocks;
-            // std::cout << "start rec " << channelNumber << " pos " << positionClocks << std::endl;
             // where imports go too: the package's audio directory where
             // there is one, else the session's temp package
             const auto audioDirectory = audioResourceContainer->getCurrentAudioFileDirectory();
@@ -78,7 +77,6 @@ void Recording::recordChannel(bool start,
 AudioRecorder* Recording::setRecordEnabled(const int channelNumber,
                                            bool bEnabled)
 {
-    //std::cout << "setRecordEnabled " << channelNumber << " " << bEnabled << std::endl;
 
     if (channelNumber < 0 || channelNumber >= MAX_AUDIO_CHANNELS) {
         jassertfalse;

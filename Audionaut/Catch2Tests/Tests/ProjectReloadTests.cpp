@@ -10,6 +10,7 @@
 #include "Engine/Export/AudioExporter.h"
 #include "Engine/PlayList/PlayListScheduler.h"
 
+#include "TestEngine.h"
 #include "TestUtils.h"
 
 #include <optional>
@@ -45,12 +46,10 @@ static void writeProjectJsonExternally(const File& file, const json& j)
 
 SCENARIO("external change reloads as an undoable step", "[engine][reload][undo]")
 {
-    MessageManager::getInstance();
-    MessageManagerLock mmLock(Thread::getCurrentThread());
-    auto engine = AudiumFactory::createAudiumEngine();
+    TestEngine engine;
     auto store = engine->getProjectFileStore();
 
-    auto outProject = File(reloadTestFilesDirectory + "Sessions/reload-test.audium/" + ProjectFileStore::projectFileName);
+    auto outProject = testOutputDirectory().getChildFile("reload-test.audium").getChildFile(ProjectFileStore::projectFileName);
 
     GIVEN("a saved project") {
         engine->getProjectSerializer()->createNewProject();
@@ -93,20 +92,14 @@ SCENARIO("external change reloads as an undoable step", "[engine][reload][undo]"
 
     // cleanup ... comment out in case you need to isolate an issue
     outProject.getParentDirectory().deleteRecursively();
-
-    engine = nullptr;
-    DeletedAtShutdown::deleteAll();
-    MessageManager::deleteInstance();
 }
 
 SCENARIO("external track addition survives reload, undo and redo", "[engine][reload][undo][rebuild]")
 {
-    MessageManager::getInstance();
-    MessageManagerLock mmLock(Thread::getCurrentThread());
-    auto engine = AudiumFactory::createAudiumEngine();
+    TestEngine engine;
     auto store = engine->getProjectFileStore();
 
-    auto outProject = File(reloadTestFilesDirectory + "Sessions/reload-track-test.audium/" + ProjectFileStore::projectFileName);
+    auto outProject = testOutputDirectory().getChildFile("reload-track-test.audium").getChildFile(ProjectFileStore::projectFileName);
 
     GIVEN("a saved single-track project") {
         engine->getProjectSerializer()->createNewProject();
@@ -136,20 +129,14 @@ SCENARIO("external track addition survives reload, undo and redo", "[engine][rel
 
     // cleanup ... comment out in case you need to isolate an issue
     outProject.getParentDirectory().deleteRecursively();
-
-    engine = nullptr;
-    DeletedAtShutdown::deleteAll();
-    MessageManager::deleteInstance();
 }
 
 SCENARIO("disk stamps tell the app's own writes apart from foreign ones", "[engine][reload][stamps]")
 {
-    MessageManager::getInstance();
-    MessageManagerLock mmLock(Thread::getCurrentThread());
-    auto engine = AudiumFactory::createAudiumEngine();
+    TestEngine engine;
     auto store = engine->getProjectFileStore();
 
-    auto outProject = File(reloadTestFilesDirectory + "Sessions/stamp-test.audium/" + ProjectFileStore::projectFileName);
+    auto outProject = testOutputDirectory().getChildFile("stamp-test.audium").getChildFile(ProjectFileStore::projectFileName);
 
     GIVEN("a saved project") {
         engine->getProjectSerializer()->createNewProject();
@@ -172,20 +159,14 @@ SCENARIO("disk stamps tell the app's own writes apart from foreign ones", "[engi
 
     // cleanup ... comment out in case you need to isolate an issue
     outProject.getParentDirectory().deleteRecursively();
-
-    engine = nullptr;
-    DeletedAtShutdown::deleteAll();
-    MessageManager::deleteInstance();
 }
 
 SCENARIO("the agent marker survives undoing only the newest of two reloads", "[engine][reload][undo][marker]")
 {
-    MessageManager::getInstance();
-    MessageManagerLock mmLock(Thread::getCurrentThread());
-    auto engine = AudiumFactory::createAudiumEngine();
+    TestEngine engine;
     auto store = engine->getProjectFileStore();
 
-    auto outProject = File(reloadTestFilesDirectory + "Sessions/reload-marker-test.audium/" + ProjectFileStore::projectFileName);
+    auto outProject = testOutputDirectory().getChildFile("reload-marker-test.audium").getChildFile(ProjectFileStore::projectFileName);
 
     GIVEN("two consecutive external changes, each reloaded") {
         engine->getProjectSerializer()->createNewProject();
@@ -221,20 +202,14 @@ SCENARIO("the agent marker survives undoing only the newest of two reloads", "[e
 
     // cleanup ... comment out in case you need to isolate an issue
     outProject.getParentDirectory().deleteRecursively();
-
-    engine = nullptr;
-    DeletedAtShutdown::deleteAll();
-    MessageManager::deleteInstance();
 }
 
 SCENARIO("undoing a reload restores unsaved local edits, not the saved state", "[engine][reload][undo][dirty]")
 {
-    MessageManager::getInstance();
-    MessageManagerLock mmLock(Thread::getCurrentThread());
-    auto engine = AudiumFactory::createAudiumEngine();
+    TestEngine engine;
     auto store = engine->getProjectFileStore();
 
-    auto outProject = File(reloadTestFilesDirectory + "Sessions/reload-dirty-test.audium/" + ProjectFileStore::projectFileName);
+    auto outProject = testOutputDirectory().getChildFile("reload-dirty-test.audium").getChildFile(ProjectFileStore::projectFileName);
 
     GIVEN("a saved project with an unsaved local edit") {
         engine->getProjectSerializer()->createNewProject();
@@ -259,20 +234,14 @@ SCENARIO("undoing a reload restores unsaved local edits, not the saved state", "
 
     // cleanup ... comment out in case you need to isolate an issue
     outProject.getParentDirectory().deleteRecursively();
-
-    engine = nullptr;
-    DeletedAtShutdown::deleteAll();
-    MessageManager::deleteInstance();
 }
 
 SCENARIO("a corrupt analysis sidecar never blocks reload or open", "[engine][reload][analysis]")
 {
-    MessageManager::getInstance();
-    MessageManagerLock mmLock(Thread::getCurrentThread());
-    auto engine = AudiumFactory::createAudiumEngine();
+    TestEngine engine;
     auto store = engine->getProjectFileStore();
 
-    auto outProject = File(reloadTestFilesDirectory + "Sessions/reload-analysis-test.audium/" + ProjectFileStore::projectFileName);
+    auto outProject = testOutputDirectory().getChildFile("reload-analysis-test.audium").getChildFile(ProjectFileStore::projectFileName);
 
     GIVEN("a saved project") {
         engine->getProjectSerializer()->createNewProject();
@@ -300,20 +269,14 @@ SCENARIO("a corrupt analysis sidecar never blocks reload or open", "[engine][rel
 
     // cleanup ... comment out in case you need to isolate an issue
     outProject.getParentDirectory().deleteRecursively();
-
-    engine = nullptr;
-    DeletedAtShutdown::deleteAll();
-    MessageManager::deleteInstance();
 }
 
 SCENARIO("external channel removal reloads in place without duplicating resource groups", "[engine][reload][rebuild]")
 {
-    MessageManager::getInstance();
-    MessageManagerLock mmLock(Thread::getCurrentThread());
-    auto engine = AudiumFactory::createAudiumEngine();
+    TestEngine engine;
     auto store = engine->getProjectFileStore();
 
-    auto outProject = File(reloadTestFilesDirectory + "Sessions/reload-channel-test.audium/" + ProjectFileStore::projectFileName);
+    auto outProject = testOutputDirectory().getChildFile("reload-channel-test.audium").getChildFile(ProjectFileStore::projectFileName);
     auto audioFile = File(reloadTestFilesDirectory + "120-funk-1-sec.wav");
     REQUIRE(audioFile.existsAsFile());
 
@@ -364,10 +327,6 @@ SCENARIO("external channel removal reloads in place without duplicating resource
 
     // cleanup ... comment out in case you need to isolate an issue
     outProject.getParentDirectory().deleteRecursively();
-
-    engine = nullptr;
-    DeletedAtShutdown::deleteAll();
-    MessageManager::deleteInstance();
 }
 
 // The app's export and stem separation render on a worker thread behind a
@@ -375,17 +334,15 @@ SCENARIO("external channel removal reloads in place without duplicating resource
 // A reload landing then would rebuild the graph the render is walking.
 SCENARIO("an external change waits for a running render", "[engine][reload][render]")
 {
-    MessageManager::getInstance();
-    MessageManagerLock mmLock(Thread::getCurrentThread());
-    auto engine = AudiumFactory::createAudiumEngine();
+    TestEngine engine;
     auto store = engine->getProjectFileStore();
     auto scheduler = engine->getPlayListScheduler();
 
     auto inputFile = generateDcOffsetAudioFile(1.0);
-    auto outProject = File(reloadTestFilesDirectory + "Sessions/reload-render-test.audium/" + ProjectFileStore::projectFileName);
+    auto outProject = testOutputDirectory().getChildFile("reload-render-test.audium").getChildFile(ProjectFileStore::projectFileName);
 
     auto bounceConfig = std::make_shared<ExportAudioConfig>();
-    bounceConfig->fileName = File(reloadTestFilesDirectory + "reload-render-bounce.wav");
+    bounceConfig->fileName = testOutputDirectory().getChildFile("reload-render-bounce.wav");
     bounceConfig->sampleRate = 44100.0;
     bounceConfig->blockSize = 512;
     bounceConfig->numChannels = 1;
@@ -470,20 +427,14 @@ SCENARIO("an external change waits for a running render", "[engine][reload][rend
     outProject.getParentDirectory().deleteRecursively();
     bounceConfig->fileName.deleteFile();
     inputFile.deleteFile();
-
-    engine = nullptr;
-    DeletedAtShutdown::deleteAll();
-    MessageManager::deleteInstance();
 }
 
 SCENARIO("discarding an unsaved agent edit keeps the saved project's audio", "[engine][reload][trash]")
 {
-    MessageManager::getInstance();
-    MessageManagerLock mmLock(Thread::getCurrentThread());
-    auto engine = AudiumFactory::createAudiumEngine();
+    TestEngine engine;
     auto store = engine->getProjectFileStore();
 
-    auto outProject = File(reloadTestFilesDirectory + "Sessions/reload-trash-test.audium/" + ProjectFileStore::projectFileName);
+    auto outProject = testOutputDirectory().getChildFile("reload-trash-test.audium").getChildFile(ProjectFileStore::projectFileName);
     auto audioFile = File(reloadTestFilesDirectory + "120-funk-1-sec.wav");
     REQUIRE(audioFile.existsAsFile());
 
@@ -528,8 +479,4 @@ SCENARIO("discarding an unsaved agent edit keeps the saved project's audio", "[e
 
     // cleanup ... comment out in case you need to isolate an issue
     outProject.getParentDirectory().deleteRecursively();
-
-    engine = nullptr;
-    DeletedAtShutdown::deleteAll();
-    MessageManager::deleteInstance();
 }

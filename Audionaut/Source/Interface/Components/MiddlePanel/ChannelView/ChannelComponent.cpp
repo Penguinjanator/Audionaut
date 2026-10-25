@@ -10,11 +10,11 @@
 #include "Engine/Channel/AudioChannel.h"
 #include "Engine/Group/AudioTrackContainer.h"
 #include "Engine/Undo/UndoableContainerAction.h"
+#include "Engine/Undo/UndoableEdit.h"
 #include "Interface/LookAndFeel/AudiumLookAndFeel.h"
 #include "Engine/Playback/AudioBusInterface.h"
 #include "Engine/Resource/ChannelMapping.h"
 #include "Util/EngineAccess.h"
-#include "Application/AudiumCommandIDs.h"
 #include "Engine/PlayList/PlayListScheduler.h"
 
 ChannelComponent::ChannelComponent (std::shared_ptr<audium::AudioTrack> audioTrack_,
@@ -396,31 +396,25 @@ void ChannelComponent::stripMenuCallback (int result, ChannelComponent* componen
 
 void ChannelComponent::setChannelHeight(int height)
 {
-    // undo
-    auto action = std::make_unique<audium::UndoableContainerAction>(audioTrack->getAudioTrackContainer(), false);
-
-    audioTrack->getChannel(rowNumber)->setChannelHeight(height);
-
-    // undo
-    action->storeNewState();
-    audioTrack->getAudioTrackContainer().getUndoManager()->perform(action.release(), "Set audio track height");
-    audioTrack->getAudioTrackContainer().getUndoManager()->beginNewTransaction();
+    audium::applyAsUndoableEdit(audioTrack->getAudioTrackContainer(), [this, height]
+    {
+        audioTrack->getChannel(rowNumber)->setChannelHeight(height);
+        return true;
+    },
+    "Set audio track height", false);
 }
 
 void ChannelComponent::setRoutingChannel(bool isInput, int newChannel)
 {
-    // undo
-    auto action = std::make_unique<audium::UndoableContainerAction>(audioTrack->getAudioTrackContainer(), false);
-
-    if (isInput)
-        audioTrack->getChannel(rowNumber)->setInputChannel(newChannel);
-    else
-        audioTrack->getChannel(rowNumber)->setOutputChannel(newChannel);
-
-    // undo
-    action->storeNewState();
-    audioTrack->getAudioTrackContainer().getUndoManager()->perform(action.release(), "Set channel routing");
-    audioTrack->getAudioTrackContainer().getUndoManager()->beginNewTransaction();
+    audium::applyAsUndoableEdit(audioTrack->getAudioTrackContainer(), [this, isInput, newChannel]
+    {
+        if (isInput)
+            audioTrack->getChannel(rowNumber)->setInputChannel(newChannel);
+        else
+            audioTrack->getChannel(rowNumber)->setOutputChannel(newChannel);
+        return true;
+    },
+    "Set channel routing", false);
 }
 
 void ChannelComponent::timerCallback()
@@ -475,25 +469,6 @@ void ChannelComponent::configurePanSlider(juce::Slider *slider)
     slider->updateText();
 }
 
-static void channelMenuCallback (int result, ChannelComponent* component)
-{
-    if (component != nullptr
-        && result != 0) {
-        switch (result) {
-            case CommandIDs::copyChansToNewTrackId:
-                if (!component->getEngine()->getAudioTrackContainer()->copySelectedChannelsToNewTrack()) {
-                    NativeMessageBox::showMessageBoxAsync(MessageBoxIconType::WarningIcon,
-                                                          "Error",
-                                                          "no channel selected.");
-                }
-                break;
-
-            default:
-                break;
-        }
-    }
-}
-
 void ChannelComponent::mouseDown (const juce::MouseEvent& e)
 {
     bool isSelected = isChannelSelected();
@@ -508,13 +483,18 @@ void ChannelComponent::mouseDown (const juce::MouseEvent& e)
     if (e.mods.isPopupMenu()) {
     
         PopupMenu m;
-        m.addItem (CommandIDs::copyChansToNewTrackId, TRANS ("Copy selected channel(s) to new track"), true);
-
-        if (m.getNumItems() > 0) {
-            m.setLookAndFeel (&getLookAndFeel());
-            m.showMenuAsync (PopupMenu::Options().withStandardItemHeight(AudiumLookAndFeel::popupMenuItemHeight),
-                             ModalCallbackFunction::forComponent (channelMenuCallback, this));
-        }
+        m.addItem (TRANS ("Copy selected channel(s) to new track"), [safeThis = Component::SafePointer<ChannelComponent> (this)]
+        {
+            if (safeThis == nullptr)
+                return;
+            if (!safeThis->getEngine()->getAudioTrackContainer()->copySelectedChannelsToNewTrack()) {
+                NativeMessageBox::showMessageBoxAsync(MessageBoxIconType::WarningIcon,
+                                                      "Error",
+                                                      "no channel selected.");
+            }
+        });
+        m.setLookAndFeel (&getLookAndFeel());
+        m.showMenuAsync (PopupMenu::Options().withStandardItemHeight(AudiumLookAndFeel::popupMenuItemHeight));
     }
     
     audioTrack->getAudioTrackContainer().sendActionMessage(audium::updateMiddlePanelAction);
@@ -525,21 +505,9 @@ void ChannelComponent::mouseUp (const juce::MouseEvent& e)
     getParentComponent()->mouseUp(e);
 }
 
-bool ChannelComponent::keyPressed (const juce::KeyPress& key)
-{
-    return false;  // Return true if your handler uses this key event, or false to allow it to be passed-on.
-}
-
 bool ChannelComponent::isInterestedInDragSource (const juce::DragAndDropTarget::SourceDetails &dragSourceDetails)
 {
-    if (auto item = dynamic_cast<ChannelComponent*>(dragSourceDetails.sourceComponent.get())) {
-        //if (item->getPlayListModel() == playListModel)
-        {
-            // return true if source details match this model
-            return true;
-        }
-    }
-    return false;
+    return dynamic_cast<ChannelComponent*>(dragSourceDetails.sourceComponent.get()) != nullptr;
 }
 
 void ChannelComponent::updateInsertLines(const juce::DragAndDropTarget::SourceDetails &dragSourceDetails)
@@ -588,8 +556,6 @@ void ChannelComponent::itemDropped (const SourceDetails &dragSourceDetails)
         
         if (getAudioTrack() == channelComponent->getAudioTrack()) {
         
-            std::cout << "MoveItemBefore -> currentIndex: " << channelComponent->rowNumber << " indexOfItemToPlaceBefore " << insertIndex << std::endl;
-            
             // remember old channel mapping
             std::vector<int> channelNumbers;
             for (auto channel : getAudioTrack()->audioChannelContainer->objects)

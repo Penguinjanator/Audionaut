@@ -95,7 +95,7 @@ read or edit them.
 | `create_project` | `create` | New empty `.audium` package |
 | `import_audio` | `import` | Add audio files (creates a new track) |
 | `export_audio` | `export` | Offline render to WAV, FLAC, AIFF, Ogg Vorbis or MP3 |
-| `analyze` | `analyze` | Essentia analysis, cached next to the project |
+| `analyze` | `analyze` | Segment, beat and onset analysis, cached next to the project |
 | `auto_edit` | `auto-edit` | Segment a clip using cached analysis |
 | `assemble` | `assemble` | Build an arrangement from regions |
 | `split` | `split` | Split clips at a timeline position (bars/beats/seconds/clocks) |
@@ -110,14 +110,15 @@ read or edit them.
 | `clip_speed` | `clip-speed` | Set a clip's speed and mode (varispeed or pitch-preserving stretch), or lock it to the project tempo |
 | `remove_track` | `remove-track` | Remove a whole track (channels, clips and regions) |
 | `remove_channel` | `remove-channel` | Remove one channel from a track |
+| `track_pan` | `track-pan` | Pan a track's channel strips, -1 left to 1 right (all strips or one) |
 | `request_feature` | — | Send a feature request to the maintainer (see below) |
 | `report_bug` | — | Send a bug report to the maintainer (see below) |
 | `separate_stems` | `separate` | Split a clip into Drums/Bass/Other/Vocals tracks (Demucs; needs the downloaded model) |
 
 A typical agent flow: `create_project` → `import_audio` → `analyze` →
 `auto_edit`/`assemble` → `export_audio`. CLI errors come back as tool errors
-carrying the CLI's own `code: message` (e.g. `essentia_unavailable: ...` in
-builds without Essentia), so agents can react.
+carrying the CLI's own `code: message` (e.g. `demucs_unavailable: ...` in
+builds without stem separation), so agents can react.
 
 ## Feature requests and bug reports from agents
 

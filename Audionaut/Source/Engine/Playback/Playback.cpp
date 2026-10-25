@@ -22,9 +22,10 @@ void Playback::prepareToPlay (int samplesPerBlockExpected, double sampleRate)
 {
     DBG("Playback::prepareToPlay " << samplesPerBlockExpected << " " << sampleRate);
 
-    // the mix buffer is sized here, once; process() then only shrinks the
-    // view (avoidReallocating) and never allocates for blocks up to this size
-    processingBuffer.setSize(MAX_AUDIO_CHANNELS, samplesPerBlockExpected);
+    // the voice buffer is sized here, once; process() then only shrinks the
+    // view (avoidReallocating) and never allocates for blocks up to this size.
+    // One channel: a voice renders one channel (VoiceSource::getNextAudioBlock)
+    processingBuffer.setSize(1, samplesPerBlockExpected);
 }
 
 bool Playback::startVoice(VoiceSource* voiceSource)
@@ -59,7 +60,6 @@ bool Playback::stopVoice(VoiceSource* source,
 
 void Playback::stopAllVoices()
 {
-    // std::cout << "stopAllVoices" << std::endl;
     for(auto i = 0; i < MAX_VOICES; ++i) {
         voices[i].stop(true);
     }
@@ -109,16 +109,6 @@ bool Playback::isVoiceSourceActive(const VoiceSource* source) const noexcept
             return true;
     }
     return false;
-}
-
-int Playback::getNumberOfVoices() const
-{
-    auto counter = 0;
-    for (auto i = 0; i < MAX_VOICES; ++i) {
-        if (voices[i].processing.load())
-            counter++;
-    }
-    return counter;
 }
 
 

@@ -4,7 +4,7 @@ Audionaut is published under a dual [GPL3 (or later)](https://www.gnu.org/licens
 
 If you want to use Audionaut in a closed-source project, you need to purchase a commercial license. Please contact us for more information [vltmrkls@gmail.com](mailto:vltmrkls@gmail.com?subject=License%20Request).
 
-**Note:** commercial licenses are not yet available. Audionaut currently links against GPL/AGPL-licensed third-party libraries (Essentia, Ableton Link) for which no commercial/relicensing agreement is in place, so a closed-source license cannot be issued at this time.
+**Note:** commercial licenses are not yet available. Audionaut currently links against a GPL-licensed third-party library (Ableton Link) for which no commercial/relicensing agreement is in place, so a closed-source license cannot be issued at this time.
 
 Pitch-preserving time-stretch (the Stretch clip mode) is built on the [Rubber Band Library](https://breakfastquay.com/rubberband/) R3 engine (GPL-2.0 or later; a commercial licence is available from the authors and would be required for a closed-source build).
 

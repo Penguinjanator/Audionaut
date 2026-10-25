@@ -13,7 +13,6 @@ void SnapToGridHandler::publishRange(juce::Range<double> clocks, bool excludeSel
 {
     excludeSelectedItems = excludeSelectedItems_;
     
-    // std::cout << "publishRange " << clocks.getStart() << " " << clocks.getEnd() << std::endl;
     clockRange = clocks;
     sendChangeMessage();
 }
@@ -175,9 +174,6 @@ const std::vector<SnapToGridHandler::Segment> SnapToGridHandler::getPlayListItem
         segmentList.push_back(segEnd);
     }
     
-//    std::sort( vec.begin(), vec.end() );
-//    vec.erase( std::unique( vec.begin(), vec.end() ), vec.end() );
-    
     return segmentList;
 }
 
@@ -197,7 +193,6 @@ bool SnapToGridHandler::snapToGrid(const ZoomHandler& zoomHandler,
 
         for (auto seg : segmentList) {
             if (std::abs(seg.position - std::max(beats, 0.0)) < tolerance) {
-                //std::cout << "snap to: " << seg.position << std::endl;
                 clocks = audium::TempoProvider::beatsToClocks(seg.position);
                 return true;
             }

@@ -10,7 +10,6 @@
 #include "Engine/ActionMessages.h"
 #include "Engine/AudiumEngine.h"
 #include "Engine/Project/ProjectFileStore.h"
-#include "Engine/Factory/AudioResourceFactory.h"
 #include "Engine/Region/AudioRegionContainer.h"
 #include "Engine/Resource/ChannelMapping.h"
 #include "Engine/Channel/AudioChannel.h"
@@ -124,7 +123,6 @@ bool AudioResourceContainer::copyAudioFiles(const juce::File sourceDirectory,
                                             const juce::File destinationDirectory,
                                             juce::Array<juce::File>& copiedFiles)
 {
-    juce::String debugString;
     if (sourceDirectory != destinationDirectory) {
 
         if (!destinationDirectory.exists()) {
@@ -149,18 +147,9 @@ bool AudioResourceContainer::copyAudioFiles(const juce::File sourceDirectory,
                     return false;
                 }
                 copiedFiles.add(destinationFile);
-                debugString += "copied to: " + destinationFile.getFileName() + "\n";
             }
         }
     }
-#if _DEBUG
-    if (debugString.isNotEmpty()) {
-
-        auto messageString = "Destination: " + destinationDirectory.getFullPathName() + "\n\n";
-        messageString += debugString;
-        userPrompter->showMessage("copyAudioFiles", messageString);
-    }
-#endif
     return true;
 }
 
@@ -245,7 +234,6 @@ std::shared_ptr<AudioResource> AudioResourceContainer::findResourceWithUrl(juce:
 {
     for (auto it = audioResources.begin(); it != audioResources.end(); ++it) {
         if ((*it).second->getUrl() == url) {
-            //            std::cout << "found url: " << url.getFileName() << std::endl;
             if ((*it).second->audioFormatReader != nullptr)
                 return (*it).second;
         }
@@ -255,7 +243,7 @@ std::shared_ptr<AudioResource> AudioResourceContainer::findResourceWithUrl(juce:
 
 std::shared_ptr<juce::AudioFormatReader> AudioResourceContainer::getAudioFormatReaderForUrl(juce::URL &url)
 {
-    if (formatManager->findFormatForFileExtension(url.getLocalFile().getFileExtension()) != nullptr) {
+    if (auto audioFormat = formatManager->findFormatForFileExtension(url.getLocalFile().getFileExtension())) {
         
         // file must be a child of our Media/Audio directory
         // see: copyToAudioFileDirectoryIfNeeded(url)
@@ -265,8 +253,18 @@ std::shared_ptr<juce::AudioFormatReader> AudioResourceContainer::getAudioFormatR
         if (auto existingResource = findResourceWithUrl(url)) {
             return existingResource->audioFormatReader;
         }
-        else {
-            return AudioResourceFactory::createAudioFormatReader(url, *formatManager.get());
+
+        auto reader = std::shared_ptr<juce::AudioFormatReader>(audioFormat->createMemoryMappedReader(url.getLocalFile()));
+        if (reader != nullptr) {
+            if (auto memReader = dynamic_cast<juce::MemoryMappedAudioFormatReader*>(reader.get())) {
+                memReader->mapEntireFile();
+            }
+            return reader;
+        }
+        else if (auto inputSource = std::make_unique<juce::URLInputSource>(url)) {
+            if (auto stream = rawToUniquePtr (inputSource->createInputStream())) {
+                return std::shared_ptr<juce::AudioFormatReader>(audioFormat->createReaderFor(stream.release(), false));
+            }
         }
     }
     return nullptr;
@@ -285,13 +283,13 @@ std::shared_ptr<AudioResource> AudioResourceContainer::addAudioResource (juce::U
     jassert(track != nullptr);
     jassert(resourceGroup != nullptr);
     
-    auto audioResource = AudioResourceFactory::createAudioResource(url,
-                                                                   audioFormatReader,
-                                                                   *this,
-                                                                   track,
-                                                                   resourceGroup,
-                                                                   destChannel,
-                                                                   sourceChannel);
+    auto audioResource = std::make_shared<AudioResource>(*this,
+                                                         track,
+                                                         resourceGroup,
+                                                         url,
+                                                         audioFormatReader,
+                                                         destChannel,
+                                                         sourceChannel);
     if (audioResource != nullptr) {
         audioResources.push_back({track, audioResource});
 
@@ -380,7 +378,6 @@ std::vector<juce::File> AudioResourceContainer::findObsoleteAudioFiles(const jso
     std::vector<std::string> jsonPaths;
     
     if (!json.empty()) {
-        // std::cout << std::setw(2) << json << std::endl;
         
         if (json.contains("audium")) {
             for (auto track : json["audium"]["audio_tracks"]) {
@@ -478,23 +475,6 @@ std::vector<std::shared_ptr<AudioResource>> AudioResourceContainer::getAudioReso
             result.push_back(itr->second);
         }
     }
-    return result;
-}
-
-std::vector<std::shared_ptr<AudioResource>> AudioResourceContainer::getAudioResourcesForChannel(const AudioChannel *channel) const
-{
-    std::vector<std::shared_ptr<AudioResource>> result;
-    for (const auto &itr : audioResources) {
-        
-        if (itr.first.get() == &channel->getAudioTrack()) {
-            auto resource = itr.second;
-            auto destChannel = resource->getChannelMapping().getDestinationChannel();
-            if (destChannel == channel->getChannelNumber()) {
-                result.push_back(resource);
-            }
-        }
-    }
-    
     return result;
 }
 

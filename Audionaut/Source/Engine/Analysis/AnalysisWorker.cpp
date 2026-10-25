@@ -28,10 +28,9 @@ AnalysisWorker::AnalysisWorker(std::shared_ptr<AnalysisProvider> analysisProvide
 const std::vector<AnalysisType>& AnalysisWorker::canonicalAnalysisTypes()
 {
     static const std::vector<AnalysisType> types {
-        AnalysisType::SBic,
-        AnalysisType::BeatDegara,
-        AnalysisType::Onset,
-        AnalysisType::Beat
+        AnalysisType::Segments,
+        AnalysisType::Beats,
+        AnalysisType::Onsets
     };
     return types;
 }
@@ -57,11 +56,10 @@ AnalysisWorker::~AnalysisWorker()
 {
     // Abandon the work rather than finish it: the queue is dropped and the
     // analysis running right now (if any) is told to give up at its next
-    // stage, so the wait below is bounded by a single Essentia stage instead
-    // of the rest of the file. The Essentia calls themselves cannot be
-    // interrupted, so the thread is never killed - a thread killed inside
-    // Essentia or the allocator would leave locks held that the exiting main
-    // thread then blocks on, which is worse than the wait.
+    // stage, so the wait below is bounded by a single analysis stage instead
+    // of the rest of the file. The thread is never killed - a thread killed
+    // inside the decoder or the allocator would leave locks held that the
+    // exiting main thread then blocks on, which is worse than the wait.
     abortRequested = true;
     cancelAll();
     thread.signalThreadShouldExit();
@@ -78,11 +76,19 @@ int AnalysisWorker::enqueue(const juce::File& audioFile,
     if (! audioFile.existsAsFile())
         return 0;
 
+    // A type the cache already holds for this file needs no job: a reopened
+    // project's files are enqueued as they load, and their sidecar usually
+    // has everything, so nothing should be queued - or shown as pending.
+    auto cache = analysisProvider != nullptr ? analysisProvider->getCache() : nullptr;
+
     int queued = 0;
     {
         std::lock_guard<std::mutex> lock(mutex);
         for (auto type : types)
         {
+            if (cache != nullptr && cache->get(audioFile, type).has_value())
+                continue;
+
             Job job { audioFile, type };
             if (std::find(jobs.begin(), jobs.end(), job) == jobs.end())
             {
@@ -92,8 +98,11 @@ int AnalysisWorker::enqueue(const juce::File& audioFile,
         }
     }
 
-    // Wake the thread so it picks up the new work without waiting out its idle poll.
-    thread.notify();
+    // Wake the thread so it picks up the new work now. notify() alone is not
+    // enough: an idle time slice asked to be called again in half a second,
+    // and the thread keeps to that unless the client is moved to the front.
+    if (queued > 0)
+        thread.moveToFrontOfQueue(this);
     return queued;
 }
 
@@ -127,33 +136,47 @@ void AnalysisWorker::cancelAll()
 
 int AnalysisWorker::useTimeSlice()
 {
-    Job job;
+    juce::File file;
+    std::vector<AnalysisType> types;
     {
-        // Claiming the job and marking it running happen in one critical
+        // Claiming the jobs and marking them running happen in one critical
         // section, so the remaining counts never miss a job that has been
-        // popped but not yet flagged as running.
+        // popped but not yet flagged as running. Every queued job of the
+        // first file goes together: one decode serves all of its analyses.
         std::lock_guard<std::mutex> lock(mutex);
         if (jobs.empty())
             return 500; // idle: poll again in half a second
 
-        job = jobs.front();
-        jobs.pop_front();
+        file = jobs.front().file;
+        for (auto it = jobs.begin(); it != jobs.end();)
+        {
+            if (it->file == file)
+            {
+                types.push_back(it->type);
+                it = jobs.erase(it);
+            }
+            else
+                ++it;
+        }
 
-        currentFileName = job.file.getFileName();
-        currentFile = job.file;
-        currentAnalysisType = job.type;
+        currentFileName = file.getFileName();
+        currentFile = file;
+        currentAnalysisTypes = types;
+        currentProgress = 0.0f;
         busy = true;
     }
 
     if (analysisProvider != nullptr && ! abortRequested.load())
-        analysisProvider->analyzeFile(job.file, job.type, &abortRequested);
+        analysisProvider->analyzeFile(file, types, &abortRequested,
+                                      [this](double fraction) { currentProgress = (float) fraction; });
 
     {
         std::lock_guard<std::mutex> lock(mutex);
         busy = false;
+        currentProgress = 0.0f;
         currentFileName = {};
         currentFile = juce::File();
-        currentAnalysisType = std::nullopt;
+        currentAnalysisTypes.clear();
     }
 
     // Come straight back if more work is waiting, otherwise idle.
@@ -167,10 +190,20 @@ int AnalysisWorker::getPendingCount() const
     return static_cast<int>(jobs.size());
 }
 
+int AnalysisWorker::getPendingFileCount() const
+{
+    std::lock_guard<std::mutex> lock(mutex);
+    std::vector<juce::File> files;
+    for (const auto& job : jobs)
+        if (job.file != currentFile && std::find(files.begin(), files.end(), job.file) == files.end())
+            files.push_back(job.file);
+    return static_cast<int>(files.size());
+}
+
 int AnalysisWorker::getRemainingCount() const
 {
     std::lock_guard<std::mutex> lock(mutex);
-    return static_cast<int>(jobs.size()) + (busy ? 1 : 0);
+    return static_cast<int>(jobs.size() + currentAnalysisTypes.size());
 }
 
 int AnalysisWorker::getRemainingCount(const juce::File& audioFile) const
@@ -181,7 +214,7 @@ int AnalysisWorker::getRemainingCount(const juce::File& audioFile) const
         [&audioFile] (const Job& job) { return job.file == audioFile; }));
 
     if (currentFile == audioFile && currentFile != juce::File())
-        ++count;
+        count += static_cast<int>(currentAnalysisTypes.size());
 
     return count;
 }
@@ -192,10 +225,24 @@ juce::String AnalysisWorker::getCurrentFileName() const
     return currentFileName;
 }
 
+juce::File AnalysisWorker::getCurrentFile() const
+{
+    std::lock_guard<std::mutex> lock(mutex);
+    return currentFile;
+}
+
 std::optional<AnalysisType> AnalysisWorker::getCurrentAnalysisType() const
 {
     std::lock_guard<std::mutex> lock(mutex);
-    return currentAnalysisType;
+    if (currentAnalysisTypes.empty())
+        return std::nullopt;
+    return currentAnalysisTypes.front();
+}
+
+std::vector<AnalysisType> AnalysisWorker::getCurrentAnalysisTypes() const
+{
+    std::lock_guard<std::mutex> lock(mutex);
+    return currentAnalysisTypes;
 }
 
 } // namespace audium

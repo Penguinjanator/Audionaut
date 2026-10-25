@@ -13,33 +13,21 @@
 #include "Engine/AudiumEngine.h"
 #include "Engine/Group/AudioTrackContainer.h"
 #include "Engine/Channel/AudioChannel.h"
+#include "Interface/Models/TrackListBoxModels.h"
 
-class ChannelSubGroupListBoxModel  : public audium::ListBoxModel
+class ChannelSubGroupListBoxModel  : public ChannelRowsListBoxModel
 {
 public:
     ChannelSubGroupListBoxModel(audium::ListBox& owner,
                                 std::shared_ptr<audium::AudiumEngine> audiumEngine,
                                 std::shared_ptr<audium::AudioTrack> audioTrack) :
-        owner(owner),
-        audiumEngine(audiumEngine),
-        audioTrack(audioTrack)
-    {
-    }
-    
-    ~ChannelSubGroupListBoxModel() override
+        ChannelRowsListBoxModel(owner, audiumEngine, audioTrack, 50)
     {
     }
     
     int getNumRows() override
     {
         return audioTrack->getNumAudioTrackChannels();
-    }
-
-    void paintListBoxItem ( int rowNumber,
-                            juce::Graphics& g,
-                            int width, int height,
-                            bool rowIsSelected) override
-    {
     }
     
     juce::Component* refreshComponentForRow (   int rowNumber, bool isRowSelected,
@@ -66,28 +54,6 @@ public:
         return nullptr;
     }
 
-    
-    int getRowHeight (int rowNumber) const override
-    {
-        auto channel = audioTrack->getChannel(rowNumber);
-        if (channel != nullptr)
-            return audioTrack->getChannel(rowNumber)->getChannelHeight();
-        
-        return 50;
-    }
-    
-    void deleteKeyPressed (int lastRowSelected) override
-    {
-        audiumEngine->getAudioTrackContainer()->deleteSelectedObjects();
-    }
-    
-    void backgroundClicked (const juce::MouseEvent&) override
-    {
-        owner.deselectAllRows();
-    }
-    
-    void listWasScrolled() override {}
-    
     void selectedRowsChanged (int lastRowSelected) override
     {
         auto selectedRows = owner.getSelectedRows();
@@ -99,11 +65,7 @@ public:
     {
         audioTrack = track;
     }
-        
-private:
-    audium::ListBox& owner;
-    std::shared_ptr<audium::AudiumEngine> audiumEngine;
-    std::shared_ptr<audium::AudioTrack> audioTrack;
+
 
 private:
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (ChannelSubGroupListBoxModel)

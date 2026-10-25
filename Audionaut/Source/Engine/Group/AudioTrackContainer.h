@@ -86,13 +86,6 @@ public:
     const float getMasterGain() const noexcept;
 
     /**
-     * @brief Checks if a group ID exists in the container.
-     * @param groupId The group ID to check.
-     * @return True if the group ID exists, false otherwise.
-     */
-    bool groupIdExists(const int groupId) const;
-
-    /**
      * @brief Creates a new audio track.
      * @param nameString The name of the new audio track.
      * @return A shared pointer to the created `AudioTrack`.
@@ -129,19 +122,13 @@ public:
     void deleteUnusedRegions();
 
     /**
-     * @brief Writes the container data to a stream.
-     * @param outputStream The output stream to write to.
-     * @return True if the operation succeeds, false otherwise.
-     */
-    bool writeToStream(juce::OutputStream& outputStream) override;
-
-    /**
-     * @brief Reads the container data from a stream.
-     * @param inputStream The input stream to read from.
+     * @brief Applies a snapshot taken with writeToJson() (undo/redo) and tells
+     *        the UI and the scheduler that the container changed.
+     * @param state The snapshot to apply; left unmodified.
      * @param rebuild Whether to rebuild the container during reading.
      * @return True if the operation succeeds, false otherwise.
      */
-    bool readFromStream(juce::InputStream& inputStream, bool rebuild) override;
+    bool restoreFromJson(const json& state, bool rebuild);
 
     /**
      * @brief Writes the container data to a JSON object.
@@ -168,12 +155,6 @@ public:
      */
     bool didLastReadRebuildStructure() const { return lastReadRebuiltStructure; }
 
-    /**
-     * @brief Gets the currently selected audio track.
-     * @return A shared pointer to the selected `AudioTrack`.
-     */
-    std::shared_ptr<AudioTrack> getSelectedGroup() const { return audioTracks[selectedGroup]; }
-    
     int getNumItems() const { return static_cast<int>(audioTracks.size());}
     std::shared_ptr<AudioTrack> getAudioTrack(int index) const;
     int getAudioTrackId(std::shared_ptr<const AudioTrack> searchTrack) const;
@@ -315,7 +296,6 @@ private:
     std::shared_ptr<TransportLoop> transportLoop; ///< Shared pointer to the transport loop.
     std::shared_ptr<AnalysisProvider> analysisProvider; ///< Shared analysis provider (owns the analysis cache).
 
-    std::size_t selectedGroup = 0; ///< Index of the currently selected group.
     float masterGain = 1.f; ///< Master gain value.
     std::atomic<int> publishedNumAudioTrackChannels { 0 }; ///< Channel count as the audio thread reads it.
     bool lastReadRebuiltStructure = false; ///< Set by readFromJson(): tracks or channels were replaced.

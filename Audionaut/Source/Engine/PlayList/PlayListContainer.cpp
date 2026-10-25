@@ -17,6 +17,21 @@
 
 namespace audium {
 
+namespace {
+
+// The play list items; older projects nest them in a "play_list" object.
+json playListItemsFromJson(json& input)
+{
+    if (input.contains("play_list_vector"))
+        return input["play_list_vector"];
+
+    // TODO: remove legacy code soon-ish
+    auto jsonPlayList = input["play_list"];
+    return jsonPlayList["play_list_items"];
+}
+
+} // namespace
+
 PlayListContainer::~PlayListContainer()
 {
     playListItems.cleanup();
@@ -34,7 +49,6 @@ std::shared_ptr<PlayListItem> PlayListContainer::createPlayListItemAtPositionUI(
     if (items.size() > 0) {
         insertIndex = getPlayListItemIndex(items.back()) + 1;
     }
-    //std::cout << "insert index: " << insertIndex << std::endl;
     
     if (auto playListItem = createPlayListItem(audioRegion, insertIndex)) {
         playListItem->setAbsolutePosition(position, context);
@@ -264,30 +278,12 @@ int PlayListContainer::getPlayListItemIndex(PlayListItem* item) const
 
 bool PlayListContainer::writeToJson (json& output)
 {
-    jassert(sortedByPosition());
-    json playList;
-    
-    for (auto item : playListItems.getObjects())
-    {
-        json j;
-        if (item->writeToJson(j))
-            output["play_list_vector"] += j;
-    }
-    
-    return true;
+    return writeChannelToJson(output, nullptr);
 }
 
 bool PlayListContainer::readFromJson (json& input, bool rebuild)
 {
-    json jsonPlayListItems;
-    if (input.contains("play_list_vector")) {
-        jsonPlayListItems = input["play_list_vector"];
-    }
-    else {
-        // TODO: remove legacy code soon-ish
-        auto jsonPlayList = input["play_list"];
-        jsonPlayListItems = jsonPlayList["play_list_items"];
-    }
+    auto jsonPlayListItems = playListItemsFromJson(input);
     
     const auto numNeeded = jsonPlayListItems.size();
     playListItems.resize (std::min (numNeeded, playListItems.size()));
@@ -320,15 +316,16 @@ bool PlayListContainer::readFromJson (json& input, bool rebuild)
 bool PlayListContainer::writeChannelToJson(json& output, AudioChannel* audioChannel)
 {
     jassert(sortedByPosition());
-    const auto channelNumber = audioChannel->getChannelNumber();
 
     for (auto item : playListItems.getObjects())
     {
         json j;
         if (item->writeToJson(j)) {
-            // the full vector is indexed by source channels - meaningless at the destination
-            j.erase("gain_vector");
-            j["channel_clip_gain"] = item->getDynamics().getGain(channelNumber);
+            if (audioChannel != nullptr) {
+                // the full vector is indexed by source channels - meaningless at the destination
+                j.erase("gain_vector");
+                j["channel_clip_gain"] = item->getDynamics().getGain(audioChannel->getChannelNumber());
+            }
             output["play_list_vector"] += j;
         }
     }
@@ -338,15 +335,7 @@ bool PlayListContainer::writeChannelToJson(json& output, AudioChannel* audioChan
 
 void PlayListContainer::mergeFromJson(json& input, int destinationChannel)
 {
-    json jsonPlayListItems;
-    if (input.contains("play_list_vector")) {
-        jsonPlayListItems = input["play_list_vector"];
-    }
-    else {
-        // TODO: remove legacy code soon-ish
-        auto jsonPlayList = input["play_list"];
-        jsonPlayListItems = jsonPlayList["play_list_items"];
-    }
+    auto jsonPlayListItems = playListItemsFromJson(input);
 
     for (auto& jsonElement : jsonPlayListItems) {
 
@@ -386,11 +375,6 @@ std::shared_ptr<PlayListItem> PlayListContainer::findExistingItem(std::shared_pt
     return nullptr;
 }
 
-bool PlayListContainer::playListItemExists(std::shared_ptr<PlayListItem> other) const
-{
-    return findExistingItem(other) != nullptr;
-}
-
 std::shared_ptr<PlayListItem> PlayListContainer::createPlayListItemFromJson (json& input)
 {
     std::shared_ptr<PlayListItem> playListItem = nullptr;
@@ -417,30 +401,6 @@ std::shared_ptr<PlayListItem> PlayListContainer::createPlayListItemFromJson (jso
     }
     
     return playListItem;
-}
-
-double PlayListContainer::getAbsolueStartTimeByOrder(const PlayListItem* playListItem, audium::TimeContextType context) const
-{
-    double startTime = 0.0;
-    
-    for (auto item : playListItems.getObjects())
-    {
-        if (item.get() == playListItem)
-        {
-            return startTime;
-        }
-        startTime += item->getRegionData(context).getLength();
-    }
-    
-    return startTime;
-}
-
-void PlayListContainer::forcePositionByOrder()
-{
-    for (auto item : playListItems.getObjects())
-    {
-        item->setAbsolutePosition(getAbsolueStartTimeByOrder(item.get(), audium::clocks), audium::clocks);
-    }
 }
 
 void PlayListContainer::sortByPosition()
@@ -619,28 +579,5 @@ double PlayListContainer::getTotalLength(audium::TimeContextType context) const
     return totalLength;
 }
 
-
-std::vector<std::shared_ptr<PlayListItem>> PlayListContainer::getSelectedItems(bool global) const
-{
-    std::vector<std::shared_ptr<PlayListItem>> result;
-    
-    if (global) {
-        auto selectedObjects = selectionManager->getSelectedObjects();
-        for (auto object : selectedObjects) {
-            if (auto playListItem = std::dynamic_pointer_cast<PlayListItem>(object)) {
-                jassert(playListItem->isSelected());
-                result.push_back(playListItem);
-            }
-        }
-    }
-    else {
-        
-        for (auto item : playListItems.objects) {
-            if (item->isSelected())
-                result.push_back(item);
-        }
-    }
-    return result;
-}
 
 } // namespace audium

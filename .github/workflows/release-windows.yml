@@ -23,14 +23,7 @@ env:
   BUILD_TYPE: Release
 
   # No toolset pin: the windows-2025 image ships Visual Studio 2026, so the
-  # v145 the .vcxproj asks for is what MSBuild picks natively - and what the
-  # CMake-driven Essentia build picks as its default. See windows.yml.
-
-  # Essentia's Windows dependencies - same values as windows.yml; read by the
-  # build-essentia-windows action and expanded by the .vcxproj.
-  VCPKG_TRIPLET: x64-windows-static-md
-  VCPKG_ROOT_DIR: C:/vcpkg
-  AUDIONAUT_VCPKG_PREFIX: C:/vcpkg/installed/x64-windows-static-md
+  # v145 the .vcxproj asks for is what MSBuild picks natively. See windows.yml.
 
 jobs:
   package:
@@ -57,12 +50,6 @@ jobs:
           echo "::error::Tag version ($TAG_VERSION) does not match Audionaut.jucer version ($JUCER_VERSION). Bump the .jucer version (and re-save with Projucer) or fix the tag."
           exit 1
         fi
-
-    # A tag run can only restore caches scoped to the tag itself or to the
-    # default branch, so a release cut before Windows CI has run on main
-    # builds Essentia cold here - correct, just slower.
-    - name: Build Essentia
-      uses: ./.github/actions/build-essentia-windows
 
     - name: Add MSBuild to PATH
       uses: microsoft/setup-msbuild@v2

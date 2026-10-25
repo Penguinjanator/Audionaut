@@ -133,9 +133,6 @@ public:
     */
     void setSource (const AudioBuffer<float>* newSource, double sampleRate, int64 hashCode);
 
-    /** Same as the other setSource() overload except for int data. */
-    void setSource (const AudioBuffer<int>* newSource, double sampleRate, int64 hashCode);
-
     /** Resets the thumbnail, ready for adding data with the specified format.
         If you're going to generate a thumbnail yourself, call this before using addBlock()
         to add the data.
@@ -229,9 +226,6 @@ public:
 
     /** Returns true if the low res preview is fully generated. */
     bool isFullyLoaded() const noexcept override;
-
-    /** Returns a value between 0 and 1 to indicate the progress towards loading the entire file. */
-    double getProportionComplete() const noexcept;
 
     /** Returns the number of samples that have been set in the thumbnail. */
     int64 getNumSamplesFinished() const noexcept override;

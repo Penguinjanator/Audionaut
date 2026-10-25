@@ -60,14 +60,8 @@ std::shared_ptr<AudiumEngine> AudiumFactory::createAudiumEngine(std::shared_ptr<
     // The AnalysisWorker drives that provider on a low-priority background thread
     // and is injected into the resource container, which enqueues each newly
     // added audio file for analysis.
-    auto sBicSegmenter              = std::make_shared<SBicSegmenter>();
-    auto onsetSegmenter             = std::make_shared<OnsetSegmenter>();
-    auto beatSegmenter              = std::make_shared<BeatSegmenter>();
     auto analysisCache              = std::make_shared<AnalysisCache>();
-    auto analysisProvider           = std::make_shared<AnalysisProvider>(sBicSegmenter,
-                                                                         onsetSegmenter,
-                                                                         beatSegmenter,
-                                                                         analysisCache);
+    auto analysisProvider           = std::make_shared<AnalysisProvider>(analysisCache);
     auto analysisWorker             = std::make_shared<AnalysisWorker>(analysisProvider);
 
     auto audioResourceContainer     = std::make_shared<AudioResourceContainer>(audioDeviceManager,

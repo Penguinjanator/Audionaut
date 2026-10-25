@@ -17,50 +17,9 @@ message(STATUS "Submodules at: ${SUBMODULES_PATH}")
 set(SRC_PATH "${CMAKE_CURRENT_LIST_DIR}/../Source")
 message(STATUS "source file root at: ${SRC_PATH}")
 
-# Essentia powers the audio-analysis features. It is not produced by this CMake
-# build - build it from the submodule with Audionaut/Builds/build_essentia.sh.
-# When AUDIONAUT_ENABLE_ESSENTIA is OFF the analysis code compiles to no-ops (see
-# ESSENTIA_ENABLED in the segmenters) and the Essentia headers/libs are skipped.
-#
-# Link against the freshly built libs in the submodule build tree:
-#   - libessentia.a under essentia/build/src
-#   - its 3rd-party static deps under essentia/packaging/debian_3rdparty/lib
-# Default to whatever is actually available: require both the Eigen headers (a
-# build artifact absent from a clean submodule checkout) and the built
-# libessentia.a. Override with -DAUDIONAUT_ENABLE_ESSENTIA=ON/OFF.
-set(ESSENTIA_LIB_PATH "${SUBMODULES_PATH}/essentia/build/src")
-set(ESSENTIA_3RDPARTY_LIB_PATH "${SUBMODULES_PATH}/essentia/packaging/debian_3rdparty/lib")
-
-# Windows/MSVC gets Essentia from a different build entirely - CMake + vcpkg
-# instead of waf + packaging/, because waf has no working Windows path. See
-# Audionaut/Builds/Windows/README.md. That build lays things out differently:
-# essentia.lib under build-msvc/lib/<config>/, dependencies from vcpkg, and the
-# generated version.h in build-msvc/generated. Produce it with
-# Audionaut/Builds/build_essentia_windows.ps1.
-set(ESSENTIA_MSVC_ROOT "${SUBMODULES_PATH}/essentia/build-msvc")
-if(MSVC)
-    # Multi-config generator: the configuration is not known until build time,
-    # so accept either and pick per-config with a generator expression below.
-    if(EXISTS "${ESSENTIA_MSVC_ROOT}/lib/Release/essentia.lib"
-       OR EXISTS "${ESSENTIA_MSVC_ROOT}/lib/Debug/essentia.lib")
-        set(ESSENTIA_AVAILABLE ON)
-    else()
-        set(ESSENTIA_AVAILABLE OFF)
-    endif()
-elseif(EXISTS "${SUBMODULES_PATH}/essentia/packaging/debian_3rdparty/include/eigen3/signature_of_eigen3_matrix_library"
-       AND EXISTS "${ESSENTIA_LIB_PATH}/libessentia.a")
-    set(ESSENTIA_AVAILABLE ON)
-else()
-    set(ESSENTIA_AVAILABLE OFF)
-endif()
-option(AUDIONAUT_ENABLE_ESSENTIA "Build against the Essentia library" ${ESSENTIA_AVAILABLE})
-message(STATUS "Essentia enabled: ${AUDIONAUT_ENABLE_ESSENTIA} (detected available: ${ESSENTIA_AVAILABLE})")
-message(STATUS "Essentia libs at: ${ESSENTIA_LIB_PATH} / ${ESSENTIA_3RDPARTY_LIB_PATH}")
-
 # demucs.cpp powers stem separation. It is plain C++ source with no build
-# step of its own, but it needs an Eigen newer than the one Essentia's tree
-# carries, and the two Eigens must never meet in one translation unit. So the
-# demucs sources - plus the one Audionaut file that calls them - go into their
+# step of its own, and it brings its own Eigen (3.4), which nothing else in
+# the build should see or pay the compile time for. So the demucs sources - plus the one Audionaut file that calls them - go into their
 # own static library, compiled against demucs.cpp's vendored Eigen, and the
 # rest of the code only ever sees the Eigen-free DemucsRunner.h. Default to
 # whatever the submodule checkout provides (the vendored Eigen is a nested
@@ -164,89 +123,28 @@ if(AUDIONAUT_ENABLE_COVERAGE AND AUDIONAUT_BUILD_CLI)
 endif()
 message(STATUS "CLI enabled: ${AUDIONAUT_BUILD_CLI}")
 
-# If you've installed JUCE somehow (via a package manager, or directly using the CMake install
-# target), you'll need to tell this project that it depends on the installed copy of JUCE. If you've
-# included JUCE directly in your source tree (perhaps as a submodule), you'll need to tell CMake to
-# include that subdirectory as part of the build.
-
-# find_package(JUCE CONFIG REQUIRED)        # If you've installed JUCE to your system
-# or
-
-add_subdirectory(${SUBMODULES_PATH}/JUCE juce-bin)                    # If you've put JUCE in a subdirectory called JUCE
-
-# Catch2
-#find_package(Catch2)
-
+add_subdirectory(${SUBMODULES_PATH}/JUCE juce-bin)
 add_subdirectory(${SUBMODULES_PATH}/Catch2 catch2-bin)
 
-file(GLOB SRC_AUDIUM
+# Every engine, interface and CLI source, so a new Source subdirectory needs
+# no edit here. Excluded: Engine/Separation/Demucs/ (built into
+# audionaut_demucs above) and Util/native/ (#included by Util/Preferences.cpp).
+# Of Application/ only the analytics unit, which the CLI dispatch consumes;
+# the rest of it is the GUI app shell.
+file(GLOB_RECURSE SRC_AUDIUM CONFIGURE_DEPENDS
         ${SRC_PATH}/Engine/*.cpp
-        ${SRC_PATH}/Engine/Project/*.cpp
-        ${SRC_PATH}/Engine/Analysis/*.cpp
-        ${SRC_PATH}/Engine/Core/*.cpp
-        ${SRC_PATH}/Engine/Channel/*.cpp
-        ${SRC_PATH}/Engine/AutoEdit/*.cpp
-        ${SRC_PATH}/Engine/Channel/*.cpp
-        ${SRC_PATH}/Engine/Factory/*.cpp
-        ${SRC_PATH}/Engine/Group/*.cpp
-        ${SRC_PATH}/Engine/Link/*.cpp
-        ${SRC_PATH}/Engine/Playback/*.cpp
-        ${SRC_PATH}/Engine/PlayList/*.cpp
-        ${SRC_PATH}/Engine/Provider/*.cpp
-        ${SRC_PATH}/Engine/Region/*.cpp
-        ${SRC_PATH}/Engine/Resource/*.cpp
-        ${SRC_PATH}/Engine/Recording/*.cpp
-        ${SRC_PATH}/Engine/Undo/*.cpp
-        ${SRC_PATH}/Engine/AudioSources/*.cpp
-        ${SRC_PATH}/Engine/AudioSources/Stretch/*.cpp
-        ${SRC_PATH}/Engine/Export/*.cpp
-        ${SRC_PATH}/Engine/Selection/*.cpp
-        ${SRC_PATH}/Engine/Separation/*.cpp
-        # NOT Engine/Separation/Demucs/*.cpp - that goes into audionaut_demucs
-
-        ${SRC_PATH}/Cli/*.cpp
-        ${SRC_PATH}/Cli/Commands/*.cpp
-
-        # NOT Application/*.cpp - only the analytics unit, which the CLI
-        # dispatch consumes; the rest of Application/ is the GUI app shell
-        ${SRC_PATH}/Application/UsageAnalytics.cpp
-
-
         ${SRC_PATH}/Interface/*.cpp
-        ${SRC_PATH}/Interface/LookAndFeel/*.cpp
-        ${SRC_PATH}/Interface/Components/*.cpp
-        ${SRC_PATH}/Interface/Components/HeaderPanel/*.cpp
-        ${SRC_PATH}/Interface/Components/MiddlePanel/*.cpp
-        ${SRC_PATH}/Interface/Components/MiddlePanel/ArrangementView/*.cpp
-        ${SRC_PATH}/Interface/Components/MiddlePanel/ChannelView/*.cpp
-        ${SRC_PATH}/Interface/Components/MiddlePanel/EditView/*.cpp
-        ${SRC_PATH}/Interface/Components/RightPanel/*.cpp
-        ${SRC_PATH}/Interface/Controls/*.cpp
-        ${SRC_PATH}/Interface/Dialogs/*.cpp
-        ${SRC_PATH}/Interface/Models/*.cpp
-        ${SRC_PATH}/Interface/Handlers/*.cpp
-        ${SRC_PATH}/Interface/Views/*.cpp
-        ${SRC_PATH}/Interface/Widgets/*.cpp
-        ${SRC_PATH}/Interface/DragAndDrop/*.cpp
-        ${SRC_PATH}/Util/*.cpp
-        )
-        
-file(GLOB SRC_TESTS
-        Tests/*.cpp
-        )
+        ${SRC_PATH}/Cli/*.cpp)
+list(FILTER SRC_AUDIUM EXCLUDE REGEX "/Engine/Separation/Demucs/")
+file(GLOB SRC_UTIL CONFIGURE_DEPENDS ${SRC_PATH}/Util/*.cpp)
+list(APPEND SRC_AUDIUM
+        ${SRC_UTIL}
+        ${SRC_PATH}/Application/UsageAnalytics.cpp)
+
+file(GLOB SRC_TESTS CONFIGURE_DEPENDS Tests/*.cpp)
 
 # Ableton Link (the imported Ableton::Link target used below)
 include(${SUBMODULES_PATH}/link/AbletonLinkConfig.cmake)
-
-# The MSVC Essentia build takes its dependencies from vcpkg; the list is
-# shared with the Essentia build itself via VcpkgDeps.cmake so the library
-# set, the debug/release selection and the required definitions cannot drift
-# between the two. Configuring this build therefore needs the vcpkg prefix -
-# build_essentia_windows.ps1 prints the exact command when it finishes.
-if(AUDIONAUT_ENABLE_ESSENTIA AND MSVC)
-    include("${CMAKE_CURRENT_LIST_DIR}/../Builds/Windows/VcpkgDeps.cmake")
-    audionaut_find_essentia_deps()
-endif()
 
 # ---------------------------------------------------------------------------
 # Shared target configuration
@@ -266,7 +164,7 @@ function(audionaut_configure_common target)
             ${SRC_AUDIUM}
             ${SRC_PATH}/../JuceLibraryCode/BinaryData.cpp)
 
-    # The source_group function creates a group in the IDE project for the files passed as arguments.
+    # IDE grouping mirrors the Source tree.
     source_group(TREE "${SRC_PATH}" PREFIX "Source Files" FILES ${SRC_AUDIUM})
 
     target_include_directories(${target}
@@ -276,34 +174,11 @@ function(audionaut_configure_common target)
                             PUBLIC ${SUBMODULES_PATH}/rubberband
                             )
 
-    if(AUDIONAUT_ENABLE_ESSENTIA)
-        if(MSVC)
-            # Eigen comes from vcpkg rather than Essentia's packaging/ tree, and
-            # version.h is generated into the build dir instead of into src/.
-            target_include_directories(${target}
-                                PUBLIC ${SUBMODULES_PATH}/essentia/src
-                                PUBLIC ${ESSENTIA_MSVC_ROOT}/generated
-                                PUBLIC ${AUDIONAUT_VCPKG_PREFIX}/include
-                                PUBLIC ${AUDIONAUT_VCPKG_PREFIX}/include/eigen3
-                                )
-            # Pulling in Essentia's headers drags <windows.h> into this target
-            # (threading.h includes it for the CRITICAL_SECTION mutex), and its
-            # defaults break two other dependencies:
-            #
-            #   NOMINMAX            - windows.h defines min/max as macros, which
-            #                         wrecks the std::min/std::max calls in
-            #                         Essentia's own devnull.h.
-            #   WIN32_LEAN_AND_MEAN - stops windows.h including winsock.h, which
-            #                         otherwise collides with the winsock2.h that
-            #                         Ableton Link's bundled asio requires
-            #                         ("WinSock.h has already been included").
-            target_compile_definitions(${target} PUBLIC NOMINMAX WIN32_LEAN_AND_MEAN)
-        else()
-            target_include_directories(${target}
-                                PUBLIC ${SUBMODULES_PATH}/essentia/src
-                                PUBLIC ${SUBMODULES_PATH}/essentia/packaging/debian_3rdparty/include/eigen3
-                                )
-        endif()
+    if(MSVC)
+        # The same as the app's .jucer: windows.h without its min/max macros
+        # (they wreck std::min/std::max), and without winsock.h, which would
+        # collide with the winsock2.h Ableton Link's bundled asio requires.
+        target_compile_definitions(${target} PUBLIC NOMINMAX WIN32_LEAN_AND_MEAN)
     endif()
 
     set_property(TARGET ${target} PROPERTY CXX_STANDARD 20)
@@ -330,10 +205,8 @@ function(audionaut_configure_common target)
         PRIVATE
             JUCE_MODAL_LOOPS_PERMITTED=1
             AUDIONAUT_HEADLESS=1 # no GUI app: no preferences, no live audio device, no message boxes
-            # JUCE_WEB_BROWSER and JUCE_USE_CURL would be on by default, but you might not need them.
-            JUCE_WEB_BROWSER=0  # If you remove this, add `NEEDS_WEB_BROWSER TRUE` to the `juce_add_console_app` call
-            JUCE_USE_CURL=0     # If you remove this, add `NEEDS_CURL TRUE` to the `juce_add_console_app` call
-            ESSENTIA_ENABLED=$<BOOL:${AUDIONAUT_ENABLE_ESSENTIA}>
+            JUCE_WEB_BROWSER=0  # removing either needs NEEDS_WEB_BROWSER / NEEDS_CURL on juce_add_console_app
+            JUCE_USE_CURL=0
             DEMUCS_ENABLED=$<BOOL:${AUDIONAUT_ENABLE_DEMUCS}>)
 
     target_link_libraries(${target}
@@ -355,44 +228,6 @@ function(audionaut_configure_common target)
     target_link_libraries(${target} PRIVATE audionaut_rubberband)
     target_link_libraries(${target} PRIVATE audionaut_lame)
 
-    if(AUDIONAUT_ENABLE_ESSENTIA AND MSVC)
-        # MSVC's linker resolves archives by symbol table rather than left to
-        # right, so the ordering the POSIX branch below needs does not apply.
-        target_compile_definitions(${target} PUBLIC ${ESSENTIA_DEP_DEFINITIONS})
-
-        target_link_libraries(${target}
-            PRIVATE
-                "${ESSENTIA_MSVC_ROOT}/lib/$<CONFIG>/essentia.lib"
-                ${ESSENTIA_DEP_LIBRARIES})
-    elseif(AUDIONAUT_ENABLE_ESSENTIA)
-        target_link_libraries(${target}
-            PRIVATE
-                # GNU ld resolves static libs left to right, so dependents must
-                # precede their dependencies: essentia/chromaprint -> avformat ->
-                # avcodec -> swresample -> avutil, codecs and utility libs last.
-                ${ESSENTIA_LIB_PATH}/libessentia.a
-                ${ESSENTIA_3RDPARTY_LIB_PATH}/libchromaprint.a
-                ${ESSENTIA_3RDPARTY_LIB_PATH}/libavformat.a
-                ${ESSENTIA_3RDPARTY_LIB_PATH}/libavcodec.a
-                ${ESSENTIA_3RDPARTY_LIB_PATH}/libswresample.a
-                ${ESSENTIA_3RDPARTY_LIB_PATH}/libavutil.a
-                # libavcodec's MP3 encoder calls LAME; it gets ours (4.0, the one
-                # the MP3 export uses) instead of essentia's own libmp3lame.a,
-                # so the binary carries exactly one LAME
-                audionaut_lame
-                ${ESSENTIA_3RDPARTY_LIB_PATH}/libfftw3f.a
-                ${ESSENTIA_3RDPARTY_LIB_PATH}/libz.a
-                ${ESSENTIA_3RDPARTY_LIB_PATH}/libsamplerate.a
-                ${ESSENTIA_3RDPARTY_LIB_PATH}/libyaml.a)
-        if(APPLE)
-            # glibc provides iconv natively; a separate libiconv exists only on macOS
-            target_link_libraries(${target} PRIVATE libiconv.a)
-        else()
-            # libavutil's hwcontext_drm needs libdrm on Linux
-            target_link_libraries(${target} PRIVATE drm)
-        endif()
-    endif()
-
     set_target_properties(${target}
                           PROPERTIES
                           XCODE_ATTRIBUTE_DEVELOPMENT_TEAM Q89CZBX79G)
@@ -402,9 +237,6 @@ endfunction()
 # Test target
 # ---------------------------------------------------------------------------
 
-# `juce_add_console_app` adds an executable target with the name passed as the first argument.
-# This target is a normal CMake target, but has a lot of extra properties set up by default.
-# Check the readme at `docs/CMake API.md` in the JUCE repo for the full list.
 juce_add_console_app(${APP_NAME} PRODUCT_NAME ${APP_NAME})
 
 audionaut_configure_common(${APP_NAME})
@@ -418,14 +250,13 @@ target_compile_definitions(${APP_NAME}
         CATCH2_TESTS=1 # test hooks only (PlayListScheduler)
         CURRENT_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}") # This is needed for the Catch2 tests to find the test files
 
-
 # ---------------------------------------------------------------------------
 # Coverage instrumentation
 #
 # Scoped to this target with target_compile_options/target_link_options rather
 # than CMAKE_CXX_FLAGS: a global flag would also instrument JUCE, Catch2, Link
-# and Essentia, which multiplies build time and drowns the report in submodule
-# source we don't own.
+# and the vendored libraries, which multiplies build time and drowns the report
+# in source we don't own.
 # ---------------------------------------------------------------------------
 if(AUDIONAUT_ENABLE_COVERAGE)
     if(NOT CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
@@ -464,9 +295,10 @@ if(AUDIONAUT_ENABLE_COVERAGE)
 
         # --root is the repo root, not SRC_PATH: gcovr resolves --filter against
         # it, and rooting at SRC_PATH filters every file back out again.
-        # --gcov-ignore-errors=no_working_dir_found is required, not defensive:
-        # some Essentia headers pulled into the analysis TUs defeat gcovr's
-        # working-directory inference and abort the whole run without it.
+        # --gcov-ignore-errors=no_working_dir_found: headers from outside the
+        # repository can defeat gcovr's working-directory inference and abort
+        # the whole run; it was needed while Essentia's headers were in the
+        # analysis translation units and stays as a guard.
         # Both paths must be normalised: SRC_PATH is spelled ".../Catch2Tests/../Source"
         # and gcovr matches --filter as a literal path prefix without resolving
         # "..", so the unnormalised form silently filters out every file.
@@ -496,20 +328,6 @@ if(AUDIONAUT_ENABLE_COVERAGE)
             "Install it (pipx install gcovr) or read the .gcda files with gcov directly.")
     endif()
 endif()
-
-
-#target_compile_options( ${APP_NAME}
-#    PRIVATE
-#        -Wall -Wcast-align -Wfloat-equal -Wno-ignored-qualifiers -Wsign-compare -Wsign-conversion -Wstrict-aliasing -Wswitch-enum -Wuninitialized -Wunreachable-code -Wunused-parameter -Wmissing-field-initializers -Wshadow-all -Wshorten-64-to-32 -Wconversion -Wint-conversion -Wconditional-uninitialized -Wconstant-conversion -Wbool-conversion -Wextra-semi -Wshift-sign-overflow -Wmissing-prototypes -Wnullable-to-nonnull-conversion -Wpedantic -Wdeprecated -Woverloaded-virtual -Wreorder -Wzero-as-null-pointer-constant -Wunused-private-field -Winconsistent-missing-destructor-override -Wshadow-field-in-constructor "-fsigned-char" )
-
-# If the target needs extra binary assets, they can be added here. The first argument is the name of
-# a new static library target that will include all the binary resources. There is an optional
-# `NAMESPACE` argument that can specify the namespace of the generated binary data class. Finally,
-# the SOURCES argument should be followed by a list of source files that should be built into the
-# static library. These source files can be of any kind (wav data, images, fonts, icons etc.).
-# Conversion to binary-data will happen when the target is built.
-
-# juce_add_binary_data(ConsoleAppData SOURCES ...)
 
 # Catch2 provides main() for the test binary (the CLI has its own).
 target_link_libraries(${APP_NAME}
@@ -549,7 +367,3 @@ if(AUDIONAUT_BUILD_CLI)
              COMMAND ${CLI_NAME} info ${CMAKE_CURRENT_SOURCE_DIR}/TestFiles/Sessions/simple-sine.audium --json)
     set_tests_properties(CliSmoke PROPERTIES ENVIRONMENT "AUDIONAUT_DISABLE_ANALYTICS=1")
 endif()
-                    
-
-
-

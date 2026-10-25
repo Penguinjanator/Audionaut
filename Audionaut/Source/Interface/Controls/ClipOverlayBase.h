@@ -76,10 +76,6 @@ public:
     /// overlay's and the Assemble dialog's crossfade toggle.
     static juce::Path xfadeIconPath();
 
-    /// The accent colour marking a toggled-on icon button, like the
-    /// header's Loop button.
-    static constexpr juce::uint32 toggledOnColour = 0xff12a4e2;
-
 protected:
     // ------------------------------------------------------------------
     // The subclass contract

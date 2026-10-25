@@ -14,11 +14,12 @@
 #include "Engine/Group/ResourceGroup.h"
 #include "Engine/Channel/AudioChannel.h"
 
+#include "Interface/Models/TrackListBoxModels.h"
 #include "Interface/Widgets/audium_ListBox.h"
 #include "Interface/Views/AudioClipView.h"
 
 
-class PlayListItemListBoxModel  : public audium::ListBoxModel
+class PlayListItemListBoxModel  : public ChannelRowsListBoxModel
 {
 public:
     PlayListItemListBoxModel(audium::ListBox& owner,
@@ -27,16 +28,10 @@ public:
                                  std::shared_ptr<audium::AudiumEngine> audiumEngine,
                                  std::shared_ptr<ZoomHandler> zoomHandler,
                                  std::shared_ptr<RegionSelector> regionSelector) :
-        owner(owner),
-        audioTrack(audioTrack),
+        ChannelRowsListBoxModel(owner, audiumEngine, audioTrack, 0),
         playListItem(playListItem),
-        audiumEngine(audiumEngine),
         zoomHandler(zoomHandler),
         regionSelector(regionSelector)
-    {
-    }
-    
-    ~PlayListItemListBoxModel() override
     {
     }
     
@@ -44,13 +39,6 @@ public:
     {
         auto resourceGroup = playListItem->getRegion()->getResourceGroup();
         return resourceGroup->getNumChannels();
-    }
-
-    void paintListBoxItem ( int rowNumber,
-                            juce::Graphics& g,
-                            int width, int height,
-                            bool rowIsSelected) override
-    {
     }
     
     juce::Component* refreshComponentForRow (   int rowNumber, bool isRowSelected,
@@ -91,35 +79,6 @@ public:
         return nullptr;
     }
 
-    
-    int getRowHeight (int rowNumber) const override
-    {
-        auto channel = audioTrack->getChannel(rowNumber);
-        if (channel != nullptr)
-        {
-            return channel->getChannelHeight();
-        }
-        return 0;
-    }
-    
-    void deleteKeyPressed (int lastRowSelected) override
-    {
-        // the rows are the clip's channels; delete acts on the engine
-        // selection, like the clip's header and the other list boxes
-        audiumEngine->getAudioTrackContainer()->deleteSelectedObjects();
-    }
-    
-    void backgroundClicked (const juce::MouseEvent&) override
-    {
-        owner.deselectAllRows();
-    }
-    
-    void listWasScrolled() override {}
-    
-    void selectedRowsChanged (int lastRowSelected) override
-    {
-    }
-    
     void setPlayListItem(std::shared_ptr<audium::PlayListItem> playListItem_)
     {
         if (playListItem != playListItem_) {
@@ -134,11 +93,8 @@ public:
     
 private:
     
-    audium::ListBox& owner;
     juce::Component *parentComponent = nullptr;
-    std::shared_ptr<audium::AudioTrack> audioTrack;
     std::shared_ptr<audium::PlayListItem> playListItem;
-    std::shared_ptr<audium::AudiumEngine> audiumEngine;
     std::shared_ptr<ZoomHandler> zoomHandler;
     std::shared_ptr<RegionSelector> regionSelector;
 

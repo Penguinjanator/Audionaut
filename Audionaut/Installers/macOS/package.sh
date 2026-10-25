@@ -13,9 +13,9 @@
 # Store Connect credentials); a locally built image can be notarized with
 # `xcrun notarytool submit <dmg> --wait` and `xcrun stapler staple <dmg>`.
 #
-# The app is compiled with AUDIONAUT_GITHUB_CHANNEL so its update check
-# asks GitHub Releases rather than the App Store; the Xcode/App Store build
-# is untouched.
+# No channel define is needed: the app tells a DMG install from an App
+# Store one at runtime by the store receipt (Source/Util/DistributionChannel.h),
+# so its update check asks GitHub Releases rather than the App Store.
 #
 # Usage: package.sh [--no-build]
 #   --no-build   package the app already sitting in
@@ -26,8 +26,7 @@
 #                  Defaults to "-" (ad-hoc), which builds an image that runs
 #                  locally but that Gatekeeper rejects on other machines.
 #
-# Requires: Xcode command line tools; the Essentia static libraries built
-# with ../../Builds/build_essentia.sh.
+# Requires: Xcode command line tools.
 
 set -eu
 
@@ -61,7 +60,7 @@ if [ "$BUILD" -eq 1 ]; then
     # Ad-hoc signing during the build keeps the Projucer's "Sign Target"
     # script phase working without a certificate in the keychain; the real
     # signature is applied below, because that phase drops the hardened
-    # runtime flag anyway. $(inherited) keeps the Projucer's defines.
+    # runtime flag anyway.
     xcodebuild -project "$XCODE_DIR/Audionaut.xcodeproj" \
         -scheme "Audionaut - App" \
         -configuration Release \
@@ -69,7 +68,6 @@ if [ "$BUILD" -eq 1 ]; then
         CODE_SIGN_IDENTITY=- \
         CODE_SIGN_STYLE=Manual \
         DEVELOPMENT_TEAM= \
-        GCC_PREPROCESSOR_DEFINITIONS='$(inherited) AUDIONAUT_GITHUB_CHANNEL=1' \
         build | grep -E '^(\*\*|error|warning: (ld|linker)|Signing|Ld |CodeSign)' || true
 fi
 if [ ! -d "$APP" ]; then
@@ -77,8 +75,8 @@ if [ ! -d "$APP" ]; then
     exit 1
 fi
 
-# The bundle has no nested code (JUCE, Essentia, Rubber Band and demucs are
-# all linked statically), so signing the bundle itself is the whole job.
+# The bundle has no nested code (JUCE, Rubber Band, LAME and demucs are all
+# linked statically), so signing the bundle itself is the whole job.
 echo "Signing $APP"
 codesign --force --options runtime --timestamp \
     --entitlements Audionaut.entitlements \

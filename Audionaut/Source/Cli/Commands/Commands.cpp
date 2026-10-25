@@ -9,6 +9,7 @@
 #include <cmath>
 #include <cstdlib>
 
+#include "Cli/CommandSession.h"
 #include "Engine/AudiumEngine.h"
 #include "Engine/Project/ProjectFileStore.h"
 #include "Engine/Group/AudioTrackContainer.h"
@@ -48,11 +49,11 @@ bool parseMusicalPosition (const juce::String& value,
     return true;
 }
 
-bool parseMusicalDuration (const juce::String& value,
-                           const juce::String& unit,
-                           const TempoProvider& tempoProvider,
-                           double& outClocks,
-                           std::string& error)
+bool musicalDurationToClocks (const juce::String& value,
+                              const juce::String& unit,
+                              const TempoProvider& tempoProvider,
+                              double& outClocks,
+                              std::string& error)
 {
     const auto numeric = value.getDoubleValue();
 
@@ -68,6 +69,18 @@ bool parseMusicalDuration (const juce::String& value,
         error = "--unit must be bars, beats, seconds or clocks";
         return false;
     }
+
+    return true;
+}
+
+bool parseMusicalDuration (const juce::String& value,
+                           const juce::String& unit,
+                           const TempoProvider& tempoProvider,
+                           double& outClocks,
+                           std::string& error)
+{
+    if (! musicalDurationToClocks (value, unit, tempoProvider, outClocks, error))
+        return false;
 
     if (outClocks <= 0.0) {
         error = "duration must be positive";
@@ -231,6 +244,33 @@ juce::File resolveProjectFile (const juce::ArgumentList& args, int argumentIndex
         return file;
 
     return {};
+}
+
+int runProjectEdit (const juce::ArgumentList& args,
+                    CliContext& context,
+                    const std::string& verb,
+                    const std::function<int (ProjectSession& session, EditOutcome& outcome)>& edit)
+{
+    auto projectFile = resolveProjectFile (args);
+    if (projectFile == juce::File())
+        return context.fail (exitUsage, "usage", verb + " requires an existing <project.audium>");
+
+    ScopedCoutToStderr guard (context.json);
+    int openFailure = exitFailure;
+    auto session = openProjectSession (projectFile, CommandAccess::mutating, context, openFailure);
+    if (! session)
+        return openFailure;
+
+    EditOutcome outcome;
+    if (auto code = edit (session, outcome); code != exitOk)
+        return code;
+
+    std::string error;
+    if (! session.commit (error))
+        return context.fail (exitFailure, "save_failed", error.empty() ? "failed to save project" : error);
+
+    context.log (outcome.log);
+    return context.ok (outcome.result);
 }
 
 } // namespace cli

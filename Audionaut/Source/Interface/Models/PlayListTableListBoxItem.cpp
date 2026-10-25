@@ -10,7 +10,6 @@
 #include "Engine/ActionMessages.h"
 #include "Engine/Undo/UndoableContainerAction.h"
 
-#include "Application/AudiumCommandIDs.h"
 
 #include "Interface/Components/RightPanel/PlayListComponent.h"
 #include "Interface/Controls/RegionLabel.h"
@@ -41,7 +40,6 @@ void PlayListTableListBoxItem::updateInsertLines(const juce::DragAndDropTarget::
     
     if (auto item = dynamic_cast<PlayListTableListBoxItem*>(dragSourceDetails.sourceComponent.get()))
     {
-        //std::cout << "movePlayListItemBefore this: " << rowNumber << " item: " << item->rowNumber << " insert: " << insertIndex << std::endl;
         
         if (rowNumber == item->rowNumber ||
             item->rowNumber == insertIndex)
@@ -76,7 +74,6 @@ void PlayListTableListBoxItem::itemDropped (const SourceDetails &dragSourceDetai
     auto before = dragSourceDetails.localPosition.y < getHeight() / 2;
     auto insertIndex = rowNumber + (before ? 0 : 1);
     
-    //std::cout << "row number: " << rowNumber + (before ? 0 : 1) << std::endl;
     
     bool modified = false;
     
@@ -164,29 +161,10 @@ void PlayListTableListBoxItem::paint(juce::Graphics& g)
     }
 }
 
-static void contextMenuCallback (int result, PlayListTableListBoxItem* component)
-{
-    if (component != nullptr &&
-        result != 0) {
-        switch (result) {
-            case CommandIDs::exportSelectedItemsId:
-                component->exportSelectedPlayListItem();
-                break;
-            default:
-                break;
-        }
-    }
-}
-
 void PlayListTableListBoxItem::mouseDown (const juce::MouseEvent& e)
 {
-    if (e.mods.isPopupMenu()) {
-        PopupMenu m;
-        m.addItem (CommandIDs::exportSelectedItemsId, TRANS ("Export..."), true);
-        m.setLookAndFeel (&getLookAndFeel());
-        m.showMenuAsync (PopupMenu::Options().withStandardItemHeight(AudiumLookAndFeel::popupMenuItemHeight),
-                         ModalCallbackFunction::forComponent (contextMenuCallback, this));
-    }
+    if (e.mods.isPopupMenu())
+        exportMenu.show (*this, getPlayListModel()->getAudiumEngine(), [this] { return getPlayListItem(); });
     
     auto track = playListModel->getAudioTrack();
     auto container = track->getPlayListContainer();
@@ -260,16 +238,6 @@ void PlayListTableListBoxItem::update(int columnId, int rowNumber, bool isSelect
     
     
     repaint();
-}
-
-void PlayListTableListBoxItem::exportSelectedPlayListItem()
-{
-    auto container = playListModel->getAudioTrack()->getPlayListContainer();
-    if (auto playListItem = container->getPlayListItem(rowNumber)) {
-        exporter = std::make_unique<audium::PlayListItemExport>(getPlayListModel()->getAudiumEngine(),
-                                                                playListItem, true);
-        exporter->exportItem();
-    }
 }
 
 std::shared_ptr<audium::PlayListItem> PlayListTableListBoxItem::getPlayListItem() const

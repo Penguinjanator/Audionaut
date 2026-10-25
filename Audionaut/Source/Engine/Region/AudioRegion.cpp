@@ -7,7 +7,6 @@
 #include "Engine/Group/AudioTrack.h"
 #include "Engine/Group/AudioTrackContainer.h"
 #include "Engine/Resource/AudioResourceContainer.h"
-#include "Engine/Factory/AudioResourceFactory.h"
 #include "Engine/Provider/TempoProvider.h"
 #include "Engine/PlayList/PlayListContainer.h"
 #include "Engine/Region/AudioRegionContainer.h"
@@ -17,20 +16,6 @@ namespace audium {
 void AudioRegion::sendActionMessage (const juce::String& message) const
 {
     audioTrack->getAudioTrackContainer().sendActionMessage(message);
-}
-
-bool AudioRegion::writeToStream (juce::OutputStream& outputStream)
-{
-    return audium::Streamable::writeToStream(outputStream);
-}
-
-bool AudioRegion::readFromStream (juce::InputStream& inputStream, bool rebuild)
-{
-    if (audium::Streamable::readFromStream(inputStream)) {
-        sendActionMessage(updateAll);
-        return true;
-    }
-    return false;
 }
 
 bool AudioRegion::writeToJson (json& output)

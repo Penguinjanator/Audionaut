@@ -12,6 +12,7 @@
 #include "Engine/AudioSources/RenderTiming.h"
 #include "Engine/Link/LinkAudioDevice.h"
 #include "Engine/PlayList/PlayListScheduler.h"
+#include "Engine/Region/AudioRegionContainer.h"
 
 namespace audium {
 
@@ -84,7 +85,7 @@ public:
     static juce::File monoFileFor(const juce::File &target, int channel, ExportFormat format)
     {
         return target.getSiblingFile(target.getFileNameWithoutExtension() + "-"
-                                     + juce::String(formatInteger(channel)) + fileExtension(format));
+                                     + juce::String(AudioRegionContainer::formatNumber(channel)) + fileExtension(format));
     }
 
 private:
@@ -257,12 +258,6 @@ private:
         config->failure = failure;
         config->error = error;
         return false;
-    }
-
-    static std::string formatInteger(long num) {
-        std::ostringstream oss;
-        oss << std::setfill('0') << std::setw(2) << num;
-        return oss.str();
     }
 
     AudiumEngine &audiumEngine;                 ///< Reference to the AudiumEngine instance.

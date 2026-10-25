@@ -56,7 +56,7 @@ public:
      */
     void releaseResources() override
     {
-        channelRemapping->releaseResources();
+        clipTransportSource->releaseResources();
     }
     
     /**
@@ -80,13 +80,6 @@ public:
     void scheduleDurationSamples(int numSamples)
     {
         durationTimer.schedule(numSamples);
-    }
-
-    /// Seconds variant; rounded, so a length that is a whole number of
-    /// samples up to float noise does not lose its last sample.
-    void scheduleDuration(double duration, double sr)
-    {
-        scheduleDurationSamples(static_cast<int>(std::round(duration * sr)));
     }
     
     bool isPlaying() const noexcept
@@ -179,6 +172,8 @@ public:
         configureClipFades in ClipFadeSpec.h). Real-time safe. */
     void configureClipFades(const ClipFadeSpec& spec, double filePositionSeconds, bool reset);
 
+    /// Renders the voice's one channel into channel 0 of @p info; where it
+    /// belongs is getDestinationChannel(). A one-channel buffer is enough.
     void getNextAudioBlock (const juce::AudioSourceChannelInfo& info) override;
 
     /// Whether the voice reads through a read-ahead buffer and has a standby
@@ -189,6 +184,9 @@ public:
 
     void applyChannelMapping(bool withChannelOffset = true);
 
+    /// The output channel the voice's rendered channel belongs to (set by applyChannelMapping).
+    int getDestinationChannel() const noexcept { return destinationChannel.load(); }
+
     /// < configure gain, fade-in, fade-out
     void configureDynamics(std::shared_ptr<PlayListItem> item);
     
@@ -196,19 +194,25 @@ private:
     /// Gives a read-ahead buffer that cannot serve @p info yet a moment to catch up.
     void waitForReadAhead (const juce::AudioSourceChannelInfo& info);
 
+    /// Renders the transport into the voice's own file-wide buffer and copies
+    /// the mapped source channel into channel 0 of @p info.
+    void renderChannel (const juce::AudioSourceChannelInfo& info);
+
     AudioResource& audioResource; ///< Reference to the associated audio resource.
     std::shared_ptr<juce::AudioFormatReader> audioFormatReader; ///< Co-owns the resource's reader: a retired voice's read-ahead may still be reading it on the background thread after the resource is gone.
     std::shared_ptr<juce::TimeSliceThread> readAheadThread; ///< Co-owns that thread too (buffered readers only): the read-ahead buffers unregister from it when the transport below goes, and a retired voice can outlive the resource container that started it.
     std::atomic<int> scheduledStartSample   = 0; ///< The sample position for a scheduled position change.
     std::atomic<double> scheduledPosition   = 0.0; ///< The scheduled playback position in seconds.
     std::atomic<bool> reScheduled           = false; /// Helper to indicate if position is re-scheduled (loop)
+    std::atomic<int> sourceChannel          = 0; ///< File channel the voice plays (channel mapping, read on the audio thread).
+    std::atomic<int> destinationChannel     = 0; ///< Output channel of the channel mapping, read by Playback on the audio thread.
     audium::SampleTimer durationTimer; ///< Timer for managing playback duration.
     DspClipData scheduledClipData; ///< What scheduleClip last applied (audio thread).
     double pendingRestartAt = -1.0; ///< Timeline seconds of a deferred restart, < 0 when none (audio thread).
     std::shared_ptr<juce::AudioFormatReaderSource> audioFormatReaderSource; ///< Audio format reader source.
     std::shared_ptr<juce::AudioFormatReaderSource> standbyReaderSource; ///< Second cursor on the same reader for the transport's standby lane.
     std::shared_ptr<audium::ClipTransportSource> clipTransportSource; ///< Underlying clip voice source.
-    std::unique_ptr<juce::ChannelRemappingAudioSource> channelRemapping; ///< Channel remapping source; the outermost source in the chain.
+    juce::AudioBuffer<float> renderBuffer; ///< The transport's output, all file channels; sized in prepareToPlay.
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (VoiceSource)
 };

@@ -70,7 +70,8 @@ public:
                                               const std::shared_ptr<AudioRegion> otherRegion);
 
     /**
-     * @brief Formats a number as a string.
+     * @brief Formats a number as a string, zero-padded to two digits
+     *        (region, take and channel numbers in names).
      * @param num The number to format.
      * @return The formatted string.
      */
@@ -109,20 +110,6 @@ public:
     int getRegionId(std::shared_ptr<AudioRegion> searchRegion) const;
 
     /**
-     * @brief Retrieves regions associated with a specific resource group.
-     * @param resourceGroup A pointer to the `ResourceGroup`.
-     * @return A vector of shared pointers to `AudioRegion` objects.
-     */
-    std::vector<std::shared_ptr<AudioRegion>> getRegionsForResourceGroup(const ResourceGroup* resourceGroup) const;
-
-    /**
-     * @brief Retrieves selected regions.
-     * @param global Whether to retrieve globally selected regions.
-     * @return A vector of shared pointers to `AudioRegion` objects.
-     */
-    std::vector<std::shared_ptr<AudioRegion>> getSelectedRegions(bool global = false) const;
-
-    /**
      * @brief Finds a region similar to the specified one.
      * @param otherRegion A shared pointer to the `AudioRegion` to compare.
      * @return A shared pointer to the similar `AudioRegion`, or nullptr if not found.
@@ -155,12 +142,6 @@ public:
     bool deleteAudioRegion(AudioRegion* region);
 
     /**
-     * @brief Deletes all regions associated with a specific resource group.
-     * @param resourceGroup A shared pointer to the `ResourceGroup`.
-     */
-    void deleteAudioRegionsForResourceGroup(std::shared_ptr<ResourceGroup> resourceGroup);
-
-    /**
      * @brief Deletes unused regions.
      */
     void deleteUnusedRegions();
@@ -169,13 +150,6 @@ public:
      * @brief Sorts the IDs of all regions.
      */
     void sortRegionIds();
-
-    /**
-     * @brief Retrieves regions associated with a specific audio resource.
-     * @param audioResource A shared pointer to the `AudioResource`.
-     * @return A vector of shared pointers to `AudioRegion` objects.
-     */
-    std::vector<std::shared_ptr<AudioRegion>> getRegionsForResource(std::shared_ptr<AudioResource> audioResource) const;
 
     /**
      * @brief Retrieves the selected rows in the container.

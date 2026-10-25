@@ -136,7 +136,6 @@ public:
     
     void mouseUp (const MouseEvent& e) override
     {
-        //std::cout << "TransportPositionControl::mouseUp" << std::endl;
         if (regionSelector->isEnabled()) {
             auto selectedRange = audiumEngine->getAudioTrackContainer()->getAudioRegionAdapter().getSelectedRange(audium::clocks);
             auto relativeEvent = e.getEventRelativeTo(owner.get());
@@ -146,9 +145,7 @@ public:
                 y < AudiumLookAndFeel::transportPositionControlHeight) {
                 
                 auto x = relativeEvent.getPosition().getX();
-                //auto seconds = zoomHandler->xToSecondsWithOffset(x);
                 auto clocks = zoomHandler->xToClocksWithOffset(x);
-                // std::cout << x1 << " " << x << " " << pos << std::endl;
                 
                 zoomHandler->snapToGrid(clocks);
                 

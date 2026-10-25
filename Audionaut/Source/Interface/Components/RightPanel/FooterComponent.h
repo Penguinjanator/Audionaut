@@ -87,12 +87,13 @@ public:
             constexpr auto numFrames = sizeof(sweepFrames) / sizeof(sweepFrames[0]);
             const auto frame = sweepFrames[(analysisAnimationTick++ / 4) % numFrames];
 
-            auto analysisType = analysisWorker->getCurrentAnalysisType();
-            auto typeLabel = analysisType.has_value() ? audium::analysisTypeToString(*analysisType) : "";
-
-            std::string txt = std::string(frame) + " Analysing " + typeLabel + ": "
-                             + analysisWorker->getCurrentFileName().toStdString() + " ";
-            txt += "(" + std::to_string(analysisWorker->getRemainingCount()) + " remaining)";
+            // One pass serves all of a file's analyses, so the file, its
+            // progress and the files still waiting are what there is to say.
+            std::string txt = std::string(frame) + " Analysing "
+                             + analysisWorker->getCurrentFileName().toStdString() + " "
+                             + std::to_string((int) std::lround(100.0f * analysisWorker->getCurrentProgress())) + "%";
+            if (const auto more = analysisWorker->getPendingFileCount(); more > 0)
+                txt += " \xc2\xb7 " + std::to_string(more) + (more == 1 ? " more file" : " more files");
             analysisStatusLabel->setText(txt, juce::dontSendNotification);
         }
         else {

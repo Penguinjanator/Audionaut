@@ -34,15 +34,6 @@ public:
     
     void createComponents()
     {
-        auto editMode = audiumEngine->getPlayListScheduler()->isEditMode();
-        
-        if (editMode) {
-            juce::NativeMessageBox::showMessageBoxAsync(MessageBoxIconType::WarningIcon,
-                                                        "The region edit view was discontinued.",
-                                                        "We will now display the arrangement view.");
-            audiumEngine->getPlayListScheduler()->setEditMode(false);
-        }
-
         removeAllChildren();
         
         channelsComponent.reset(new ChannelsComponent(audiumEngine));

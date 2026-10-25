@@ -20,16 +20,25 @@ namespace audium {
 
 /** @brief The kinds of analysis whose results the cache can hold. */
 enum class AnalysisType {
-    SBic,       ///< BIC segmentation.
-    Onset,      ///< Onset detection.
-    Beat,       ///< Beat tracking (BeatSegmenter, Method::MultiFeature).
-    BeatDegara  ///< Beat tracking (BeatSegmenter, Method::Degara).
+    Segments,   ///< BIC segmentation (SBicSegmenter).
+    Onsets,     ///< Onset detection (OnsetSegmenter).
+    Beats       ///< Beat tracking with a BPM (BeatSegmenter).
 };
 
-/** @brief Stable, human-readable name for an analysis type (used in JSON). */
+/**
+ * @brief Stable, human-readable name for an analysis type (used in JSON and
+ *        on the command line): "segments", "onsets" or "beats".
+ */
 std::string analysisTypeToString(AnalysisType analysisType);
 
-/** @brief Parses an analysis type name; std::nullopt if unrecognised. */
+/**
+ * @brief Parses an analysis type name; std::nullopt if unrecognised.
+ *
+ * The names the types carried while the analysis ran on Essentia are still
+ * accepted, so stored settings and scripts keep working: "sbic" is
+ * Segments, "onset" is Onsets, and "beat_degara" as well as "beat" (the
+ * multifeature tracker, which no longer exists separately) are Beats.
+ */
 std::optional<AnalysisType> analysisTypeFromString(const std::string& name);
 
 /** @brief Comma-joins the types' names (see analysisTypeToString). */
@@ -178,12 +187,15 @@ public:
      * Version history:
      *   1 - initial; sidecars written before the version was ever checked
      *   2 - version checking introduced, discarding all of those
+     *   3 - analysis moved from Essentia to the native segmenters: the
+     *       types were renamed (segments / onsets / beats, the multifeature
+     *       "beat" dropped) and every result changed
      *
      * Note the bump has to accompany the change that motivates it. Landing a
      * segmenter change *after* a bump leaves caches rebuilt with the old
      * behaviour and still considered current, so it needs a bump of its own.
      */
-    static constexpr int dataVersion = 2;
+    static constexpr int dataVersion = 3;
 
 private:
     /** @brief A cached result plus the file identity it was computed from. */

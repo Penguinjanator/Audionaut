@@ -13,35 +13,31 @@ namespace audium {
 
 /**
  * @class BeatSegmenter
- * @brief Tracks beat positions in an audio file using Essentia's
- *        BeatTrackerMultiFeature algorithm (streaming mode).
+ * @brief Tracks the beats of an audio file and reports their tempo.
  *
- * As with SBicSegmenter and OnsetSegmenter, the public interface is free of
- * any Essentia types so this header can be included from engine code (e.g.
- * AnalysisProvider) that does not itself link against Essentia. The streaming
- * network (MonoLoader -> BeatTrackerMultiFeature) lives entirely in the .cpp.
+ * The chain is AnalysisAudioLoader -> Stft -> OnsetStrength -> TempoEstimator
+ * -> BeatTracker, run by AnalysisRun, which shares the front end with the
+ * other analyses. This class is the single-type door to it: a file in, beat
+ * timestamps plus a BPM out. The BPM is the tempo the tracked beats actually
+ * follow, which is what the grid snapping and the clip tempo consume.
  */
 class BeatSegmenter {
 
 public:
     /**
-     * @brief Beat-tracking method, passed through to RhythmExtractor2013's
-     *        "method" parameter.
-     */
-    enum class Method {
-        MultiFeature,
-        Degara
-    };
-
-    /**
      * @brief Tunable parameters for the beat tracking.
      */
     struct Parameters {
-        float sampleRate = 44100.0f;
-        Method method = Method::MultiFeature;
-        // RhythmExtractor2013's own tempo search range defaults.
+        /// The audio is resampled to this rate and analysed in 2048-sample
+        /// frames with a hop of 512.
+        float sampleRate = 22050.0f;
+        /// The tempo search range, in BPM.
         int maxTempo = 208;
         int minTempo = 40;
+        /// Track the beats on the flux of the band magnitudes rather than
+        /// of their dB values: see OnsetStrength::Flux. The tempo is always
+        /// estimated on the dB envelope.
+        bool linearBeatFlux = true;
     };
 
     /**
@@ -49,7 +45,7 @@ public:
      */
     struct Result {
         std::vector<float> beats;  ///< Beat timestamps in seconds.
-        float bpm = 0.0f;          ///< RhythmExtractor2013's overall BPM estimate.
+        float bpm = 0.0f;          ///< The tempo of the beats.
     };
 
     BeatSegmenter() = default;
@@ -65,10 +61,11 @@ public:
      * @brief Tracks beats for the given audio file.
      * @param audioFile The audio file to analyse.
      * @param params Beat-tracking parameters.
-     * @param shouldAbort Optional flag polled between the streaming network's
-     *        steps. Once set, the analysis gives up at the next poll and
-     *        returns empty, so a caller shutting down (see AnalysisWorker)
-     *        waits for one step at most rather than for the whole file.
+     * @param shouldAbort Optional flag polled between the analysis stages
+     *        (decoding, the STFT frames, the tracking). Once set, the
+     *        analysis gives up at the next poll and returns empty, so a
+     *        caller shutting down (see AnalysisWorker) waits for one stage
+     *        at most rather than for the whole file.
      * @return Beat timestamps and BPM estimate. Empty/zero on failure or when
      *         aborted.
      */

@@ -15,7 +15,7 @@ run:
 ./build/AudionautTests_artefacts/AudionautTests
 ```
 
-run a single tag/scenario (tests are tagged, e.g. `[engine]`, `[cli]`, `[essentia]`):
+run a single tag/scenario (tests are tagged, e.g. `[engine]`, `[cli]`, `[analysis]`):
 
 ```
 ./build/AudionautTests_artefacts/AudionautTests "[cli]"
@@ -39,9 +39,9 @@ cmake --build build --target AudionautCli
 ./build/AudionautCli_artefacts/AudionautCli --help
 ```
 
-note: CMake globs the source files at configure time - after adding a new
-.cpp (a test, a CLI command, or a new Source subdirectory) re-run the
-`cmake -B build ...` configure step or the file won't be compiled.
+note: the source globs are `CONFIGURE_DEPENDS`, so a new .cpp (a test, a CLI
+command, or a whole new Source subdirectory) is picked up by the next build
+without re-running the configure step.
 
 update Xcode project (creates a xcode project in the "_build" folder):
 

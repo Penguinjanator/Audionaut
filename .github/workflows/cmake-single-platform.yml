@@ -1,10 +1,8 @@
-# This starter workflow is for a CMake project running on a single platform. There is a different starter workflow if you need cross-platform coverage.
-# See: https://github.com/actions/starter-workflows/blob/main/ci/cmake-multi-platform.yml
-name: Build and run Catch2 tests on macos 
+name: Build and run Catch2 tests on macos
 
 on:
   push:
-    branches: 
+    branches:
       - main
       - develop
   pull_request:
@@ -12,15 +10,8 @@ on:
       - main
       - develop
 
-env:
-  # Customize the CMake build type here (Release, Debug, RelWithDebInfo, etc.)
-  BUILD_TYPE: Release
-
 jobs:
   build:
-    # The CMake configure and build commands are platform agnostic and should work equally well on Windows or Mac.
-    # You can convert this to a matrix build if you need cross-platform coverage.
-    # See: https://docs.github.com/en/free-pro-team@latest/actions/learn-github-actions/managing-complex-workflows#using-a-build-matrix
     runs-on: macos-latest
 
     steps:
@@ -29,102 +20,8 @@ jobs:
     - name: Checkout submodules
       uses: ./.github/actions/checkout-submodules
 
-    # Some test wavs (see .gitattributes) live in Git LFS; without this the
-    # tests get pointer stubs and fail loading them. A separate step rather
-    # than `lfs: true` on the checkout: that option also smudges LFS pointers
-    # inside the essentia submodule, whose upstream has LFS disabled, and the
-    # resulting download error fails the whole checkout.
-    - name: Fetch Git LFS test files
-      run: git lfs pull
-
-    # Essentia (the audio-analysis backend) is built from the submodule tree; the
-    # tests link the resulting static libs. Without it, ESSENTIA_ENABLED
-    # auto-detects off and the analysis tests compile out.
-    - name: Set up Python for waf
-      # Essentia's bundled waf needs stdlib distutils, removed in Python 3.12+.
-      uses: actions/setup-python@v5
+    - name: Build and run the tests
+      uses: ./.github/actions/run-catch2-tests
       with:
-        python-version: '3.11'
-
-    - name: Pin CMake 3.x for the legacy Essentia 3rd-party builds
-      # Essentia's 3rd-party deps (taglib, chromaprint, ...) ship CMakeLists from
-      # 2012-2016 that CMake 4.x refuses (removed <3.5 minimums and OLD policy
-      # behaviour). The runner ships CMake 4.x; pin the last 3.x line, which also
-      # builds the JUCE/Catch2 project fine (it needs only >= 3.15).
-      run: |
-        pip install "cmake~=3.31.0"
-        echo "cmake: $(command -v cmake)  $(cmake --version | head -1)"
-
-    - name: Install Essentia build tools
-      run: brew install pkg-config
-
-    - name: Essentia submodule revision
-      id: essentia-rev
-      run: echo "sha=$(git -C Submodules/essentia rev-parse HEAD)" >> "$GITHUB_OUTPUT"
-
-    # Restore/save are split (not the combined cache action) so the cache is
-    # only written after a *successful* build - a partial build from a failed
-    # run must never poison the cache (it would make CMake silently fall back to
-    # Essentia-off and pass without exercising analysis).
-    # The cache must include src/version.h: waf generates it into the *source*
-    # tree, and the test build includes it via essentia/src. Without it, a
-    # cache hit skips the build step and the compile fails on the missing
-    # header. Key is versioned (v2) to invalidate earlier caches saved without
-    # version.h.
-    - name: Restore Essentia cache
-      id: cache-essentia
-      uses: actions/cache/restore@v4
-      with:
-        path: |
-          Submodules/essentia/build
-          Submodules/essentia/src/version.h
-          Submodules/essentia/packaging/debian_3rdparty/include
-          Submodules/essentia/packaging/debian_3rdparty/lib
-        key: essentia-v2-${{ runner.os }}-${{ runner.arch }}-${{ steps.essentia-rev.outputs.sha }}-${{ hashFiles('Audionaut/Builds/build_essentia.sh') }}
-
-    - name: Build Essentia
-      if: steps.cache-essentia.outputs.cache-hit != 'true'
-      run: ./Audionaut/Builds/build_essentia.sh
-
-    - name: Save Essentia cache
-      # Reached only if Build Essentia succeeded (the job stops on failure).
-      if: steps.cache-essentia.outputs.cache-hit != 'true'
-      uses: actions/cache/save@v4
-      with:
-        path: |
-          Submodules/essentia/build
-          Submodules/essentia/src/version.h
-          Submodules/essentia/packaging/debian_3rdparty/include
-          Submodules/essentia/packaging/debian_3rdparty/lib
-        key: essentia-v2-${{ runner.os }}-${{ runner.arch }}-${{ steps.essentia-rev.outputs.sha }}-${{ hashFiles('Audionaut/Builds/build_essentia.sh') }}
-
-    - name: Configure CMake
-      # Configure CMake in a 'build' subdirectory. `CMAKE_BUILD_TYPE` is only required if you are using a single-configuration generator such as make.
-      # See https://cmake.org/cmake/help/latest/variable/CMAKE_BUILD_TYPE.html?highlight=cmake_build_type
-      run: cmake -B ${{github.workspace}}/build -S${{github.workspace}}/Audionaut/Catch2Tests -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}}
-
-    - name: Build
-      # Build your program with the given configuration
-      run: cmake --build ${{github.workspace}}/build --config ${{env.BUILD_TYPE}}
-
-    - name: Test
-      working-directory: ${{github.workspace}}/build
-      # Execute tests defined by the CMake configuration.
-      # See https://cmake.org/cmake/help/latest/manual/ctest.1.html for more detail
-      # --no-tests=error: ctest passes by default when it finds no tests, which
-      # is how a missing enable_testing() made this step a silent no-op.
-      run: ctest -C ${{env.BUILD_TYPE}} --output-on-failure --no-tests=error
-
-    - name: Check that the suite left the fixtures alone
-      # A test that opens a checked-in session in place would leave what it
-      # imports or records in the repository (see FixtureSessionCopy in
-      # Catch2Tests/Tests/TestEngine.h); the per-engine ProjectDirectories
-      # keep one test's project directory from leaking into the next.
-      shell: bash
-      run: |
-        if [ -n "$(git status --porcelain -- Audionaut/Catch2Tests/TestFiles)" ]; then
-          echo "the test run left files under Audionaut/Catch2Tests/TestFiles:"
-          git status --short -- Audionaut/Catch2Tests/TestFiles
-          exit 1
-        fi
-
+        build-type: Release
+        config: Release

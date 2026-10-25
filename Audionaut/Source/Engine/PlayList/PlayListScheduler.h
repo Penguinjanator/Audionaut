@@ -109,15 +109,6 @@ public:
     void setFollowTransport(bool enable) { data.followTransport = enable; }
     bool getFollowTransport() const { return data.followTransport; }
     
-    [[deprecated]]
-    void setEditMode(bool bEditMode) { data.editMode = bEditMode; }
-    
-    [[deprecated]]
-    bool isEditMode() const { return data.editMode; }
-    
-    [[deprecated]]
-    bool isArrangementMode() const { return !data.editMode; }
-    
     void setCurrentPositionAtPlayListItemIndex(std::shared_ptr<AudioTrack> track, int playListItemIndex);
     int getPlayListItemIndexAtCurrentPosition(std::shared_ptr<AudioTrack> track);
     double getPlayListItemProgress(std::shared_ptr<AudioTrack> track, int playListItemIndex) const;
@@ -136,14 +127,9 @@ public:
         if (isPlaying &&
             beats >= 0.0) {
             
-            auto timeContext = audium::seconds;
-            auto pos = 0.0;
-            if (timeContext == clocks)
-                pos = tempoProvider->beatsToClocks(beats);
-            else
-                pos = tempoProvider->beatsToSeconds(beats);
+            auto pos = tempoProvider->beatsToSeconds(beats);
             
-            auto loopResult = transportLoop->processLoop(pos, numSamples, timeContext);
+            auto loopResult = transportLoop->processLoop(pos, numSamples, audium::seconds);
             
             if (loopResult.context == audium::seconds)
                 data.transportPositionClocks = tempoProvider->secondsToClocks(loopResult.positionResult);
@@ -196,7 +182,6 @@ public:
     void stopRecording(const int channelNumber = -1);
     bool isRecordingArmed() const noexcept { return data.isRecordingArmed; }
     void setRecordingArmed(bool bArmed) { data.isRecordingArmed = bArmed; }
-    double getRecordingLength(audium::TimeContextType context) const;
     
     bool isRecording() const noexcept;
     
@@ -247,6 +232,10 @@ public:
     
 private:
     
+    /** Puts the transport, its start and the loop's notion of being inside
+        it at positionClocks, whatever Link reports about playing. */
+    void moveTransportTo(double positionClocks);
+
     /** Audio thread, stopped transport: takes over the committed voice and
         clip snapshots without rendering, so retired voice sources can be
         released at the next commit (see VoiceSourceContainer::commit). */
@@ -292,8 +281,6 @@ private:
     double externalSampleRate = 0.0;
     
     int bufferSize = 0;
-    
-    std::atomic<bool> forcePosition = false;
     
     std::atomic<double> totalLengthClocks = 0.0;
 

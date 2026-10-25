@@ -71,13 +71,6 @@ public:
     void setSourceChannel(int newSrcChannel);
 
     /**
-     * @brief Checks if the mapping contains the specified source channel number.
-     * @param channelNumber The source channel number to check.
-     * @return True if the source channel number exists, false otherwise.
-     */
-    bool containsSourceChannelNumber(int channelNumber) const;
-
-    /**
      * @brief Checks if the mapping contains the specified destination channel number.
      * @param channelNumber The destination channel number to check.
      * @return True if the destination channel number exists, false otherwise.

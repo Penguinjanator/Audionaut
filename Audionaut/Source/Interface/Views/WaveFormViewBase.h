@@ -15,7 +15,6 @@
 #include "Engine/Region/AudioRegion.h"
 #include "Engine/Group/AudioTrack.h"
 #include "Engine/AudiumEngine.h"
-#include "Engine/Factory/AudioResourceFactory.h"
 #include "Engine/Resource/audium_AudioThumbnail.h"
 #include "Engine/Resource/ChannelMapping.h"
 
@@ -42,12 +41,6 @@ public:
         channelNumber(channelNumber_),
         playListItem(playListItem_)
     {
-        // this component doesn't handle mouse events
-        //setInterceptsMouseClicks(false, false);
-        
-        // use buffered image
-        // setBufferedToImage(true);
-        
         createThumbnailCache();
     }
 

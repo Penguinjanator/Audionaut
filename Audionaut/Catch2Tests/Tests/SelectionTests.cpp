@@ -101,3 +101,49 @@ SCENARIO("pasting clipboard JSON with stale ids is skipped instead of crashing",
         }
     }
 }
+
+SCENARIO("the first selected clip is found among other selected objects", "[engine][selection]")
+{
+    TestEngine engine;
+    auto tracks = engine->getAudioTrackContainer();
+    auto selection = tracks->getSelectionManager();
+
+    auto audioFile = File(selectionTestFilesDirectory + "120-funk-1-sec.wav");
+    REQUIRE(audioFile.existsAsFile());
+
+    GIVEN("a project with one clip") {
+        engine->getProjectSerializer()->createNewProject();
+        REQUIRE(tracks->addAudioFiles({ audioFile.getFullPathName() }, 0.0, nullptr, false));
+
+        std::shared_ptr<AudioTrack> clipTrack;
+        for (auto i = 0; i < tracks->getNumItems(); ++i)
+            if (tracks->getAudioTrack(i)->getPlayListContainer()->playListItems.size() > 0)
+                clipTrack = tracks->getAudioTrack(i);
+        REQUIRE(clipTrack != nullptr);
+        auto clip = clipTrack->getPlayListContainer()->playListItems.getObjects()[0];
+
+        selection->deselectAll();
+
+        THEN("nothing selected yields no clip") {
+            REQUIRE(selection->firstSelectedClip() == nullptr);
+        }
+
+        WHEN("only the track is selected") {
+            clipTrack->setSelected(true);
+
+            THEN("there is no selected clip") {
+                REQUIRE(selection->anythingSelected());
+                REQUIRE(selection->firstSelectedClip() == nullptr);
+            }
+        }
+
+        WHEN("the track and then the clip are selected") {
+            clipTrack->setSelected(true);
+            clip->setSelected(true);
+
+            THEN("the clip is returned") {
+                REQUIRE(selection->firstSelectedClip() == clip);
+            }
+        }
+    }
+}

@@ -213,12 +213,40 @@ SCENARIO ("cli split and create-region", "[cli][region]")
         }
 
         WHEN ("split targets a position outside every clip") {
+            nlohmann::json envelope;
+            context.envelopeSink = [&envelope] (const nlohmann::json& produced) { envelope = produced; };
+            auto exitCode = cli::runSplit (makeArgs ("split " + project.getFullPathName()
+                                                     + " --at 10 --unit seconds"),
+                                           context);
+            context.envelopeSink = nullptr;
+
             THEN ("it fails without touching the project") {
-                REQUIRE (cli::runSplit (makeArgs ("split " + project.getFullPathName()
-                                                  + " --at 10 --unit seconds"),
-                                        context)
-                         == cli::exitFailure);
+                REQUIRE (exitCode == cli::exitFailure);
                 REQUIRE (countPlayListItems (readProjectJson (project)) == baselineItems);
+            }
+
+            THEN ("the error names the position as given and in the other units") {
+                REQUIRE (envelope["error"]["code"] == "nothing_to_split");
+                auto message = envelope["error"]["message"].get<std::string>();
+                REQUIRE (message.find ("10 seconds") != std::string::npos);
+                REQUIRE (message.find ("10 s") != std::string::npos);
+                REQUIRE (message.find ("bar 6") != std::string::npos); // 10 s at 120 BPM = 5 bars past bar 1
+            }
+        }
+
+        WHEN ("split targets the clip's exact start") {
+            nlohmann::json envelope;
+            context.envelopeSink = [&envelope] (const nlohmann::json& produced) { envelope = produced; };
+            auto exitCode = cli::runSplit (makeArgs ("split " + project.getFullPathName() + " --at 1"),
+                                           context);
+            context.envelopeSink = nullptr;
+
+            THEN ("there is nothing to cut, and the error says so") {
+                REQUIRE (exitCode == cli::exitFailure);
+                REQUIRE (countPlayListItems (readProjectJson (project)) == baselineItems);
+                auto message = envelope["error"]["message"].get<std::string>();
+                REQUIRE (message.find ("1 bars (0 s, bar 1)") != std::string::npos);
+                REQUIRE (message.find ("start or end") != std::string::npos);
             }
         }
 
@@ -1112,14 +1140,10 @@ SCENARIO ("cli long verbs report progress from 0 to 1, once per 5% step", "[cli]
     }
 
     WHEN ("the project is analyzed") {
-        const auto exitCode = cli::runAnalyze (makeArgs ("analyze " + project.getFullPathName() + " --types sbic"),
-                                               context);
-
-        // builds without Essentia have nothing to report
-        if (exitCode != cli::exitUnavailable) {
-            REQUIRE (exitCode == cli::exitOk);
-            requireSteppedFromZeroToOne();
-        }
+        REQUIRE (cli::runAnalyze (makeArgs ("analyze " + project.getFullPathName() + " --types segments"),
+                                  context)
+                 == cli::exitOk);
+        requireSteppedFromZeroToOne();
     }
 
     workDir.deleteRecursively();
@@ -1558,6 +1582,163 @@ SCENARIO ("cli import stops at the project's channel limit", "[cli][channels]")
                                            capturing)
                          == cli::exitFailure);
                 REQUIRE (envelope["error"]["code"] == "no_channels");
+            }
+        }
+    }
+
+    workDir.deleteRecursively();
+}
+
+SCENARIO ("cli analyze reports results under the requested names and refuses what it cannot decode", "[cli][analysis]")
+{
+    const auto testFiles = juce::String (CURRENT_SOURCE_DIR) + "/TestFiles/";
+    const auto audioFile = juce::File (testFiles + "120-funk-export.wav");
+    REQUIRE (audioFile.existsAsFile());
+
+    cli::CliContext context;
+    context.json = true;
+    context.quiet = true;
+    nlohmann::json envelope;
+    context.envelopeSink = [&envelope] (const nlohmann::json& e) { envelope = e; };
+
+    WHEN ("the types are given by their old names")
+    {
+        const auto exitCode = cli::runAnalyze (makeArgs ("analyze " + audioFile.getFullPathName()
+                                                         + " --types sbic,beat_degara,onsets --json"),
+                                               context);
+
+        THEN ("each result sits under the name it was asked for")
+        {
+            REQUIRE (exitCode == cli::exitOk);
+            const auto& analyses = envelope["result"]["files"][0]["analyses"];
+            REQUIRE (analyses.contains ("sbic"));
+            REQUIRE (analyses.contains ("beat_degara"));
+            REQUIRE (analyses.contains ("onsets"));
+            CHECK (analyses["sbic"]["segments"].size() >= 2);
+            CHECK (analyses["beat_degara"]["bpm"].get<float>() > 0.0f);
+            CHECK_FALSE (analyses.contains ("segments"));
+        }
+    }
+
+    WHEN ("the file is not audio")
+    {
+        const auto bogus = juce::File::getSpecialLocation (juce::File::tempDirectory)
+                               .getChildFile ("AudionautTests").getChildFile ("not-audio.wav");
+        bogus.getParentDirectory().createDirectory();
+        bogus.replaceWithText ("this is not a wav file");
+
+        const auto exitCode = cli::runAnalyze (makeArgs ("analyze " + bogus.getFullPathName() + " --json"), context);
+
+        THEN ("it fails with decode_failed instead of reporting empty analyses")
+        {
+            REQUIRE (exitCode == cli::exitFailure);
+            REQUIRE (envelope["ok"] == false);
+            CHECK (envelope["error"]["code"] == "decode_failed");
+        }
+
+        bogus.deleteFile();
+    }
+}
+
+SCENARIO ("cli track-pan", "[cli][track][pan]")
+{
+    auto workDir = makeWorkDirectory();
+    auto project = workDir.getChildFile ("pan.audium");
+    auto audioFile = juce::File (testFilesDir + "sine-0dB.wav");
+    REQUIRE (audioFile.existsAsFile());
+
+    cli::CliContext context;
+    context.quiet = true;
+    context.json = true; // info only hands its summary to the envelope sink in --json mode
+    nlohmann::json envelope;
+    context.envelopeSink = [&envelope] (const nlohmann::json& produced) { envelope = produced; };
+
+    // `create` makes an empty two-channel track 0; the import lands the mono
+    // clip on a one-strip track 1 - the "mono stem" of the agent's request
+    GIVEN ("a project whose track 1 is a mono stem holding a one-second clip") {
+        REQUIRE (cli::runCreate (makeArgs ("create " + project.getFullPathName() + " --channels 2"), context)
+                 == cli::exitOk);
+        REQUIRE (cli::runImport (makeArgs ("import " + project.getFullPathName() + " "
+                                           + audioFile.getFullPathName()),
+                                 context)
+                 == cli::exitOk);
+        const auto projectArg = project.getFullPathName();
+
+        THEN ("the summary shows the strip centred") {
+            REQUIRE (cli::runInfo (makeArgs ("info " + projectArg), context) == cli::exitOk);
+            auto tracks = envelope["result"]["tracks"];
+            REQUIRE (tracks.size() == 2);
+            REQUIRE (tracks[1]["channels"].size() == 1);
+            REQUIRE (tracks[1]["channels"][0]["pan"].get<double>() == Catch::Approx (0.0));
+        }
+
+        WHEN ("the stem is panned hard left") {
+            REQUIRE (cli::runTrackPan (makeArgs ("track-pan " + projectArg + " --track 1 --pan -1"), context)
+                     == cli::exitOk);
+
+            THEN ("the result, the summary and the saved project carry the pan") {
+                REQUIRE (envelope["result"]["track"] == 1);
+                REQUIRE (envelope["result"]["pans"].size() == 1);
+                REQUIRE (envelope["result"]["pans"][0].get<double>() == Catch::Approx (-1.0));
+
+                auto json = readProjectJson (project);
+                REQUIRE (json["audium"]["audio_tracks"][1]["channels"][0]["pan"].get<double>()
+                         == Catch::Approx (-1.0));
+
+                REQUIRE (cli::runInfo (makeArgs ("info " + projectArg), context) == cli::exitOk);
+                REQUIRE (envelope["result"]["tracks"][1]["channels"][0]["pan"].get<double>()
+                         == Catch::Approx (-1.0));
+            }
+
+            THEN ("a stereo export puts the clip on the left only") {
+                auto output = workDir.getChildFile ("left.wav");
+                REQUIRE (cli::runExport (makeArgs ("export " + projectArg + " -o " + output.getFullPathName()
+                                                   + " --channels 2"),
+                                         context)
+                         == cli::exitOk);
+
+                juce::AudioFormatManager formatManager;
+                formatManager.registerBasicFormats();
+                std::unique_ptr<juce::AudioFormatReader> reader (formatManager.createReaderFor (output));
+                REQUIRE (reader != nullptr);
+                REQUIRE (reader->numChannels == 2);
+                juce::AudioBuffer<float> buffer (2, static_cast<int> (reader->lengthInSamples));
+                reader->read (&buffer, 0, buffer.getNumSamples(), 0, true, true);
+                REQUIRE (buffer.getMagnitude (0, 0, buffer.getNumSamples()) > 0.5f);
+                REQUIRE (buffer.getMagnitude (1, 0, buffer.getNumSamples()) == Catch::Approx (0.0).margin (1.0e-4));
+            }
+        }
+
+        WHEN ("one strip is addressed") {
+            REQUIRE (cli::runTrackPan (makeArgs ("track-pan " + projectArg + " --track 1 --pan 0.25 --channel 0"),
+                                       context)
+                     == cli::exitOk);
+
+            THEN ("that strip moves") {
+                REQUIRE (envelope["result"]["pans"][0].get<double>() == Catch::Approx (0.25));
+            }
+        }
+
+        WHEN ("the options are unusable") {
+            THEN ("each call fails without touching the project") {
+                REQUIRE (cli::runTrackPan (makeArgs ("track-pan " + projectArg + " --track 0"), context)
+                         == cli::exitUsage);
+                REQUIRE (cli::runTrackPan (makeArgs ("track-pan " + projectArg + " --pan 0.5"), context)
+                         == cli::exitUsage);
+                REQUIRE (cli::runTrackPan (makeArgs ("track-pan " + projectArg + " --track 0 --pan 1.5"), context)
+                         == cli::exitUsage);
+                REQUIRE (cli::runTrackPan (makeArgs ("track-pan " + projectArg + " --track 0 --pan left"), context)
+                         == cli::exitUsage);
+                REQUIRE (cli::runTrackPan (makeArgs ("track-pan " + projectArg + " --track 0 --pan 0 --channel 3"),
+                                           context)
+                         == cli::exitUsage);
+                REQUIRE (cli::runTrackPan (makeArgs ("track-pan " + projectArg + " --track 7 --pan 0"), context)
+                         == cli::exitFailure);
+                REQUIRE (envelope["error"]["code"] == "track_not_found");
+
+                auto json = readProjectJson (project);
+                REQUIRE (json["audium"]["audio_tracks"][1]["channels"][0]["pan"].get<double>()
+                         == Catch::Approx (0.0));
             }
         }
     }

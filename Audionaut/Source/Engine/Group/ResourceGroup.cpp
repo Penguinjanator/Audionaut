@@ -50,21 +50,15 @@ void ResourceGroup::cleanupAudioResources()
 
 bool ResourceGroup::writeToJson (json& output)
 {
-    for (auto resource : getAudioResources()) {
-        json j;
-        resource->writeToJson(j);
-        output["resources"] += j;
-    }
-    
-    audioRegionContainer->writeToJson(output);        
-    return true;
+    return writeChannelToJson(output, nullptr);
 }
 
 bool ResourceGroup::writeChannelToJson (json& output, AudioChannel* audioChannel)
 {
     for (auto resource : getAudioResources()) {
-        json j;
-        if (resource->getChannelMapping().containsDestinationChannelNumber(audioChannel->getChannelNumber())) {
+        if (audioChannel == nullptr
+            || resource->getChannelMapping().containsDestinationChannelNumber(audioChannel->getChannelNumber())) {
+            json j;
             resource->writeToJson(j);
             output["resources"] += j;
         }
@@ -115,11 +109,6 @@ void ResourceGroup::mergeFromJson(json& input, int destinationChannel)
     audioRegionContainer->mergeFromJson(input, destinationChannel);
 }
 
-bool ResourceGroup::writeToStream (juce::OutputStream& outputStream)
-{
-    return Streamable::writeToStream(outputStream);
-}
-
 bool ResourceGroup::readFromJson (json& input, bool rebuild)
 {
     json output;
@@ -168,15 +157,6 @@ bool ResourceGroup::readFromJson (json& input, bool rebuild)
     }
         
     return audioRegionContainer->readFromJson(input, rebuild);
-}
-
-bool ResourceGroup::readFromStream (juce::InputStream& inputStream, bool rebuild)
-{
-    if (Streamable::readFromStream(inputStream)) {
-        getAudioTrack().getAudioTrackContainer().sendActionMessage(updateAll);
-        return true;
-    }
-    return false;
 }
 
 std::vector<std::shared_ptr<AudioResource>> ResourceGroup::getAudioResources() const

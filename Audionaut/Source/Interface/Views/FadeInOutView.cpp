@@ -8,6 +8,33 @@
 
 using namespace juce;
 
+float FadeRampGeometry::gainAt (float offsetIntoRamp) const
+{
+    auto progress = offsetIntoRamp / width;
+    return static_cast<float>(audium::ClipDynamics::fadeCurve(fadeOut ? 1.f - progress : progress, curve));
+}
+
+float FadeRampGeometry::yAt (float x) const
+{
+    return bottom - (gainAt(x - startX) * height);
+}
+
+juce::Path FadeRampGeometry::makePath (float fromX, float fromY, float toX, float toY, bool sampleFromX) const
+{
+    juce::Path path;
+    path.startNewSubPath(fromX, fromY);
+
+    auto fromOffset = fromX - startX;
+    auto numPixels  = static_cast<int>(toX - fromX);
+    auto stride     = numPixels > 10 ? 4 : 1;
+    for (auto w = sampleFromX ? 0 : stride; w < numPixels; w += stride)
+        path.lineTo(fromX + static_cast<float>(w),
+                    bottom - (gainAt(fromOffset + static_cast<float>(w)) * height));
+
+    path.lineTo(toX, toY);
+    return path;
+}
+
 void FadeInOutView::paint (juce::Graphics& g)
 {
     if (playListItem == nullptr)
@@ -55,19 +82,9 @@ void FadeInOutView::paint (juce::Graphics& g)
     juce::Path strokePath;
 
     if (hasFadeIn) {
-        auto fRampWidth = fFadeInEndX - fFadeInStartX;
-        auto iRampWidth = static_cast<int>(fRampWidth);
-
-        juce::Path curve;
-        curve.startNewSubPath (Point<float> (fFadeInStartX, fHeight));
-        auto stride = iRampWidth > 10 ? 4 : 1;
-        for (auto w = 0; w < iRampWidth; w += stride) {
-            auto square = static_cast<float>(audium::ClipDynamics::fadeCurve(w / fRampWidth, dynamics.getFadeInCurve()));
-            auto y      = fHeight - (square * fHeight);
-
-            curve.lineTo(fFadeInStartX + static_cast<float>(w), y);
-        }
-        curve.lineTo(fFadeInEndX, yOffset);
+        FadeRampGeometry ramp { fFadeInStartX, fFadeInEndX - fFadeInStartX, false,
+                                dynamics.getFadeInCurve(), fHeight, fHeight };
+        auto curve = ramp.makePath(fFadeInStartX, fHeight, fFadeInEndX, yOffset);
 
         strokePath.addPath(curve);
 
@@ -78,19 +95,9 @@ void FadeInOutView::paint (juce::Graphics& g)
     }
 
     if (hasFadeOut) {
-        auto fRampWidth = fFadeOutEndX - fFadeOutStartX;
-        auto iRampWidth = static_cast<int>(fRampWidth);
-
-        juce::Path curve;
-        curve.startNewSubPath (Point<float> (fFadeOutStartX, yOffset));
-        auto stride = iRampWidth > 10 ? 4 : 1;
-        for (auto w = 0; w < iRampWidth; w += stride) {
-            auto square = static_cast<float>(audium::ClipDynamics::fadeCurve(1.f - (w / fRampWidth), dynamics.getFadeOutCurve()));
-            auto y      = fHeight - (square * fHeight);
-
-            curve.lineTo(fFadeOutStartX + static_cast<float>(w), y);
-        }
-        curve.lineTo(fFadeOutEndX, fHeight);
+        FadeRampGeometry ramp { fFadeOutStartX, fFadeOutEndX - fFadeOutStartX, true,
+                                dynamics.getFadeOutCurve(), fHeight, fHeight };
+        auto curve = ramp.makePath(fFadeOutStartX, yOffset, fFadeOutEndX, fHeight);
 
         strokePath.addPath(curve);
 

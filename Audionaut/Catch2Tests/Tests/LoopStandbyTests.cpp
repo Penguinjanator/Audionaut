@@ -26,6 +26,7 @@
 #include "Engine/Resource/AudioResource.h"
 #include "Engine/Resource/AudioResourceContainer.h"
 
+#include "TestEngine.h"
 #include "TestUtils.h"
 
 // A Stretch-mode clip re-primes its stretcher on every seek - its start,
@@ -148,7 +149,7 @@ juce::AudioBuffer<float> readAudioFile (const juce::File& file)
 /// reader for FLAC, so a clip of it plays through a read-ahead buffer.
 juce::File createSlowSawFlacFile()
 {
-    const auto targetFile = juce::File (juce::String (CURRENT_SOURCE_DIR) + "/TestFiles/slow-saw.flac");
+    const auto targetFile = testOutputDirectory().getChildFile ("slow-saw.flac");
     juce::TemporaryFile tempFile (targetFile);
 
     std::unique_ptr<juce::OutputStream> stream (tempFile.getFile().createOutputStream());
@@ -260,7 +261,7 @@ SCENARIO ("a looped stretched clip wraps through the standby lane", "[engine][lo
     auto testFile = createSlowSawAudioFile();
     REQUIRE (testFile.existsAsFile());
 
-    const auto bounceFile = juce::File (juce::String (CURRENT_SOURCE_DIR) + "/TestFiles/loop-standby-out.wav");
+    const auto bounceFile = testOutputDirectory().getChildFile ("loop-standby-out.wav");
 
     // a looped bounce of the stretched clip; returns the bounce and the
     // clip's stretch node counters
@@ -358,7 +359,7 @@ SCENARIO ("a stretched clip starts through the standby lane", "[engine][stretch]
 
     auto testFile = createSlowSawAudioFile();
     REQUIRE (testFile.existsAsFile());
-    const auto bounceFile = juce::File (juce::String (CURRENT_SOURCE_DIR) + "/TestFiles/clip-start-standby-out.wav");
+    const auto bounceFile = testOutputDirectory().getChildFile ("clip-start-standby-out.wav");
 
     // the stretched clip placed at one second into an unlooped bounce
     struct Result { juce::AudioBuffer<float> audio; int primes = 0; int adoptions = 0; };
@@ -428,9 +429,6 @@ SCENARIO ("a stretched clip starts through the standby lane", "[engine][stretch]
 
 SCENARIO ("play start inside a stretched clip primes its standby before the first block", "[engine][stretch][standby]")
 {
-    juce::MessageManager::getInstance();
-    juce::MessageManagerLock mmLock (juce::Thread::getCurrentThread());
-
     auto testFile = createSlowSawAudioFile();
     REQUIRE (testFile.existsAsFile());
 
@@ -439,7 +437,7 @@ SCENARIO ("play start inside a stretched clip primes its standby before the firs
         constexpr int blockSize = 128;
         constexpr double sampleRate = 44100.0;
 
-        auto engine = AudiumFactory::createAudiumEngine();
+        TestEngine engine;
         REQUIRE (engine->getProjectFileStore()->open (testFile, nullptr));
         auto item = engine->getAudioTrackContainer()->getAudioTrack (0)->getPlayListContainer()->getPlayListItem (0);
         REQUIRE (item != nullptr);
@@ -475,13 +473,9 @@ SCENARIO ("play start inside a stretched clip primes its standby before the firs
                 REQUIRE_FALSE (stretch->hasReadyStandby());
             }
         }
-
-        engine = nullptr;
     }
 
     testFile.deleteFile();
-    juce::DeletedAtShutdown::deleteAll();
-    juce::MessageManager::deleteInstance();
 }
 
 SCENARIO ("a clip that changes while it plays restarts through the standby lane", "[engine][stretch][standby][snapshot]")
@@ -491,7 +485,7 @@ SCENARIO ("a clip that changes while it plays restarts through the standby lane"
 
     auto testFile = createSlowSawAudioFile();
     REQUIRE (testFile.existsAsFile());
-    const auto bounceFile = juce::File (juce::String (CURRENT_SOURCE_DIR) + "/TestFiles/snapshot-restart-out.wav");
+    const auto bounceFile = testOutputDirectory().getChildFile ("snapshot-restart-out.wav");
 
     // A two-second bounce of the stretched clip (it ends later: a stretched
     // voice runs out of input ahead of its timeline end and is restarted
@@ -674,7 +668,7 @@ SCENARIO ("a looped clip behind a read-ahead buffer wraps through a pre-filled l
     // of the wrap, so the wrap block only swaps lanes.
     auto testFile = createSlowSawFlacFile();
     REQUIRE (testFile.existsAsFile());
-    const auto bounceFile = juce::File (juce::String (CURRENT_SOURCE_DIR) + "/TestFiles/loop-buffered-out.wav");
+    const auto bounceFile = testOutputDirectory().getChildFile ("loop-buffered-out.wav");
 
     struct Result { juce::AudioBuffer<float> audio; int adoptions = 0; int loops = 0; bool buffered = false; int primes = 0; int underruns = 0; };
     const auto bounce = [&] (bool standbyEnabled, int blockSize, StretchMode mode = StretchMode::RePitch) {

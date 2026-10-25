@@ -28,7 +28,7 @@
     models are MIT (lower quality); Open-Unmix weights are CC-BY-NC.
     Training our own htdemucs on licensed data is the clean long-term fix.
   - Adds to the LICENSE.md commercial-licensing blockers alongside
-    Essentia (AGPL) and Ableton Link (GPL).
+    Ableton Link (GPL).
 - [x] Mirror the weights on audionaut.app as a fallback download. Done
   2026-09-02: the app tries
   `https://audionaut.app/models/ggml-model-htdemucs-4s-f16.bin` when
@@ -36,9 +36,9 @@
   Space and verified end to end - the hidden `[download-mirror]` test
   fetches it through the app's fallback path with the primary disabled.
   A copy is also staged in the web repo's `docs/models/`.
-- [ ] Windows/Linux pass: verify the `/external:I` / `-isystem` demotion of
-  Essentia's Eigen keeps the demucs translation units on the vendored Eigen
-  (they need >= 3.4), and check MSVC compile time for the transformer units.
+- [ ] Windows/Linux pass: check MSVC compile time for the transformer units.
+  (The Eigen clash this item also covered went with Essentia: the demucs
+  translation units are the only ones that see an Eigen now.)
 - [ ] Long clips: the separator holds the whole clip and all stems in
   memory, so clips are capped at 10 minutes. Stream longer clips through
   the segmenter in windows.
@@ -47,7 +47,8 @@
 
 - [x] **Wire code coverage in properly.** Done — `AUDIONAUT_ENABLE_COVERAGE`
   (default `OFF`) in `Audionaut/Catch2Tests/CMakeLists.txt`, plus a
-  `Code coverage` workflow in `.github/workflows/coverage.yml`.
+  `Code coverage` workflow in `.github/workflows/coverage.yml`, run by hand
+  since 2026-10-22 (the Linux tests on every push/PR are `linux-tests.yml`).
 
   Locally:
 
@@ -64,9 +65,22 @@
   recommended config flags inject `-O3` for other build types through
   INTERFACE options that land later on the command line.
 
-  Baseline measured 2026-08-09 (all 62 test cases passing, Essentia enabled):
+  Baseline measured 2026-08-09 (all 62 test cases passing, Essentia still linked then):
   **35.8% lines overall** (4,421/12,358) — Engine **66.8%** (4,209/6,300),
   Interface **3.5%** (212/6,025).
+
+- [ ] **One static library for the CMake tests and the CLI.** With
+  `AUDIONAUT_BUILD_CLI=ON` (the default) `Audionaut/Catch2Tests/CMakeLists.txt`
+  compiles every engine source twice, once for `AudionautTests` and once for
+  `audionaut-cli`. Build the shared sources once as a static library and link
+  both targets against it. Per push, CI would go from 8 full compiles to 5:
+  macOS 2→1, Linux tests 2→1, Windows 3→2, Makefile stays at 1. CMake only:
+  the app keeps building from the Projucer projects, and the in-app CLI/MCP
+  verbs are compiled into the app as before. Both targets already share
+  `AUDIONAUT_HEADLESS`. What differs is `CURRENT_SOURCE_DIR` (tests only) and
+  `GA4_MEASUREMENT_ID` (CLI only, kept out of the tests on purpose so they can
+  never create an analytics destination). Those have to stay on the
+  executables and must not move into the library.
 
 ## Agent access — follow-ups (feature/headless-cli, PR #66)
 
@@ -263,10 +277,32 @@ the one-gesture crossfade UX on top:
   with charts and tables is drafted in the website repo
   (`Audionaut-Web/docs/performance.md`, uncommitted) but should go live
   only after at least one round of work on the two findings:
-  - the plain-track cost grows superlinearly (8 → 32 tracks ≈ 10× the
-    load for 4× the tracks) - profile the callback with 32 and 64 tracks
-    to see what scales worse than the voice count (per-block container
-    walks, cache misses in the clip chain, the bus mixing);
+  - [x] the plain-track cost grows superlinearly (8 → 32 tracks ≈ 10× the
+    load for 4× the tracks). Fixed 2026-10-22 (perf/voice-channel-width):
+    every voice processed the whole bus width, so a block cost
+    voices × bus channels - quadratic in the track count.
+    `VoiceSource::applyChannelMapping` gave the project's channel count to
+    `ChannelRemappingAudioSource::setNumberOfChannelsToProduce`, which sizes
+    the buffer the remapper asks of the source *below* it: every voice
+    resampled, gained and faded all 2N channels (and reallocated that
+    buffer on the audio thread when the project grew). `Playback::process`
+    then added all 2N channels per voice into the bus. Now the remapper
+    asks for the file's channels and `Playback` adds only the voice's
+    destination channel. Also `MAX_VOICES` was 64, so a 64-stereo-track
+    project played only half its voices (`getAvailableVoice` returns
+    nullptr, jassert only) - now `MAX_AUDIO_CHANNELS * 2`.
+    Bench, 128 samples, mean % before → after: 8 tracks 0.8 → 0.7,
+    16 → 2.4 → 1.5, 32 → 8.8 → 3.3, 64 → 18.3 (64 voices) → 8.3 (all 128).
+    Then the voice renders into a one-channel buffer (`Playback` and the
+    bounce add it to `VoiceSource::getDestinationChannel()`), which ends the
+    two bus-wide clears per voice and block, and
+    `juce::ChannelRemappingAudioSource` went: it took its CriticalSection
+    per block and per channel lookup and sized its buffer on the audio
+    thread; `VoiceSource::renderChannel` copies the mapped file channel out
+    of a buffer sized in prepareToPlay. Left, all linear: each mono voice decodes and
+    resamples every channel of its file and keeps one (O(ch²) for
+    multichannel recordings); `ClipResamplingSource` interpolates even at
+    ratio 1.0; gain and fade-in still multiply once steady;
   - stretched clips: render ahead on a worker thread (the clip positions
     are known) so the hops stop landing in the callback, or find a
     cheaper per-track configuration of the stretcher.
@@ -296,3 +332,30 @@ the one-gesture crossfade UX on top:
   change. Fix: on a non-rebuild read, keep the chain when region,
   resources and speed are unchanged and only refresh the cheap state
   (position, gain, fades).
+
+## Analysis — follow-ups (found 2026-10-21 in the Essentia removal)
+
+- [ ] **Show Analysis shows nothing for a type that is off in Settings.**
+  The auto-analysis defaults (Settings > Analysis) are Segments and Beats;
+  Onsets is off. Ticking *Onsets* in a track's Show Analysis menu only
+  toggles the overlay's visibility (`toggleAnalysisVisibility` in
+  `ChannelGroupHeaderComponent`), and with nothing in the cache for that
+  type the overlay stays empty, without a word. Asking to see an analysis
+  is asking for it: the toggle should enqueue the type for the track's
+  files when the cache lacks it (`AnalysisWorker::enqueue` with an explicit
+  type list runs even while auto-analysis is off) and show the clip
+  header's progress meanwhile. Worth a hint that the type is off by
+  default and where to turn it on, so the next file gets it without the
+  detour.
+- [ ] **The Auto Edit merge is chaotic on long material.** The hidden
+  `[merge-jitter]` scenario (`MergeSensitivityTests`) moves Essentia's own
+  recorded boundaries by 0.1 s and re-merges: on the 173 s recording that
+  keeps only about half of the cuts, 0.25 s keeps a third, while the 15 s
+  and 60 s recordings keep nearly all. Two inherited quirks of
+  `EventMerger` do it: the top-N peak ranking of the summed activation,
+  and the minimum-length pass that measures each gap against the previous
+  peak rather than the last one kept, so a run of close peaks collapses to
+  whichever follows a large enough gap. Neither is behind a flag yet, unlike
+  the quirks `EventMerger::Parameters` already names; changing them changes
+  every user's cuts, so it wants a listening session on the demo material,
+  not only the harness.

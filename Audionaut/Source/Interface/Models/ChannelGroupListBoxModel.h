@@ -16,25 +16,17 @@
 #include "Interface/Components/MiddlePanel/ChannelView/ChannelGroupComponent.h"
 #include "Interface/LookAndFeel/AudiumLookAndFeel.h"
 #include "Engine/Group/AudioTrackContainer.h"
+#include "Interface/Models/TrackListBoxModels.h"
 
-class ChannelGroupListBoxModel : public audium::ListBoxModel {
+class ChannelGroupListBoxModel : public TrackRowsListBoxModel {
     
 public:
     
     ChannelGroupListBoxModel(std::shared_ptr<audium::ListBox> owner,
                               std::shared_ptr<audium::AudiumEngine> audiumEngine) :
-        owner(owner),
-        audiumEngine(audiumEngine)
+        TrackRowsListBoxModel(audiumEngine),
+        owner(owner)
     {
-    }
-    
-    ~ChannelGroupListBoxModel() override
-    {
-    }
-    
-    int getNumRows() override
-    {
-        return audiumEngine->getAudioTrackContainer()->getNumItems();
     }
 
     void paintListBoxItem ( int rowNumber,
@@ -69,43 +61,14 @@ public:
         return nullptr;
     }
 
-    
-    int getRowHeight (int rowNumber) const override
-    {
-        auto track = audiumEngine->getAudioTrackContainer()->getAudioTrack(rowNumber);
-        if (track != nullptr)
-            return track->getViewState().getTotalHeight() + DraggerControl::draggerHeight;
-        
-        return 0;
-    }
-    
-    void deleteKeyPressed (int lastRowSelected) override
-    {
-        audiumEngine->getAudioTrackContainer()->deleteSelectedObjects();
-    }
-    
     void backgroundClicked (const juce::MouseEvent&) override
     {
         audiumEngine->getAudioTrackContainer()->getSelectionManager()->deselectAll();
         owner->deselectAllRows();
         audiumEngine->getAudioTrackContainer()->sendActionMessage(audium::updateMiddlePanelAction);
     }
-    
-    void listWasScrolled() override
-    {
-    }
-    
-    void selectedRowsChanged (int lastRowSelected) override
-    {
-    }
-    
-    int getExtraSpaceAtBottom() const override
-    {
-        return AudiumLookAndFeel::extraSpaceAtBottom;
-    }
         
 private:
     std::shared_ptr<audium::ListBox> owner;
-    std::shared_ptr<audium::AudiumEngine> audiumEngine;
 
 };

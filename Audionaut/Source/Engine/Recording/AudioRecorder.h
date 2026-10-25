@@ -66,7 +66,6 @@ public:
                                              inputChannels,
                                              numSamples);
             
-//            std::cout << "rec " << buffer.getSample(0, 0) << std::endl;
             
             // write() returns false when the writer's fifo is full (the disk
             // thread fell behind); those samples never reach the file, so

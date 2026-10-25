@@ -7,6 +7,7 @@
 
 #include <JuceHeader.h>
 
+#include "Util/DistributionChannel.h"
 #include "Util/Preferences.h"
 
 namespace audium {
@@ -15,12 +16,12 @@ namespace audium {
  * @class UpdateChecker
  * @brief Channel-aware "is a newer Audionaut available?" check.
  *
- * The version source follows the distribution channel: the Mac App Store
- * build asks Apple's lookup API and the update dialog opens the store page;
- * the GitHub Releases builds (Windows, Linux, and the macOS DMG, which is
- * compiled with AUDIONAUT_GITHUB_CHANNEL) ask the latest-release API and
- * open the release page. Either way it is one small anonymous HTTPS GET -
- * no telemetry.
+ * The version source follows the distribution channel, decided at runtime
+ * (DistributionChannel.h): a Mac App Store install asks Apple's lookup API
+ * and the update dialog opens the store page; the GitHub Releases builds
+ * (Windows, Linux, the macOS DMG - and dev builds) ask the latest-release
+ * API and open the release page. Either way it is one small anonymous
+ * HTTPS GET - no telemetry.
  *
  * Two entry points: checkOnStartupIfDue() is the automatic path (honours
  * the Settings toggle, throttled to one attempt per day, silent unless a
@@ -65,13 +66,14 @@ private:
         juce::String error;           // set when fetched is false
     };
 
-    /// Blocking GET + parse; runs on the worker thread.
-    static Result fetchLatest();
+    /// Blocking GET + parse of the channel's endpoint; runs on the worker thread.
+    static Result fetchLatest (DistributionChannel channel);
 
     /// Message-thread presentation of a finished fetch.
     void presentResult (const Result& result, bool userRequested);
 
     Preferences& preferences;
+    const DistributionChannel channel;
     std::atomic<bool> checkInFlight { false };
 
     JUCE_DECLARE_WEAK_REFERENCEABLE (UpdateChecker)

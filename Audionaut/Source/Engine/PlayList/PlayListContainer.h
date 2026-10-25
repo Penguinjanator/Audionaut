@@ -72,10 +72,10 @@ public:
     
     bool writeToJson (json& output) override;
     bool readFromJson (json& input, bool rebuild) override;
-    // writes the playlist items with the given channel's clip gain as "channel_clip_gain"
+    // writes the playlist items with the given channel's clip gain as "channel_clip_gain";
+    // nullptr writes them as writeToJson() does
     bool writeChannelToJson(json& output, AudioChannel* audioChannel);
     void mergeFromJson(json& input, int destinationChannel = -1);
-    bool playListItemExists(std::shared_ptr<PlayListItem> item) const;
     std::shared_ptr<PlayListItem> findExistingItem(std::shared_ptr<PlayListItem> item) const;
     std::shared_ptr<PlayListItem> createPlayListItemFromJson (json& jsonItem);
     
@@ -89,11 +89,6 @@ public:
     PlayListItem* itemContainingRange(juce::Range<double> range, audium::TimeContextType context) const;
     
     const std::vector<PlayListItem*> itemsAtAbsoluteRange(juce::Range<double> range, audium::TimeContextType context) const;
-    
-    double getAbsolueStartTimeByOrder(const PlayListItem* playListItem, audium::TimeContextType context) const;
-    
-    // sets the absolute position based on the order
-    void forcePositionByOrder();
     
     void sortByPosition();
     bool sortedByPosition() const;
@@ -114,8 +109,6 @@ public:
     
     // selection:
     void selectPlayListItemWithRegion(std::shared_ptr<AudioRegion> region);
-    
-    std::vector<std::shared_ptr<PlayListItem>> getSelectedItems(bool global = false) const;
     
     double getTotalLength(audium::TimeContextType context) const;
     
