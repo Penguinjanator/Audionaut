@@ -8,7 +8,11 @@ name: macOS Release
 #
 # Can also be run manually from the Actions tab to exercise the build and
 # the packaging - a manual run skips the tag check and publishes nothing;
-# the image is kept as a workflow artifact instead.
+# the image is kept as a workflow artifact instead. A manual run given a
+# `release_tag` behaves like the tag push instead: it checks the version
+# and attaches the image to that (existing) Release - the way to re-deliver
+# the image when the tag's own run failed after the fact (stapling,
+# upload) and the workflow has been fixed since.
 #
 # Runs alongside the Linux and Windows release workflows on the same tag;
 # all three attach their artifacts to one Release (whichever finishes first
@@ -30,6 +34,11 @@ on:
   push:
     tags: [ 'v*' ]
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Attach the image to this existing Release (e.g. v1.7.0); the checked-out commit must carry that version. Empty = dry run.'
+        required: false
+        default: ''
 
 permissions:
   contents: write
@@ -41,6 +50,11 @@ jobs:
     # .jucer).
     runs-on: macos-15
 
+    env:
+      # the Release to publish to: the pushed tag, or the manual run's input;
+      # empty for a dry run
+      RELEASE_TAG: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || inputs.release_tag }}
+
     steps:
     - uses: actions/checkout@v4
 
@@ -51,9 +65,9 @@ jobs:
     # no tests.
 
     - name: Check tag matches .jucer version
-      if: startsWith(github.ref, 'refs/tags/')
+      if: env.RELEASE_TAG != ''
       run: |
-        TAG_VERSION="${GITHUB_REF_NAME#v}"
+        TAG_VERSION="${RELEASE_TAG#v}"
         JUCER_VERSION=$(grep -o 'version="[0-9]\+\.[0-9]\+\.[0-9]\+"' Audionaut/Audionaut.jucer | head -1 | cut -d'"' -f2)
         echo "tag: $TAG_VERSION  .jucer: $JUCER_VERSION"
         if [ "$TAG_VERSION" != "$JUCER_VERSION" ]; then
@@ -153,10 +167,26 @@ jobs:
           exit 1
         fi
         rm "$RUNNER_TEMP/notary.p8"
-        xcrun stapler staple "$DMG"
+        # The ticket is fetched from Apple's CDN; right after acceptance the
+        # lookup can fail (v1.7.0: "The network connection was lost", error
+        # 68, twice in a row on the GitHub runner), so retry for a while.
+        for attempt in $(seq 1 12); do
+          if xcrun stapler staple "$DMG"; then
+            break
+          fi
+          if [ "$attempt" = 12 ]; then
+            echo "::error::stapling failed $attempt times - the image is notarized but not stapled"
+            exit 1
+          fi
+          echo "staple attempt $attempt failed, retrying in 30 s"
+          sleep 30
+        done
         spctl --assess --type open --context context:primary-signature --verbose=2 "$DMG"
 
     - name: Keep the image as a workflow artifact
+      # also after a failed notarization or stapling, so the image can be
+      # inspected or stapled by hand
+      if: ${{ !cancelled() }}
       uses: actions/upload-artifact@v4
       with:
         name: macos-dmg
@@ -164,19 +194,19 @@ jobs:
         if-no-files-found: error
 
     - name: Upload to GitHub Release
-      if: startsWith(github.ref, 'refs/tags/')
+      if: env.RELEASE_TAG != ''
       env:
         GH_TOKEN: ${{ github.token }}
       run: |
         # The Linux and Windows release workflows run on the same tag; the
         # `|| upload` covers losing the race to their `gh release create`.
         ARTIFACTS=(Audionaut/Installers/macOS/Audionaut-*.dmg)
-        if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
-          gh release upload "$GITHUB_REF_NAME" "${ARTIFACTS[@]}" --clobber
+        if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+          gh release upload "$RELEASE_TAG" "${ARTIFACTS[@]}" --clobber
         else
-          gh release create "$GITHUB_REF_NAME" "${ARTIFACTS[@]}" \
-            --title "Audionaut $GITHUB_REF_NAME" --generate-notes \
-            || gh release upload "$GITHUB_REF_NAME" "${ARTIFACTS[@]}" --clobber
+          gh release create "$RELEASE_TAG" "${ARTIFACTS[@]}" \
+            --title "Audionaut $RELEASE_TAG" --generate-notes \
+            || gh release upload "$RELEASE_TAG" "${ARTIFACTS[@]}" --clobber
         fi
 
     - name: Remove the signing keychain
